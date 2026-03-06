@@ -7,6 +7,10 @@ channel = "stable-24_05"
 
 [[ports]]
 localPort = 5000
+externalPort = 5000
+
+[[ports]]
+localPort = 5904
 externalPort = 80
 
 [env]
@@ -37,3 +41,7 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev:client"
 waitForPort = 5000
+
+[agent]
+stack = "MOCKUP_JS"
+mockupState = "MOCKUP"

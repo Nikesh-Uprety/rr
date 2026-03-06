@@ -1,0 +1,366 @@
+You are a senior system architect and full-stack engineer.
+
+Design and generate a modern, high-performance full-stack e-commerce platform called **Urban Threads**.
+
+The goal is a production-quality application that is **fast, scalable, lightweight, and visually minimal**.
+
+The project should be structured so that the **UI is built first**, followed by the backend APIs and database integration.
+
+────────────────────────
+
+TECH STACK (STRICT)
+
+Frontend:
+
+* Next.js 14 (App Router)
+* TypeScript
+* TailwindCSS
+* shadcn/ui component library
+* Framer Motion (animations)
+* Zustand (state management)
+* React Hook Form + Zod validation
+* Recharts (analytics charts)
+
+Backend:
+
+* Next.js API routes
+* Prisma ORM
+
+Database:
+
+* PostgreSQL (recommended for relational ecommerce data)
+
+Authentication:
+
+* NextAuth.js with credentials provider
+* Role-based access: admin and staff
+
+Deployment target:
+
+* Replit / Vercel compatible architecture
+
+Performance requirements:
+
+* Server components where possible
+* Lazy loading for heavy components
+* Image optimization
+* Avoid unnecessary libraries
+
+────────────────────────
+
+UI DESIGN REQUIREMENTS
+
+The design must match a **minimal luxury ecommerce aesthetic**.
+
+Theme style:
+
+* clean
+* modern
+* minimal
+* fashion brand feel
+
+Color palette:
+
+Light Mode
+
+* white backgrounds
+* soft gray surfaces
+* dark text
+
+Dark Mode
+
+* near-black background
+* soft gray cards
+* white text
+
+Warm Mode (Eye Comfort)
+
+* warm beige background
+* slightly reduced blue tones
+* amber highlights
+
+Provide a **theme switcher toggle** in the navbar.
+
+Modes:
+
+* Light
+* Dark
+* Warm (blue-light reduced)
+
+Use CSS variables so themes switch instantly.
+
+────────────────────────
+
+MAIN APPLICATION SECTIONS
+
+1️⃣ Public Storefront
+
+Landing Page
+
+* Hero section with featured collection
+* Category grid (Tops, Bottoms, Accessories, Footwear)
+* Featured product carousel
+* Newsletter signup
+* Minimal footer
+
+Product Catalog
+
+* Grid/list view toggle
+* Sidebar filters:
+
+  * categories
+  * price range
+  * colors
+  * sizes
+* Search functionality
+* Sorting (price, newest, popularity)
+* Pagination or infinite scroll
+
+Product Detail Page
+
+* Image gallery with zoom
+* Variant selection
+* Add to cart
+* Stock check
+* Related products
+* Product description and care info
+
+Cart
+
+* quantity update
+* remove item
+* promo code input
+* price breakdown
+
+Checkout
+
+* shipping information
+* simulated payment
+* order summary
+* confirmation page
+
+────────────────────────
+
+2️⃣ Admin Dashboard
+
+Dashboard Overview
+
+* KPI cards:
+  revenue
+  orders
+  average order value
+  new customers
+
+Charts
+
+* revenue over time (Recharts)
+* sales by category (pie chart)
+
+Top products table
+Payment methods breakdown
+
+Products Management
+
+* product table
+* search
+* add/edit product form
+* stock management
+* SKU generator
+
+Orders Management
+
+* orders table
+* order details modal
+* status update
+* CSV export
+
+Customers
+
+* customer list
+* avatar
+* purchase history
+* total spent
+* export CSV
+
+POS Interface
+
+* product search
+* cart builder
+* customer selection
+* discount
+* tax calculation
+* checkout
+* park sale
+
+────────────────────────
+
+CORE FEATURES
+
+Authentication
+
+* NextAuth login
+* protected dashboard routes
+* role permissions
+
+State Management
+
+* Zustand for cart
+* UI filters
+* dashboard state
+
+Inventory
+
+* stock tracking
+* low stock alerts
+
+Analytics
+
+* charts
+* date filters
+* revenue metrics
+
+Reporting
+
+* CSV export
+* order reports
+
+POS
+
+* keyboard shortcuts
+* receipt printing
+* barcode scanning simulation
+
+────────────────────────
+
+DATABASE MODELS
+
+Order
+
+* id
+* orderNumber
+* customerId
+* status
+* subtotal
+* tax
+* discount
+* total
+* createdAt
+* paymentMethod
+
+OrderItem
+
+* productId
+* variantId
+* quantity
+* priceAtTime
+
+Customer
+
+* id
+* firstName
+* lastName
+* email
+* avatar
+* totalSpent
+* orderCount
+* createdAt
+* lastOrderDate
+
+Product
+
+* id
+* name
+* sku
+* price
+* stock
+* category
+* images
+* variants
+
+────────────────────────
+
+FILE STRUCTURE
+
+urban-threads/
+app/
+(storefront)/
+products/
+product/[id]/
+cart/
+checkout/
+
+dashboard/
+products/
+orders/
+customers/
+pos/
+
+api/
+auth/
+products/
+orders/
+customers/
+
+components/
+ui/
+dashboard/
+storefront/
+forms/
+
+lib/
+prisma/
+utils/
+validations/
+
+store/
+cart.ts
+ui.ts
+dashboard.ts
+
+styles/
+globals.css
+
+────────────────────────
+
+UX REQUIREMENTS
+
+* responsive design
+* mobile optimized POS
+* smooth animations
+* modern minimal UI
+* fast page navigation
+* loading skeletons
+* optimistic UI updates
+
+────────────────────────
+
+IMPLEMENTATION PLAN
+
+Step 1
+Build full UI with mock data.
+
+Step 2
+Add database models using Prisma.
+
+Step 3
+Implement API routes.
+
+Step 4
+Integrate authentication.
+
+Step 5
+Connect frontend with backend.
+
+Step 6
+Optimize performance.
+
+────────────────────────
+
+Generate:
+
+1. Project folder structure
+2. Next.js setup
+3. Theme system
+4. UI layout components
+5. Initial pages
+6. Sample mock data

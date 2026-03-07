@@ -6,8 +6,9 @@ import { formatPrice } from "@/lib/format";
 
 export default function Cart() {
   const [, setLocation] = useLocation();
-  const { items, removeItem, updateQuantity, subtotal } = useCartStore();
-  
+  const { items, removeItem, updateQuantity } = useCartStore();
+
+  const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const shipping = 100;
   const total = subtotal + shipping;
 

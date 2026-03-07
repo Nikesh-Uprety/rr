@@ -62,7 +62,7 @@ export default function AdminPOS() {
         items: items.map((item) => ({
           productId: item.product.id,
           quantity: item.quantity,
-          priceAtTime: item.product.price,
+          priceAtTime: Number(item.product.price),
         })),
         shipping: {
           firstName: "POS",
@@ -86,8 +86,23 @@ export default function AdminPOS() {
       setItems([]);
       toast({ title: "POS order completed" });
     },
-    onError: () => {
-      toast({ title: "Failed to complete order" });
+    onError: (err: Error) => {
+      const msg = err?.message ?? "Failed to complete checkout";
+      const serverMsg = msg.startsWith("400:")
+        ? msg.replace(/^\d+:\s*/, "")
+        : msg.startsWith("500:")
+          ? "Server error. Please try again."
+          : msg;
+      try {
+        const parsed = typeof serverMsg === "string" && serverMsg.startsWith("{") ? JSON.parse(serverMsg) : null;
+        toast({
+          title: "Checkout failed",
+          description: parsed?.error ?? serverMsg,
+          variant: "destructive",
+        });
+      } catch {
+        toast({ title: "Checkout failed", description: serverMsg, variant: "destructive" });
+      }
     },
   });
 
@@ -124,7 +139,7 @@ export default function AdminPOS() {
                 <div className="text-xs text-muted-foreground uppercase mb-1">
                   {product.category ?? "Product"}
                 </div>
-                <div className="font-serif text-sm mb-1 line-clamp-2">
+                <div className="text-xs font-bold uppercase tracking-widest mb-1 line-clamp-2">
                   {product.name}
                 </div>
                 <div className="text-sm font-medium">

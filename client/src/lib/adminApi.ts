@@ -1,5 +1,5 @@
 import { apiRequest } from "./queryClient";
-import type { ProductApi } from "./api";
+import type { ProductApi, CategoryApi } from "./api";
 
 export interface AdminOrder {
   id: string;
@@ -7,6 +7,9 @@ export interface AdminOrder {
   fullName: string;
   total: number;
   status: string;
+  paymentMethod?: string;
+  paymentProofUrl?: string | null;
+  paymentVerified?: string | null;
   createdAt: string;
 }
 
@@ -85,6 +88,28 @@ export async function deleteAdminProduct(id: string): Promise<void> {
   await apiRequest("DELETE", `/api/admin/products/${id}`);
 }
 
+export async function createCategory(data: {
+  name: string;
+  slug: string;
+}): Promise<CategoryApi> {
+  const res = await apiRequest("POST", "/api/admin/categories", data);
+  const json = (await res.json()) as { success: boolean; data: CategoryApi };
+  return json.data;
+}
+
+export async function uploadProductImage(
+  imageBase64: string,
+): Promise<string> {
+  const res = await apiRequest("POST", "/api/admin/upload-product-image", {
+    imageBase64,
+  });
+  const json = (await res.json()) as { success: boolean; url?: string; error?: string };
+  if (!json.success || !json.url) {
+    throw new Error(json.error ?? "Upload failed");
+  }
+  return json.url;
+}
+
 export async function fetchAdminOrders(filters?: {
   status?: string;
   search?: string;
@@ -111,6 +136,20 @@ export async function updateOrderStatus(
   status: string,
 ): Promise<AdminOrder> {
   const res = await apiRequest("PUT", `/api/admin/orders/${id}`, { status });
+  const json = (await res.json()) as {
+    success: boolean;
+    data: AdminOrder;
+  };
+  return json.data;
+}
+
+export async function verifyOrderPayment(
+  id: string,
+  paymentVerified: "verified" | "rejected",
+): Promise<AdminOrder> {
+  const res = await apiRequest("PUT", `/api/admin/orders/${id}/verify-payment`, {
+    paymentVerified,
+  });
   const json = (await res.json()) as {
     success: boolean;
     data: AdminOrder;
@@ -164,4 +203,3 @@ export async function fetchAnalytics(
   };
   return json.data;
 }
-

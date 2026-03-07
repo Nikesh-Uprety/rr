@@ -14,6 +14,7 @@ import ProductDetail from "@/pages/storefront/ProductDetail";
 import Contact from "@/pages/storefront/Contact";
 import Cart from "@/pages/storefront/Cart";
 import Checkout from "@/pages/storefront/Checkout";
+import PaymentProcess from "@/pages/storefront/PaymentProcess";
 
 import AdminProducts from "@/pages/admin/Products";
 import AdminOrders from "@/pages/admin/Orders";
@@ -110,11 +111,14 @@ function Router() {
         </StorefrontLayout>
       </Route>
       <Route path="/checkout">
-        <ProtectedRoute>
-          <StorefrontLayout>
-            <Checkout />
-          </StorefrontLayout>
-        </ProtectedRoute>
+        <StorefrontLayout>
+          <Checkout />
+        </StorefrontLayout>
+      </Route>
+      <Route path="/checkout/payment">
+        <StorefrontLayout>
+          <PaymentProcess />
+        </StorefrontLayout>
       </Route>
       <Route path="/login">
         <LoginPage />

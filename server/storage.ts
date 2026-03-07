@@ -1,10 +1,12 @@
 import { db } from "./db";
 import {
+  categories,
   customers,
   orderItems,
   orders,
   products,
   users,
+  type Category,
   type Customer,
   type Order,
   type OrderItem,
@@ -29,6 +31,7 @@ export interface CreateOrderInput {
   postalCode: string;
   country: string;
   total: number;
+  paymentMethod: string;
   items: CreateOrderItemInput[];
 }
 
@@ -80,6 +83,11 @@ export interface IStorage {
   getOrderById(id: string): Promise<Order & { items: OrderItem[] }>;
   createOrder(data: CreateOrderInput): Promise<Order>;
   updateOrderStatus(id: string, status: string): Promise<Order>;
+  updateOrderPaymentProof(id: string, paymentProofUrl: string): Promise<Order>;
+  updateOrderPaymentVerified(
+    id: string,
+    paymentVerified: "verified" | "rejected",
+  ): Promise<Order>;
 
   // Customers
   getCustomers(search?: string): Promise<Customer[]>;
@@ -100,6 +108,10 @@ export interface IStorage {
 
   // Analytics
   getAnalytics(range: "7d" | "30d" | "90d" | "1y"): Promise<AnalyticsData>;
+
+  // Categories
+  getCategories(): Promise<Category[]>;
+  createCategory(data: { name: string; slug: string }): Promise<Category>;
 }
 
 export class PgStorage implements IStorage {
@@ -139,11 +151,15 @@ export class PgStorage implements IStorage {
       .select({
         id: products.id,
         name: products.name,
+        shortDetails: products.shortDetails,
         description: products.description,
         price: products.price,
         imageUrl: products.imageUrl,
+        galleryUrls: products.galleryUrls,
         category: products.category,
         stock: products.stock,
+        colorOptions: products.colorOptions,
+        sizeOptions: products.sizeOptions,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       })
@@ -161,11 +177,15 @@ export class PgStorage implements IStorage {
       .select({
         id: products.id,
         name: products.name,
+        shortDetails: products.shortDetails,
         description: products.description,
         price: products.price,
         imageUrl: products.imageUrl,
+        galleryUrls: products.galleryUrls,
         category: products.category,
         stock: products.stock,
+        colorOptions: products.colorOptions,
+        sizeOptions: products.sizeOptions,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       })
@@ -183,20 +203,28 @@ export class PgStorage implements IStorage {
       .insert(products)
       .values({
         name: data.name,
+        shortDetails: data.shortDetails ?? null,
         description: data.description ?? null,
         price: data.price,
         imageUrl: data.imageUrl ?? null,
+        galleryUrls: data.galleryUrls ?? null,
         category: data.category ?? null,
         stock: data.stock,
+        colorOptions: data.colorOptions ?? null,
+        sizeOptions: data.sizeOptions ?? null,
       })
       .returning({
         id: products.id,
         name: products.name,
+        shortDetails: products.shortDetails,
         description: products.description,
         price: products.price,
         imageUrl: products.imageUrl,
+        galleryUrls: products.galleryUrls,
         category: products.category,
         stock: products.stock,
+        colorOptions: products.colorOptions,
+        sizeOptions: products.sizeOptions,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       });
@@ -212,21 +240,29 @@ export class PgStorage implements IStorage {
       .update(products)
       .set({
         name: data.name,
+        shortDetails: data.shortDetails,
         description: data.description,
         price: data.price,
         imageUrl: data.imageUrl,
+        galleryUrls: data.galleryUrls,
         category: data.category,
         stock: data.stock,
+        colorOptions: data.colorOptions,
+        sizeOptions: data.sizeOptions,
       })
       .where(eq(products.id, id))
       .returning({
         id: products.id,
         name: products.name,
+        shortDetails: products.shortDetails,
         description: products.description,
         price: products.price,
         imageUrl: products.imageUrl,
+        galleryUrls: products.galleryUrls,
         category: products.category,
         stock: products.stock,
+        colorOptions: products.colorOptions,
+        sizeOptions: products.sizeOptions,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       });
@@ -236,6 +272,18 @@ export class PgStorage implements IStorage {
 
   async deleteProduct(id: string): Promise<void> {
     await db.delete(products).where(eq(products.id, id));
+  }
+
+  async getCategories(): Promise<Category[]> {
+    return db.select().from(categories).orderBy(asc(categories.name));
+  }
+
+  async createCategory(data: { name: string; slug: string }): Promise<Category> {
+    const [row] = await db
+      .insert(categories)
+      .values({ name: data.name, slug: data.slug })
+      .returning();
+    return row;
   }
 
   async getOrders(filters?: {
@@ -277,6 +325,9 @@ export class PgStorage implements IStorage {
         country: orders.country,
         total: orders.total,
         status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -304,6 +355,9 @@ export class PgStorage implements IStorage {
         country: orders.country,
         total: orders.total,
         status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -345,6 +399,7 @@ export class PgStorage implements IStorage {
         country: data.country,
         total: data.total,
         status: "pending",
+        paymentMethod: data.paymentMethod ?? "cash_on_delivery",
       })
       .returning({
         id: orders.id,
@@ -359,6 +414,9 @@ export class PgStorage implements IStorage {
         country: orders.country,
         total: orders.total,
         status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -395,10 +453,75 @@ export class PgStorage implements IStorage {
         country: orders.country,
         total: orders.total,
         status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
 
+    return row;
+  }
+
+  async updateOrderPaymentProof(
+    id: string,
+    paymentProofUrl: string,
+  ): Promise<Order> {
+    const [row] = await db
+      .update(orders)
+      .set({ paymentProofUrl })
+      .where(eq(orders.id, id))
+      .returning({
+        id: orders.id,
+        userId: orders.userId,
+        email: orders.email,
+        fullName: orders.fullName,
+        addressLine1: orders.addressLine1,
+        addressLine2: orders.addressLine2,
+        city: orders.city,
+        region: orders.region,
+        postalCode: orders.postalCode,
+        country: orders.country,
+        total: orders.total,
+        status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
+        createdAt: orders.createdAt,
+        updatedAt: orders.updatedAt,
+      });
+    if (!row) throw new Error("Order not found");
+    return row;
+  }
+
+  async updateOrderPaymentVerified(
+    id: string,
+    paymentVerified: "verified" | "rejected",
+  ): Promise<Order> {
+    const [row] = await db
+      .update(orders)
+      .set({ paymentVerified })
+      .where(eq(orders.id, id))
+      .returning({
+        id: orders.id,
+        userId: orders.userId,
+        email: orders.email,
+        fullName: orders.fullName,
+        addressLine1: orders.addressLine1,
+        addressLine2: orders.addressLine2,
+        city: orders.city,
+        region: orders.region,
+        postalCode: orders.postalCode,
+        country: orders.country,
+        total: orders.total,
+        status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
+        createdAt: orders.createdAt,
+        updatedAt: orders.updatedAt,
+      });
+    if (!row) throw new Error("Order not found");
     return row;
   }
 
@@ -467,6 +590,9 @@ export class PgStorage implements IStorage {
         country: orders.country,
         total: orders.total,
         status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -610,9 +736,7 @@ export class PgStorage implements IStorage {
         totalOrders: sql<number>`count(*)`,
       })
       .from(orders)
-      .where(
-        sql`"created_at" >= now() - interval '${days} days'`,
-      );
+      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`));
 
     const avgOrderValue =
       summary.totalOrders > 0
@@ -624,9 +748,7 @@ export class PgStorage implements IStorage {
         count: sql<number>`count(*)`,
       })
       .from(customers)
-      .where(
-        sql`"created_at" >= now() - interval '${days} days'`,
-      );
+      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`));
 
     const revenueRows = await db
       .select({
@@ -634,11 +756,9 @@ export class PgStorage implements IStorage {
         revenue: sql<number>`sum(${orders.total})`,
       })
       .from(orders)
-      .where(
-        sql`"created_at" >= now() - interval '${days} days'`,
-      )
+      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
       .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
-      .orderBy(asc(sql`day`));
+      .orderBy(asc(sql`date_trunc('day', ${orders.createdAt})::date`));
 
     const revenueByDay: RevenueByDay[] = revenueRows.map((row) => ({
       date: row.day,
@@ -656,9 +776,7 @@ export class PgStorage implements IStorage {
         eq(orderItems.orderId, orders.id),
       )
       .innerJoin(products, eq(orderItems.productId, products.id))
-      .where(
-        sql`"orders"."created_at" >= now() - interval '${days} days'`,
-      )
+      .where(sql.raw(`"orders"."created_at" >= now() - interval '${days} days'`))
       .groupBy(products.category);
 
     const totalCategoryRevenue = salesCategoryRows.reduce(
@@ -693,6 +811,12 @@ export class MemStorage implements IStorage {
   private _products: Product[] = [];
   private _orders: (Order & { items: OrderItem[] })[] = [];
   private _customers: Customer[] = [];
+  private _categories: Category[] = [
+    { id: "1", name: "Hoodies", slug: "HOODIE", createdAt: new Date() },
+    { id: "2", name: "Trousers", slug: "TROUSER", createdAt: new Date() },
+    { id: "3", name: "T-Shirts", slug: "TSHIRTS", createdAt: new Date() },
+    { id: "4", name: "Winter '25", slug: "WINTER_25", createdAt: new Date() },
+  ];
 
   async getProducts(_filters?: {
     category?: string;
@@ -740,6 +864,21 @@ export class MemStorage implements IStorage {
 
   async deleteProduct(id: string): Promise<void> {
     this._products = this._products.filter((p) => p.id !== id);
+  }
+
+  async getCategories(): Promise<Category[]> {
+    return this._categories;
+  }
+
+  async createCategory(data: { name: string; slug: string }): Promise<Category> {
+    const cat: Category = {
+      id: crypto.randomUUID(),
+      name: data.name,
+      slug: data.slug,
+      createdAt: new Date(),
+    };
+    this._categories.push(cat);
+    return cat;
   }
 
   async getOrders(): Promise<Order[]> {
@@ -844,6 +983,21 @@ export class MemStorage implements IStorage {
     });
   }
 
+  async getCategories(): Promise<Category[]> {
+    return this._categories;
+  }
+
+  async createCategory(data: { name: string; slug: string }): Promise<Category> {
+    const category: Category = {
+      id: crypto.randomUUID(),
+      name: data.name,
+      slug: data.slug,
+      createdAt: new Date(),
+    };
+    this._categories.push(category);
+    return category;
+  }
+
   async getUserByEmail(email: string): Promise<User | null> {
     return this._users.find((u) => u.username === email) ?? null;
   }
@@ -861,6 +1015,21 @@ export class MemStorage implements IStorage {
     };
     this._users.push(user);
     return user;
+  }
+
+  async getCategories(): Promise<Category[]> {
+    return this._categories;
+  }
+
+  async createCategory(data: { name: string; slug: string }): Promise<Category> {
+    const cat: Category = {
+      id: crypto.randomUUID(),
+      name: data.name,
+      slug: data.slug,
+      createdAt: new Date(),
+    };
+    this._categories.push(cat);
+    return cat;
   }
 
   async getAnalytics(): Promise<AnalyticsData> {

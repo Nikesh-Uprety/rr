@@ -43,11 +43,15 @@ export const customers = pgTable("customers", {
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  shortDetails: text("short_details"),
   description: text("description"),
   price: numeric("price", { precision: 10, scale: 2 }).notNull(),
   imageUrl: text("image_url"),
+  galleryUrls: text("gallery_urls"), // JSON array of image URLs
   category: text("category"),
   stock: integer("stock").notNull().default(0),
+  colorOptions: text("color_options"), // JSON array of color names
+  sizeOptions: text("size_options"), // JSON array of size codes
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -58,6 +62,17 @@ export const products = pgTable("products", {
 
 export type Product = typeof products.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
+
+export const categories = pgTable("categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Category = typeof categories.$inferSelect;
 
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -72,6 +87,9 @@ export const orders = pgTable("orders", {
   country: text("country").notNull(),
   total: numeric("total", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull().default("pending"),
+  paymentMethod: text("payment_method").notNull().default("cash_on_delivery"),
+  paymentProofUrl: text("payment_proof_url"),
+  paymentVerified: text("payment_verified"), // null = pending, "verified" | "rejected"
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

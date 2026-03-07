@@ -18,8 +18,12 @@ declare module "http" {
   }
 }
 
+// 5 MB in bytes – payment screenshot uploads (base64 ~33% larger than binary)
+const JSON_BODY_LIMIT = 5 * 1024 * 1024;
+
 app.use(
   express.json({
+    limit: JSON_BODY_LIMIT,
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
@@ -95,15 +99,20 @@ app.use((req, res, next) => {
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    console.error("Internal Server Error:", err);
-
     if (res.headersSent) {
       return next(err);
     }
 
+    // PayloadTooLargeError from body-parser when request body exceeds limit
+    if (err.type === "entity.too.large" || err.status === 413 || err.statusCode === 413) {
+      return res.status(413).json({
+        message: "File too large. Maximum size for payment screenshot is 5 MB. Please use a smaller image.",
+      });
+    }
+
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+    console.error("Internal Server Error:", err);
     return res.status(status).json({ message });
   });
 

@@ -53,7 +53,7 @@ export default function AdminLayout({
             className="font-serif font-bold text-xl tracking-tight"
             data-testid="link-admin-home"
           >
-            ULTIMATEX
+            RARE@admin
           </Link>
         </div>
 
@@ -99,7 +99,7 @@ export default function AdminLayout({
         {/* Header - only on mobile or if needed */}
         <header className="h-16 bg-white dark:bg-card border-b border-[#E5E5E0] dark:border-border flex items-center justify-between px-6 md:hidden">
           <Link href="/" className="font-serif font-bold text-xl tracking-tight">
-            ULTIMATEX
+            RARE@admin
           </Link>
           <Button variant="ghost" size="icon">
             <LayoutGrid className="h-5 w-5" />

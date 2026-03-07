@@ -1,10 +1,25 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { type Server } from "http";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import { passport } from "./auth";
 import { z } from "zod";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
+
+const UPLOADS_DIR = path.join(process.cwd(), "uploads", "payment-proofs");
+const PRODUCTS_UPLOADS_DIR = path.join(process.cwd(), "uploads", "products");
+function ensureUploadsDir() {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+}
+function ensureProductUploadsDir() {
+  if (!fs.existsSync(PRODUCTS_UPLOADS_DIR)) {
+    fs.mkdirSync(PRODUCTS_UPLOADS_DIR, { recursive: true });
+  }
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -245,6 +260,7 @@ export async function registerRoutes(
         postalCode: shipping.zip,
         country: shipping.country,
         total,
+        paymentMethod: parsed.data.paymentMethod,
         items: items.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -284,14 +300,158 @@ export async function registerRoutes(
     }
   });
 
+  const paymentProofSchema = z.object({
+    imageBase64: z.string().min(1),
+  });
+
+  app.post(
+    "/api/orders/:id/payment-proof",
+    async (req: Request, res: Response) => {
+      try {
+        const parsed = paymentProofSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res
+            .status(400)
+            .json({ success: false, error: "Invalid payload" });
+        }
+        const orderId = req.params.id;
+        await storage.getOrderById(orderId);
+        const base64 = parsed.data.imageBase64;
+        const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
+        const buffer = Buffer.from(
+          match ? match[2] : base64,
+          "base64",
+        );
+        ensureUploadsDir();
+        const ext = match ? match[1] : "png";
+        const filename = `${orderId}.${ext}`;
+        const filePath = path.join(UPLOADS_DIR, filename);
+        fs.writeFileSync(filePath, buffer);
+        const proofUrl = `/api/uploads/payment-proofs/${filename}`;
+        await storage.updateOrderPaymentProof(orderId, proofUrl);
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in POST /api/orders/:id/payment-proof", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to upload payment proof" });
+      }
+    },
+  );
+
+  app.get("/api/uploads/payment-proofs/:filename", (req: Request, res: Response) => {
+    const filename = req.params.filename;
+    if (!/^[a-zA-Z0-9._-]+\.(png|jpg|jpeg|webp)$/.test(filename)) {
+      return res.status(400).send("Invalid filename");
+    }
+    const filePath = path.join(UPLOADS_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send("Not found");
+    }
+    res.sendFile(filePath, (err) => {
+      if (err) res.status(500).send("Error sending file");
+    });
+  });
+
+  // Categories (public read, admin create)
+  const DEFAULT_CATEGORIES = [
+    { name: "Hoodies", slug: "HOODIE" },
+    { name: "Trousers", slug: "TROUSER" },
+    { name: "T-Shirts", slug: "TSHIRTS" },
+    { name: "Winter '25", slug: "WINTER_25" },
+  ];
+  app.get("/api/categories", async (req: Request, res: Response) => {
+    try {
+      let categories = await storage.getCategories();
+      if (categories.length === 0) {
+        for (const cat of DEFAULT_CATEGORIES) {
+          try {
+            await storage.createCategory(cat);
+          } catch {
+            // ignore duplicate or table not ready
+          }
+        }
+        categories = await storage.getCategories();
+      }
+      return res.json({ success: true, data: categories });
+    } catch (err) {
+      console.error("Error in GET /api/categories", err);
+      return res.status(500).json({ success: false, error: "Failed to load categories" });
+    }
+  });
+
+  app.post(
+    "/api/admin/categories",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const parsed = z.object({ name: z.string().min(1), slug: z.string().min(1) }).safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ success: false, error: "Invalid payload" });
+        }
+        const category = await storage.createCategory(parsed.data);
+        return res.status(201).json({ success: true, data: category });
+      } catch (err) {
+        console.error("Error in POST /api/admin/categories", err);
+        return res.status(500).json({ success: false, error: "Failed to create category" });
+      }
+    },
+  );
+
+  // Product image upload (admin only)
+  const productImageSchema = z.object({ imageBase64: z.string().min(1) });
+  app.post(
+    "/api/admin/upload-product-image",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const parsed = productImageSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ success: false, error: "Invalid payload" });
+        }
+        const base64 = parsed.data.imageBase64;
+        const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
+        const buffer = Buffer.from(match ? match[2] : base64, "base64");
+        ensureProductUploadsDir();
+        const ext = (match ? match[1] : "png").replace("jpeg", "jpg");
+        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const filePath = path.join(PRODUCTS_UPLOADS_DIR, filename);
+        fs.writeFileSync(filePath, buffer);
+        const url = `/api/uploads/products/${filename}`;
+        return res.json({ success: true, url });
+      } catch (err) {
+        console.error("Error in POST /api/admin/upload-product-image", err);
+        return res.status(500).json({ success: false, error: "Failed to upload image" });
+      }
+    },
+  );
+
+  app.get("/api/uploads/products/:filename", (req: Request, res: Response) => {
+    const filename = req.params.filename;
+    if (!/^[a-zA-Z0-9._-]+\.(png|jpg|jpeg|webp)$/.test(filename)) {
+      return res.status(400).send("Invalid filename");
+    }
+    const filePath = path.join(PRODUCTS_UPLOADS_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).send("Not found");
+    }
+    res.sendFile(filePath, (err) => {
+      if (err) res.status(500).send("Error sending file");
+    });
+  });
+
   // Admin product routes (protected)
   const adminProductSchema = z.object({
     name: z.string().min(1),
+    shortDetails: z.string().optional(),
     description: z.string().optional(),
     price: z.number().positive(),
-    imageUrl: z.string().url().optional(),
+    imageUrl: z.string().optional().or(z.literal("")),
+    galleryUrls: z.string().optional(),
     category: z.string().optional(),
     stock: z.number().int().nonnegative(),
+    colorOptions: z.string().optional(),
+    sizeOptions: z.string().optional(),
   });
 
   app.get(
@@ -329,7 +489,11 @@ export async function registerRoutes(
             .json({ success: false, error: "Invalid product payload" });
         }
 
-        const product = await storage.createProduct(parsed.data);
+        const data = {
+          ...parsed.data,
+          imageUrl: parsed.data.imageUrl?.trim() || undefined,
+        };
+        const product = await storage.createProduct(data);
         return res.status(201).json({ success: true, data: product });
       } catch (err) {
         console.error("Error in POST /api/admin/products", err);
@@ -352,9 +516,13 @@ export async function registerRoutes(
             .json({ success: false, error: "Invalid product payload" });
         }
 
+        const data = {
+          ...parsed.data,
+          imageUrl: parsed.data.imageUrl !== undefined ? (parsed.data.imageUrl?.trim() || undefined) : undefined,
+        };
         const updated = await storage.updateProduct(
           req.params.id,
-          parsed.data,
+          data,
         );
         return res.json({ success: true, data: updated });
       } catch (err) {
@@ -430,6 +598,35 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: "Failed to update order status" });
+      }
+    },
+  );
+
+  const verifyPaymentSchema = z.object({
+    paymentVerified: z.enum(["verified", "rejected"]),
+  });
+
+  app.put(
+    "/api/admin/orders/:id/verify-payment",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const parsed = verifyPaymentSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res
+            .status(400)
+            .json({ success: false, error: "Invalid payload" });
+        }
+        const updated = await storage.updateOrderPaymentVerified(
+          req.params.id,
+          parsed.data.paymentVerified,
+        );
+        return res.json({ success: true, data: updated });
+      } catch (err) {
+        console.error("Error in PUT /api/admin/orders/:id/verify-payment", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to update payment verification" });
       }
     },
   );

@@ -8,6 +8,7 @@ import {
   exportOrdersCSV,
   fetchAdminOrders,
   updateOrderStatus,
+  verifyOrderPayment,
   type AdminOrder,
 } from "@/lib/adminApi";
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +46,23 @@ export default function AdminOrders() {
     },
     onError: () => {
       toast({ title: "Failed to update status" });
+    },
+  });
+
+  const verifyMutation = useMutation({
+    mutationFn: ({
+      id,
+      paymentVerified,
+    }: {
+      id: string;
+      paymentVerified: "verified" | "rejected";
+    }) => verifyOrderPayment(id, paymentVerified),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      toast({ title: "Payment verification updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update verification" });
     },
   });
 
@@ -99,6 +117,7 @@ export default function AdminOrders() {
                 <th className="px-6 py-4 font-medium">Order</th>
                 <th className="px-6 py-4 font-medium">Customer</th>
                 <th className="px-6 py-4 font-medium">Date</th>
+                <th className="px-6 py-4 font-medium">Payment</th>
                 <th className="px-6 py-4 font-medium">Status</th>
                 <th className="px-6 py-4 font-medium text-right">Amount</th>
               </tr>
@@ -119,6 +138,9 @@ export default function AdminOrders() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="h-6 w-20 bg-muted rounded-full animate-pulse" />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="h-3 w-16 bg-muted animate-pulse" />
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="h-3 w-16 bg-muted animate-pulse ml-auto" />
@@ -150,6 +172,77 @@ export default function AdminOrders() {
                           {order.createdAt
                             ? new Date(order.createdAt).toLocaleDateString()
                             : ""}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col gap-1 text-xs">
+                            <span className="font-medium capitalize">
+                              {order.paymentMethod?.replace(/_/g, " ") ?? "—"}
+                            </span>
+                            {order.paymentProofUrl ? (
+                              <>
+                                <a
+                                  href={order.paymentProofUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline"
+                                >
+                                  View screenshot
+                                </a>
+                                {order.paymentVerified == null ? (
+                                  <div className="flex gap-1 mt-1">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs"
+                                      onClick={() =>
+                                        verifyMutation.mutate({
+                                          id: order.id,
+                                          paymentVerified: "verified",
+                                        })
+                                      }
+                                      disabled={verifyMutation.isPending}
+                                    >
+                                      Verify
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs text-red-600"
+                                      onClick={() =>
+                                        verifyMutation.mutate({
+                                          id: order.id,
+                                          paymentVerified: "rejected",
+                                        })
+                                      }
+                                      disabled={verifyMutation.isPending}
+                                    >
+                                      Reject
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Badge
+                                    variant="outline"
+                                    className={
+                                      order.paymentVerified === "verified"
+                                        ? "bg-[#E8F3EB] text-[#2C5234] text-[10px]"
+                                        : "bg-[#FDECEC] text-[#9A2D2D] text-[10px]"
+                                    }
+                                  >
+                                    {order.paymentVerified}
+                                  </Badge>
+                                )}
+                              </>
+                            ) : (
+                              order.paymentMethod &&
+                              ["esewa", "khalti", "bank"].includes(
+                                order.paymentMethod,
+                              ) && (
+                                <span className="text-muted-foreground">
+                                  Awaiting proof
+                                </span>
+                              )
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <select

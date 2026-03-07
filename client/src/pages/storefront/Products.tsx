@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
-import { useLocation, Link } from "wouter";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
-import { fetchProducts, type ProductApi } from "@/lib/api";
+import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 
 function ProductsSkeleton() {
@@ -20,12 +20,16 @@ function ProductsSkeleton() {
 }
 
 export default function Products() {
-  const [location] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const initialCategory = searchParams.get("category");
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>(initialCategory || "all");
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: fetchCategories,
+  });
 
   const filters = useMemo(
     () => ({
@@ -86,23 +90,27 @@ export default function Products() {
               Categories
             </h3>
             <div className="space-y-4">
-              {[
-                { label: "All", value: "all" },
-                { label: "Hoodies", value: "HOODIE" },
-                { label: "Trousers", value: "TROUSER" },
-                { label: "T-Shirts", value: "TSHIRTS" },
-                { label: "Winter '25", value: "WINTER_25" },
-              ].map((cat) => (
+              <button
+                onClick={() => setCategory("all")}
+                className={`block text-xs uppercase tracking-widest transition-colors w-full text-left ${
+                  category === "all"
+                    ? "font-bold text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                All
+              </button>
+              {categories.map((cat) => (
                 <button
-                  key={cat.value}
-                  onClick={() => setCategory(cat.value)}
-                  className={`block text-xs uppercase tracking-widest transition-colors ${
-                    category === cat.value
+                  key={cat.id}
+                  onClick={() => setCategory(cat.slug)}
+                  className={`block text-xs uppercase tracking-widest transition-colors w-full text-left ${
+                    category === cat.slug
                       ? "font-bold text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {cat.label}
+                  {cat.name}
                 </button>
               ))}
             </div>
@@ -134,6 +142,11 @@ export default function Products() {
                     className="group block"
                   >
                     <div className="aspect-[3/4] overflow-hidden bg-gray-50 mb-4 relative">
+                      {product.stock === 0 && (
+                        <div className="absolute top-3 left-3 z-10 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5">
+                          Out of Stock
+                        </div>
+                      )}
                       <img
                         src={product.imageUrl ?? ""}
                         alt={product.name}

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, MoreHorizontal, Pencil } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Pencil, ImageIcon, ArrowLeft, Upload } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,19 +15,17 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   createAdminProduct,
+  createCategory,
   deleteAdminProduct,
   fetchAdminProducts,
   updateAdminProduct,
+  uploadProductImage,
 } from "@/lib/adminApi";
-import type { ProductApi } from "@/lib/api";
+import { fetchCategories, type ProductApi } from "@/lib/api";
+import { compressImage } from "@/lib/imageUtils";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -55,21 +53,39 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
+const PRESET_COLORS = ["Black", "White", "Navy", "Grey", "Brown", "Beige", "Red", "Blue", "Green", "Pink", "Yellow", "Orange"];
+const PRESET_SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+}
 
 const productSchema = z.object({
   name: z.string().min(2, "Name required"),
-  category: z.enum([
-    "HOODIE",
-    "SWEATPANTS",
-    "JACKET",
-    "PULLOVER",
-    "POLO",
-    "SWEATSHIRT",
-  ]),
-  collection: z.string().default("s25w"),
-  price: z.coerce.number().min(1, "Price required"),
-  stock: z.coerce.number().min(0).default(0),
+  shortDetails: z.string().optional(),
   description: z.string().optional(),
+  category: z.string().min(1, "Category required"),
+  price: z.coerce.number().min(1, "Price required"),
+  stockStatus: z.enum(["in_stock", "out_of_stock"]),
+  stock: z.coerce.number().min(0).default(0),
+  imageUrl: z.string().optional(),
+  galleryUrlsText: z.string().optional(),
+  colorOptions: z.array(z.string()),
+  sizeOptions: z.array(z.string()),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -80,8 +96,20 @@ export default function AdminProducts() {
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<ProductApi | null>(null);
+  const [newCategoryOpen, setNewCategoryOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategorySlug, setNewCategorySlug] = useState("");
+  const [pendingCategoryForm, setPendingCategoryForm] = useState<"add" | "edit" | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: fetchCategories,
+  });
 
   const filters = useMemo(
     () => ({
@@ -104,11 +132,16 @@ export default function AdminProducts() {
     resolver: zodResolver(productSchema),
     defaultValues: {
       name: "",
-      category: "HOODIE",
-      collection: "s25w",
-      price: 0,
-      stock: 0,
+      shortDetails: "",
       description: "",
+      category: "",
+      price: 0,
+      stockStatus: "in_stock",
+      stock: 0,
+      imageUrl: "",
+      galleryUrlsText: "",
+      colorOptions: [],
+      sizeOptions: [],
     },
   });
 
@@ -116,49 +149,93 @@ export default function AdminProducts() {
     resolver: zodResolver(productSchema),
     defaultValues: {
       name: "",
-      category: "HOODIE",
-      collection: "s25w",
-      price: 0,
-      stock: 0,
+      shortDetails: "",
       description: "",
+      category: "",
+      price: 0,
+      stockStatus: "in_stock",
+      stock: 0,
+      imageUrl: "",
+      galleryUrlsText: "",
+      colorOptions: [],
+      sizeOptions: [],
     },
   });
 
+  // Sync default category when categories load
+  useEffect(() => {
+    if (categories.length && !addForm.getValues("category")) {
+      addForm.setValue("category", categories[0].slug);
+    }
+  }, [categories, addForm]);
+
   useEffect(() => {
     if (editProduct) {
+      const galleryUrls = parseJsonArray(editProduct.galleryUrls);
+      const colorOptions = parseJsonArray(editProduct.colorOptions);
+      const sizeOptions = parseJsonArray(editProduct.sizeOptions);
       editForm.reset({
         name: editProduct.name,
-        category: (editProduct.category as ProductFormValues["category"]) ??
-          "HOODIE",
-        collection: "s25w",
-        price: Number(editProduct.price),
-        stock: editProduct.stock,
+        shortDetails: editProduct.shortDetails ?? "",
         description: editProduct.description ?? "",
+        category: editProduct.category ?? "",
+        price: Number(editProduct.price),
+        stockStatus: editProduct.stock === 0 ? "out_of_stock" : "in_stock",
+        stock: editProduct.stock,
+        imageUrl: editProduct.imageUrl ?? "",
+        galleryUrlsText: galleryUrls.join("\n"),
+        colorOptions,
+        sizeOptions,
       });
     }
   }, [editProduct, editForm]);
 
+  function parseJsonArray(s: string | null | undefined): string[] {
+    if (!s || !s.trim()) return [];
+    try {
+      const a = JSON.parse(s);
+      return Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
   const addMutation = useMutation({
-    mutationFn: async (values: ProductFormValues) =>
-      createAdminProduct({
+    mutationFn: async (values: ProductFormValues) => {
+      const galleryUrls = values.galleryUrlsText
+        ? values.galleryUrlsText.split(/\n/).map((u) => u.trim()).filter(Boolean)
+        : [];
+      const stock = values.stockStatus === "out_of_stock" ? 0 : values.stock;
+      return createAdminProduct({
         name: values.name,
+        shortDetails: values.shortDetails || undefined,
         description: values.description ?? "",
         price: values.price,
-        imageUrl: null,
+        imageUrl: values.imageUrl?.trim() || undefined,
+        galleryUrls: galleryUrls.length ? JSON.stringify(galleryUrls) : undefined,
         category: values.category,
-        stock: values.stock,
-      }),
+        stock,
+        colorOptions: values.colorOptions.length ? JSON.stringify(values.colorOptions) : undefined,
+        sizeOptions: values.sizeOptions.length ? JSON.stringify(values.sizeOptions) : undefined,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       toast({ title: "Product added" });
       setAddOpen(false);
+      const firstSlug = categories[0]?.slug ?? "";
       addForm.reset({
         name: "",
-        category: "HOODIE",
-        collection: "s25w",
-        price: 0,
-        stock: 0,
+        shortDetails: "",
         description: "",
+        category: firstSlug,
+        price: 0,
+        stockStatus: "in_stock",
+        stock: 0,
+        imageUrl: "",
+        galleryUrlsText: "",
+        colorOptions: [],
+        sizeOptions: [],
       });
     },
     onError: () => {
@@ -169,12 +246,21 @@ export default function AdminProducts() {
   const editMutation = useMutation({
     mutationFn: async (values: ProductFormValues) => {
       if (!editProduct) throw new Error("No product selected");
+      const galleryUrls = values.galleryUrlsText
+        ? values.galleryUrlsText.split(/\n/).map((u) => u.trim()).filter(Boolean)
+        : [];
+      const stock = values.stockStatus === "out_of_stock" ? 0 : values.stock;
       return updateAdminProduct(editProduct.id, {
         name: values.name,
+        shortDetails: values.shortDetails || undefined,
         description: values.description ?? "",
         price: values.price,
+        imageUrl: values.imageUrl?.trim() || undefined,
+        galleryUrls: galleryUrls.length ? JSON.stringify(galleryUrls) : undefined,
         category: values.category,
-        stock: values.stock,
+        stock,
+        colorOptions: values.colorOptions.length ? JSON.stringify(values.colorOptions) : undefined,
+        sizeOptions: values.sizeOptions.length ? JSON.stringify(values.sizeOptions) : undefined,
       });
     },
     onSuccess: () => {
@@ -186,6 +272,21 @@ export default function AdminProducts() {
     onError: () => {
       toast({ title: "Failed to update product" });
     },
+  });
+
+  const createCategoryMutation = useMutation({
+    mutationFn: (data: { name: string; slug: string }) => createCategory(data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Category created" });
+      setNewCategoryOpen(false);
+      setNewCategoryName("");
+      setNewCategorySlug("");
+      if (pendingCategoryForm === "add") addForm.setValue("category", data.slug);
+      else if (pendingCategoryForm === "edit") editForm.setValue("category", data.slug);
+      setPendingCategoryForm(null);
+    },
+    onError: () => toast({ title: "Failed to create category", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -245,181 +346,296 @@ export default function AdminProducts() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Sheet open={addOpen} onOpenChange={setAddOpen}>
+          <Button
+            className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus className="w-4 h-4 mr-2" /> Add Product
+          </Button>
+        </div>
+      </div>
+
+      {/* Full-page Add Product overlay */}
+      {addOpen && (
+        <div className="fixed inset-0 z-50 bg-background overflow-auto">
+          <div className="max-w-2xl mx-auto p-6 pb-20">
             <Button
-              className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground"
-              onClick={() => setAddOpen(true)}
+              type="button"
+              variant="ghost"
+              className="mb-4 -ml-2"
+              onClick={() => { setAddOpen(false); addForm.reset(); }}
             >
-              <Plus className="w-4 h-4 mr-2" /> Add Product
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back to products
             </Button>
-            <SheetContent
-              side="right"
-              className="sm:max-w-[480px] w-full overflow-y-auto"
-            >
-              <SheetHeader className="mb-6">
-                <SheetTitle>Add New Product</SheetTitle>
-              </SheetHeader>
-              <Form {...addForm}>
-                <form
-                  onSubmit={addForm.handleSubmit((values) =>
-                    addMutation.mutate(values),
-                  )}
-                  className="space-y-8"
-                >
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">
-                      Basic Info
-                    </h3>
-                    <FormField
-                      control={addForm.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Product Name *</FormLabel>
+            <h2 className="text-2xl font-serif font-medium mb-8">Add New Product</h2>
+            <Form {...addForm}>
+              <form
+                onSubmit={addForm.handleSubmit((values) => addMutation.mutate(values))}
+                className="space-y-8"
+              >
+                <div className="space-y-4">
+                  <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground flex items-center gap-2">
+                    <ImageIcon className="h-3.5 w-3.5" /> Product Media
+                  </h3>
+                  <FormField
+                    control={addForm.control}
+                    name="imageUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Main image URL</FormLabel>
+                        <div className="flex gap-2 flex-wrap">
                           <FormControl>
-                            <Input placeholder="Two-Way Zip Hoodie" {...field} />
+                            <Input placeholder="https://..." className="font-mono text-sm flex-1 min-w-[200px]" {...field} />
                           </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={addForm.control}
-                      name="category"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Category *</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={uploadingImage}
+                            onClick={() => imageInputRef.current?.click()}
                           >
+                            <Upload className="w-4 h-4 mr-2" /> Upload from device
+                          </Button>
+                          <input
+                            ref={imageInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingImage(true);
+                              try {
+                                const dataUrl = await compressImage(file);
+                                const url = await uploadProductImage(dataUrl);
+                                addForm.setValue("imageUrl", url);
+                                toast({ title: "Image uploaded" });
+                              } catch {
+                                toast({ title: "Upload failed", variant: "destructive" });
+                              } finally {
+                                setUploadingImage(false);
+                                e.target.value = "";
+                              }
+                            }}
+                          />
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addForm.control}
+                    name="galleryUrlsText"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Gallery images (one URL per line)</FormLabel>
+                        <FormControl>
+                          <Textarea rows={3} placeholder="One URL per line" className="font-mono text-sm resize-none" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Product Details</h3>
+                  <FormField
+                    control={addForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Product Name *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Two-Way Zip Hoodie" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addForm.control}
+                    name="shortDetails"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Short details</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Brief tagline or key features" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Full description</FormLabel>
+                        <FormControl>
+                          <Textarea rows={4} placeholder="Full product description..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addForm.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Category *</FormLabel>
+                        <div className="flex gap-2 flex-wrap">
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger className="min-w-[180px]">
                                 <SelectValue placeholder="Select category" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="HOODIE">Hoodie</SelectItem>
-                              <SelectItem value="SWEATPANTS">
-                                Sweatpants
-                              </SelectItem>
-                              <SelectItem value="JACKET">Jacket</SelectItem>
-                              <SelectItem value="PULLOVER">Pullover</SelectItem>
-                              <SelectItem value="POLO">Polo</SelectItem>
-                              <SelectItem value="SWEATSHIRT">
-                                Sweatshirt
-                              </SelectItem>
+                              {categories.map((c) => (
+                                <SelectItem key={c.id} value={c.slug}>{c.name}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => { setPendingCategoryForm("add"); setNewCategoryOpen(true); }}
+                          >
+                            Add new category
+                          </Button>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Pricing &amp; Stock</h3>
+                  <FormField
+                    control={addForm.control}
+                    name="price"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price (NPR) *</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step="1" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addForm.control}
+                    name="stockStatus"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Stock status</FormLabel>
+                        <FormControl>
+                          <RadioGroup
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            className="flex gap-4"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="in_stock" id="add-in-stock" />
+                              <Label htmlFor="add-in-stock">In Stock</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="out_of_stock" id="add-out-of-stock" />
+                              <Label htmlFor="add-out-of-stock">Out of Stock</Label>
+                            </div>
+                          </RadioGroup>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {addForm.watch("stockStatus") === "in_stock" && (
                     <FormField
                       control={addForm.control}
-                      name="collection"
+                      name="stock"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Collection</FormLabel>
+                          <FormLabel>Quantity</FormLabel>
                           <FormControl>
-                            <Input placeholder="s25w" {...field} />
+                            <Input type="number" min={0} step="1" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">
-                      Pricing &amp; Stock
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={addForm.control}
-                        name="price"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Price (NPR) *</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min={0}
-                                step="1"
-                                {...field}
+                  )}
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Variations</h3>
+                  <FormField
+                    control={addForm.control}
+                    name="colorOptions"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Colors</FormLabel>
+                        <div className="flex flex-wrap gap-3">
+                          {PRESET_COLORS.map((color) => (
+                            <div key={color} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`add-color-${color}`}
+                                checked={field.value.includes(color)}
+                                onCheckedChange={(checked) => {
+                                  const next = checked
+                                    ? [...field.value, color]
+                                    : field.value.filter((c) => c !== color);
+                                  field.onChange(next);
+                                }}
                               />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={addForm.control}
-                        name="stock"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Stock</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min={0}
-                                step="1"
-                                {...field}
+                              <Label htmlFor={`add-color-${color}`} className="font-normal cursor-pointer">{color}</Label>
+                            </div>
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={addForm.control}
+                    name="sizeOptions"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Sizes</FormLabel>
+                        <div className="flex flex-wrap gap-3">
+                          {PRESET_SIZES.map((size) => (
+                            <div key={size} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`add-size-${size}`}
+                                checked={field.value.includes(size)}
+                                onCheckedChange={(checked) => {
+                                  const next = checked
+                                    ? [...field.value, size]
+                                    : field.value.filter((s) => s !== size);
+                                  field.onChange(next);
+                                }}
                               />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">
-                      Description
-                    </h3>
-                    <FormField
-                      control={addForm.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Textarea
-                              rows={4}
-                              placeholder="Short description for this product..."
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-4 border-t">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setAddOpen(false);
-                        addForm.reset();
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={addMutation.isPending}
-                    >
-                      Save Product
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </SheetContent>
-          </Sheet>
+                              <Label htmlFor={`add-size-${size}`} className="font-normal cursor-pointer">{size}</Label>
+                            </div>
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button type="button" variant="outline" onClick={() => { setAddOpen(false); addForm.reset(); }}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={addMutation.isPending}>
+                    Save Product
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
           <div className="relative w-full max-w-md">
@@ -433,34 +649,19 @@ export default function AdminProducts() {
         </div>
         
         <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 w-full sm:w-auto">
-          <Button 
-            variant={categoryFilter === "all" ? "default" : "outline"}
-            className={`rounded-full ${categoryFilter === "all" ? "bg-[#2C3E2D] text-white dark:bg-primary" : "bg-white dark:bg-card border-[#E5E5E0] dark:border-border"}`}
-            onClick={() => setCategoryFilter("all")}
-          >
-            All
-          </Button>
-          <Button 
-            variant={categoryFilter === "tops" ? "default" : "ghost"}
-            className={`rounded-full ${categoryFilter === "tops" ? "bg-[#2C3E2D] text-white dark:bg-primary" : ""}`}
-            onClick={() => setCategoryFilter("tops")}
-          >
-            Tops
-          </Button>
-          <Button 
-            variant={categoryFilter === "bottoms" ? "default" : "ghost"}
-            className={`rounded-full ${categoryFilter === "bottoms" ? "bg-[#2C3E2D] text-white dark:bg-primary" : ""}`}
-            onClick={() => setCategoryFilter("bottoms")}
-          >
-            Bottoms
-          </Button>
-          <Button 
-            variant={categoryFilter === "accessories" ? "default" : "ghost"}
-            className={`rounded-full ${categoryFilter === "accessories" ? "bg-[#2C3E2D] text-white dark:bg-primary" : ""}`}
-            onClick={() => setCategoryFilter("accessories")}
-          >
-            Accessories
-          </Button>
+          {[
+            { label: "All", value: "all" },
+            ...categories.map((c) => ({ label: c.name, value: c.slug })),
+          ].map((cat) => (
+            <Button
+              key={cat.value}
+              variant={categoryFilter === cat.value ? "default" : "outline"}
+              className={`rounded-full ${categoryFilter === cat.value ? "bg-[#2C3E2D] text-white dark:bg-primary" : "bg-white dark:bg-card border-[#E5E5E0] dark:border-border"}`}
+              onClick={() => setCategoryFilter(cat.value)}
+            >
+              {cat.label}
+            </Button>
+          ))}
         </div>
       </div>
 
@@ -557,92 +758,162 @@ export default function AdminProducts() {
             ))}
       </div>
 
-      <Sheet open={editOpen} onOpenChange={setEditOpen}>
-        <SheetContent
-          side="right"
-          className="sm:max-w-[480px] w-full overflow-y-auto"
-        >
-          <SheetHeader className="mb-6">
-            <SheetTitle>
-              {editProduct ? `Edit — ${editProduct.name}` : "Edit Product"}
-            </SheetTitle>
-          </SheetHeader>
-          <Form {...editForm}>
-            <form
-              onSubmit={editForm.handleSubmit((values) =>
-                editMutation.mutate(values),
-              )}
-              className="space-y-8"
+      {/* Full-page Edit Product overlay */}
+      {editOpen && editProduct && (
+        <div className="fixed inset-0 z-50 bg-background overflow-auto">
+          <div className="max-w-2xl mx-auto p-6 pb-20">
+            <Button
+              type="button"
+              variant="ghost"
+              className="mb-4 -ml-2"
+              onClick={() => { setEditOpen(false); setEditProduct(null); }}
             >
-              <div className="space-y-4">
-                <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">
-                  Basic Info
-                </h3>
-                <FormField
-                  control={editForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Product Name *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Two-Way Zip Hoodie" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={editForm.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category *</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back to products
+            </Button>
+            <h2 className="text-2xl font-serif font-medium mb-8">Edit — {editProduct.name}</h2>
+            <Form {...editForm}>
+              <form
+                onSubmit={editForm.handleSubmit((values) => editMutation.mutate(values))}
+                className="space-y-8"
+              >
+                <div className="space-y-4">
+                  <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground flex items-center gap-2">
+                    <ImageIcon className="h-3.5 w-3.5" /> Product Media
+                  </h3>
+                  <FormField
+                    control={editForm.control}
+                    name="imageUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Main image URL</FormLabel>
+                        <div className="flex gap-2 flex-wrap">
+                          <FormControl>
+                            <Input placeholder="https://..." className="font-mono text-sm flex-1 min-w-[200px]" {...field} />
+                          </FormControl>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={uploadingImage}
+                            onClick={() => imageInputRef.current?.click()}
+                          >
+                            <Upload className="w-4 h-4 mr-2" /> Upload from device
+                          </Button>
+                          <input
+                            ref={imageInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingImage(true);
+                              try {
+                                const dataUrl = await compressImage(file);
+                                const url = await uploadProductImage(dataUrl);
+                                editForm.setValue("imageUrl", url);
+                                toast({ title: "Image uploaded" });
+                              } catch {
+                                toast({ title: "Upload failed", variant: "destructive" });
+                              } finally {
+                                setUploadingImage(false);
+                                e.target.value = "";
+                              }
+                            }}
+                          />
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="galleryUrlsText"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Gallery images (one per line)</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
+                          <Textarea rows={3} placeholder="One URL per line" className="font-mono text-sm resize-none" {...field} />
                         </FormControl>
-                        <SelectContent>
-                          <SelectItem value="HOODIE">Hoodie</SelectItem>
-                          <SelectItem value="SWEATPANTS">
-                            Sweatpants
-                          </SelectItem>
-                          <SelectItem value="JACKET">Jacket</SelectItem>
-                          <SelectItem value="PULLOVER">Pullover</SelectItem>
-                          <SelectItem value="POLO">Polo</SelectItem>
-                          <SelectItem value="SWEATSHIRT">
-                            Sweatshirt
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={editForm.control}
-                  name="collection"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Collection</FormLabel>
-                      <FormControl>
-                        <Input placeholder="s25w" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">
-                  Pricing &amp; Stock
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Product Details</h3>
+                  <FormField
+                    control={editForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Product Name *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Two-Way Zip Hoodie" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="shortDetails"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Short details</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Brief tagline" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Full description</FormLabel>
+                        <FormControl>
+                          <Textarea rows={4} placeholder="Full description..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Category *</FormLabel>
+                        <div className="flex gap-2 flex-wrap">
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="min-w-[180px]">
+                                <SelectValue placeholder="Select category" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {categories.map((c) => (
+                                <SelectItem key={c.id} value={c.slug}>{c.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => { setPendingCategoryForm("edit"); setNewCategoryOpen(true); }}
+                          >
+                            Add new category
+                          </Button>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Pricing &amp; Stock</h3>
                   <FormField
                     control={editForm.control}
                     name="price"
@@ -650,12 +921,7 @@ export default function AdminProducts() {
                       <FormItem>
                         <FormLabel>Price (NPR) *</FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="1"
-                            {...field}
-                          />
+                          <Input type="number" min={0} step="1" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -663,96 +929,127 @@ export default function AdminProducts() {
                   />
                   <FormField
                     control={editForm.control}
-                    name="stock"
+                    name="stockStatus"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Stock</FormLabel>
+                        <FormLabel>Stock status</FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="1"
-                            {...field}
-                          />
+                          <RadioGroup
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            className="flex gap-4"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="in_stock" id="edit-in-stock" />
+                              <Label htmlFor="edit-in-stock">In Stock</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="out_of_stock" id="edit-out-of-stock" />
+                              <Label htmlFor="edit-out-of-stock">Out of Stock</Label>
+                            </div>
+                          </RadioGroup>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">
-                  Description
-                </h3>
-                <FormField
-                  control={editForm.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <Textarea
-                          rows={4}
-                          placeholder="Short description for this product..."
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                  {editForm.watch("stockStatus") === "in_stock" && (
+                    <FormField
+                      control={editForm.control}
+                      name="stock"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Quantity</FormLabel>
+                          <FormControl>
+                            <Input type="number" min={0} step="1" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   )}
-                />
-              </div>
-
-              <div className="space-y-3 pt-4 border-t">
-                <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">
-                  Variants
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Variants are currently managed via seed data or API. Editing
-                  from the dashboard will be added later.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3 pt-4 border-t">
-                <div className="flex justify-end gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setEditOpen(false);
-                      setEditProduct(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={editMutation.isPending || !editProduct}
-                  >
-                    Save Changes
-                  </Button>
                 </div>
-
-                {editProduct && (
+                <div className="space-y-4">
+                  <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Variations</h3>
+                  <FormField
+                    control={editForm.control}
+                    name="colorOptions"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Colors</FormLabel>
+                        <div className="flex flex-wrap gap-3">
+                          {PRESET_COLORS.map((color) => (
+                            <div key={color} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`edit-color-${color}`}
+                                checked={field.value.includes(color)}
+                                onCheckedChange={(checked) => {
+                                  const next = checked
+                                    ? [...field.value, color]
+                                    : field.value.filter((c) => c !== color);
+                                  field.onChange(next);
+                                }}
+                              />
+                              <Label htmlFor={`edit-color-${color}`} className="font-normal cursor-pointer">{color}</Label>
+                            </div>
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="sizeOptions"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Sizes</FormLabel>
+                        <div className="flex flex-wrap gap-3">
+                          {PRESET_SIZES.map((size) => (
+                            <div key={size} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`edit-size-${size}`}
+                                checked={field.value.includes(size)}
+                                onCheckedChange={(checked) => {
+                                  const next = checked
+                                    ? [...field.value, size]
+                                    : field.value.filter((s) => s !== size);
+                                  field.onChange(next);
+                                }}
+                              />
+                              <Label htmlFor={`edit-size-${size}`} className="font-normal cursor-pointer">{size}</Label>
+                            </div>
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="flex flex-col gap-3 pt-4 border-t">
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => { setEditOpen(false); setEditProduct(null); }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={editMutation.isPending}>
+                      Save Changes
+                    </Button>
+                  </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        className="w-full mt-4"
-                      >
+                      <Button type="button" variant="destructive" className="w-full mt-4">
                         Delete Product
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          Delete this product?
-                        </AlertDialogTitle>
+                        <AlertDialogTitle>Delete this product?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This cannot be undone. All variant and image data will
-                          be removed.
+                          This cannot be undone. All variant and image data will be removed.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -760,10 +1057,7 @@ export default function AdminProducts() {
                         <AlertDialogAction
                           onClick={() => {
                             deleteMutation.mutate(editProduct.id, {
-                              onSuccess: () => {
-                                setEditOpen(false);
-                                setEditProduct(null);
-                              },
+                              onSuccess: () => { setEditOpen(false); setEditProduct(null); },
                             });
                           }}
                         >
@@ -772,12 +1066,65 @@ export default function AdminProducts() {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                )}
-              </div>
-            </form>
-          </Form>
-        </SheetContent>
-      </Sheet>
+                </div>
+              </form>
+            </Form>
+          </div>
+        </div>
+      )}
+
+      <Dialog open={newCategoryOpen} onOpenChange={setNewCategoryOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add new category</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="new-cat-name">Name</Label>
+              <Input
+                id="new-cat-name"
+                value={newCategoryName}
+                onChange={(e) => {
+                  setNewCategoryName(e.target.value);
+                  setNewCategorySlug(slugify(e.target.value));
+                }}
+                placeholder="e.g. Hoodies"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="new-cat-slug">Slug</Label>
+              <Input
+                id="new-cat-slug"
+                value={newCategorySlug}
+                onChange={(e) => setNewCategorySlug(e.target.value)}
+                placeholder="e.g. hoodies"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setNewCategoryOpen(false); setNewCategoryName(""); setNewCategorySlug(""); setPendingCategoryForm(null); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (!newCategoryName.trim() || !newCategorySlug.trim()) {
+                  toast({ title: "Name and slug required", variant: "destructive" });
+                  return;
+                }
+                createCategoryMutation.mutate({ name: newCategoryName.trim(), slug: newCategorySlug.trim() });
+              }}
+              disabled={createCategoryMutation.isPending}
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

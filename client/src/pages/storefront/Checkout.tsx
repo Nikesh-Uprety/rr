@@ -3,11 +3,21 @@ import { Link, useLocation } from "wouter";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Wallet, Banknote, Building2, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { createOrder } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+
+const PAYMENT_OPTIONS = [
+  { id: "e_wallet", label: "E-Wallet", icon: Wallet, logoColor: "bg-indigo-600" },
+  { id: "esewa", label: "eSewa", icon: Smartphone, logoColor: "bg-[#54B848]" },
+  { id: "khalti", label: "Khalti", icon: Smartphone, logoColor: "bg-[#5C2D91]" },
+  { id: "bank", label: "Bank Transfer", icon: Building2, logoColor: "bg-slate-700" },
+  { id: "cash_on_delivery", label: "Cash on Delivery", icon: Banknote, logoColor: "bg-amber-600" },
+] as const;
+
+export type PaymentMethodId = (typeof PAYMENT_OPTIONS)[number]["id"];
 
 export default function Checkout() {
   const [, setLocation] = useLocation();
@@ -16,6 +26,7 @@ export default function Checkout() {
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [formError, setFormError] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId>("cash_on_delivery");
 
   const shipping = 100;
   const subtotal = useMemo(
@@ -49,10 +60,10 @@ export default function Checkout() {
     const address = String(formData.get("address") || "").trim();
     const city = String(formData.get("city") || "").trim();
     const state = String(formData.get("state") || "").trim();
-    const zip = String(formData.get("zip") || "").trim();
+    const zip = "00000"; // Nepal – not collected
     const phone = String(formData.get("phone") || "").trim();
 
-    if (!firstName || !lastName || !email || !address || !city || !state || !zip) {
+    if (!firstName || !lastName || !email || !address || !city || !state) {
       setFormError("Please fill in all required fields.");
       return;
     }
@@ -75,11 +86,24 @@ export default function Checkout() {
           zip,
           country: "NP",
         },
-        paymentMethod: "cash_on_delivery",
+        paymentMethod,
       });
 
       if (!result.success || !result.data) {
         setFormError(result.error || "Failed to place order.");
+        return;
+      }
+
+      const needsPaymentPage =
+        paymentMethod === "esewa" ||
+        paymentMethod === "khalti" ||
+        paymentMethod === "bank";
+
+      if (needsPaymentPage) {
+        clearCart();
+        setLocation(
+          `/checkout/payment?orderId=${result.data.order.id}&method=${paymentMethod}`,
+        );
         return;
       }
 
@@ -155,7 +179,7 @@ export default function Checkout() {
                 className="h-14 rounded-none border-gray-200"
                 required
               />
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <Input
                   name="city"
                   placeholder="City"
@@ -168,18 +192,48 @@ export default function Checkout() {
                   className="h-14 rounded-none border-gray-200"
                   required
                 />
-                <Input
-                  name="zip"
-                  placeholder="Zip code"
-                  className="h-14 rounded-none border-gray-200"
-                  required
-                />
               </div>
               <Input
                 name="phone"
                 placeholder="Phone"
                 className="h-14 rounded-none border-gray-200"
               />
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-xl font-black uppercase tracking-tighter mb-6">
+              Payment Option
+            </h2>
+            <div className="space-y-3">
+              {PAYMENT_OPTIONS.map((opt) => {
+                const Icon = opt.icon;
+                const isSelected = paymentMethod === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setPaymentMethod(opt.id)}
+                    className={`w-full flex items-center gap-4 p-4 rounded-none border-2 text-left transition-colors ${
+                      isSelected
+                        ? "border-black bg-black/5"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <span
+                      className={`w-12 h-12 rounded-none flex items-center justify-center text-white shrink-0 ${opt.logoColor}`}
+                    >
+                      <Icon className="w-6 h-6" />
+                    </span>
+                    <span className="font-semibold uppercase tracking-wide text-sm">
+                      {opt.label}
+                    </span>
+                    {isSelected && (
+                      <CheckCircle2 className="w-5 h-5 text-black ml-auto shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

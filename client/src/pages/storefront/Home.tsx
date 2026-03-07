@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
+import { formatPrice } from "@/lib/format";
 import { MOCK_PRODUCTS } from "@/lib/mockData";
 import { Link } from "wouter";
-import { formatPrice } from "@/lib/format";
 
 export default function Home() {
   const featuredProducts = MOCK_PRODUCTS.slice(0, 2);
@@ -14,8 +14,8 @@ export default function Home() {
         <img
           alt="Luxury street style campaign"
           className="w-full h-full object-cover"
-          // src="https://i.ibb.co/67cBG904/landing-page.png"
-          src="https://i.ibb.co/DDcQv54D/landingpage1.png"
+          src="https://i.ibb.co/67cBG904/landing-page.png"
+          // src="https://i.ibb.co/DDcQv54D/landingpage1.png"
         />
         <div className="absolute inset-0 bg-black/10 dark:bg-black/30" />
         <div className="absolute inset-0 flex items-center justify-start container mx-auto px-6 sm:px-12">

@@ -188,9 +188,11 @@ export default function Home() {
         <div className="container mx-auto px-6 max-w-7xl">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-16 mb-32">
             <div className="col-span-1">
-              <h2 className="text-4xl font-black tracking-tighter mb-8 italic">
-                RARE
-              </h2>
+              <img
+                src="https://cdn2.blanxer.com/brand_logo/67cd36dcf133882caba612b4/67d00c07ef86879da12106aa.webp"
+                alt="RARE"
+                className="h-12 w-auto mb-8 object-contain"
+              />
               <p className="text-gray-500 text-sm leading-relaxed tracking-wide">
                 Khusibu, Nayabazar, Kathmandu
                 <br />

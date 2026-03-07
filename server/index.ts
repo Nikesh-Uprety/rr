@@ -10,6 +10,8 @@ import { passport, configurePassport } from "./auth";
 import { pool } from "./db";
 
 const app = express();
+// Behind Render's proxy, trust X-Forwarded-* so secure cookies work
+app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 declare module "http" {

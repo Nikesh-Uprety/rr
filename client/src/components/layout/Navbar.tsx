@@ -117,17 +117,17 @@ export default function Navbar() {
               </button>
             )}
 
-            <Link
-              href="/cart"
-              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors relative"
-            >
-              <ShoppingBag className="w-5 h-5" />
-              {cartItemsCount > 0 && (
+            {cartItemsCount > 0 && (
+              <Link
+                href="/cart"
+                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors relative"
+              >
+                <ShoppingBag className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full min-w-4 h-4 px-1 flex items-center justify-center text-[10px] font-bold">
                   {cartItemsCount}
                 </span>
-              )}
-            </Link>
+              </Link>
+            )}
 
             {isAuthenticated && user ? (
               <div className="flex items-center gap-2">

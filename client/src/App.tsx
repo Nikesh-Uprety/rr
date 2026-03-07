@@ -22,6 +22,7 @@ import AdminOrders from "@/pages/admin/Orders";
 import AdminCustomers from "@/pages/admin/Customers";
 import AdminPOS from "@/pages/admin/POS";
 import AdminAnalytics from "@/pages/admin/Analytics";
+import AdminDashboard from "@/pages/admin/Dashboard";
 
 import LoginPage from "@/pages/auth/Login";
 import NotFound from "@/pages/not-found";
@@ -65,7 +66,11 @@ function Router() {
     <Switch>
       {/* Admin Routes */}
       <Route path="/admin">
-        <Redirect to="/admin/analytics" />
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminDashboard />
+          </AdminLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/admin/analytics">
         <ProtectedRoute requireAdmin>

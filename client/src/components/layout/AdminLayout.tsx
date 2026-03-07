@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const ADMIN_NAV = [
-  { href: "/admin", icon: LayoutGrid, label: "Overview" },
+  { href: "/admin", icon: LayoutGrid, label: "Dashboard" },
   { href: "/admin/products", icon: Package, label: "Products" },
   { href: "/admin/orders", icon: ShoppingBag, label: "Orders" },
   { href: "/admin/customers", icon: User, label: "Customers" },

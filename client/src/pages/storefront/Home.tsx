@@ -1,12 +1,38 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
 import { MOCK_PRODUCTS } from "@/lib/mockData";
 import { Link } from "wouter";
 import { ExternalLink } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchProducts, type ProductApi } from "@/lib/api";
+
+const LIFESTYLE_IMAGES = [
+  "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=1200&q=80",
+  "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=1200&q=80",
+  "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=1200&q=80",
+  "https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=1200&q=80",
+  "https://images.unsplash.com/photo-1578768079052-aa76e52d4f8e?w=1200&q=80",
+];
 
 export default function Home() {
-  const featuredProducts = MOCK_PRODUCTS.slice(0, 2);
+  const [carouselIndex, setCarouselIndex] = useState(0);
+
+  const { data: apiProducts = [] } = useQuery({
+    queryKey: ["products", "featured"],
+    queryFn: () => fetchProducts({ limit: 2 }),
+  });
+
+  const featuredProducts = apiProducts.slice(0, 2);
+
   const newArrivals = MOCK_PRODUCTS.slice(2, 6);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setCarouselIndex((i) => (i + 1) % LIFESTYLE_IMAGES.length);
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen pt-20">
@@ -18,7 +44,7 @@ export default function Home() {
           src="https://i.ibb.co/67cBG904/landing-page.png"
           // src="https://i.ibb.co/DDcQv54D/landingpage1.png"
         />
-        <div className="absolute inset-0 bg-black/10 dark:bg-black/30" />
+        <div className="absolute inset-0 bg-black/50" />
         <div className="absolute inset-0 flex items-center justify-start container mx-auto px-6 sm:px-12">
           <div className="animate-in fade-in slide-in-from-left-8 duration-1000 max-w-4xl text-white">
             <h1 className="font-serif text-6xl md:text-8xl lg:text-9xl font-bold leading-none tracking-tighter mb-8">
@@ -41,14 +67,39 @@ export default function Home() {
       </section>
 
       {/* Quote Section */}
-      <section className="py-32 md:py-48 bg-background">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <p className="text-3xl md:text-5xl italic font-serif text-foreground/90 leading-tight">
-            "Products are made in a factory but brands are created in the mind."
-          </p>
-          <p className="mt-12 text-xs tracking-[0.3em] uppercase text-muted-foreground font-bold">
-            — Walter Landor
-          </p>
+      <section className="py-16 md:py-20 bg-neutral-950 text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-950" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-white/5 blur-3xl" />
+        <div className="relative max-w-4xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
+            <div className="flex items-center gap-4 shrink-0">
+              <img
+                src="/images/walter-landor.png"
+                alt="Walter Landor"
+                className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover ring-2 ring-white/20 animate-in fade-in zoom-in duration-700"
+              />
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 font-bold">Designer</span>
+                <div className="flex gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-white/60 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-white/40 animate-pulse delay-150" />
+                  <div className="w-2 h-2 rounded-full bg-white/20 animate-pulse delay-300" />
+                </div>
+              </div>
+            </div>
+            <div className="text-center md:text-left">
+              <p className="text-2xl md:text-4xl italic font-serif text-white/95 leading-snug animate-in fade-in slide-in-from-bottom-4 duration-700">
+                &ldquo;Products are made in a factory but brands are created in the mind.&rdquo;
+              </p>
+              <div className="mt-6 flex items-center justify-center md:justify-start gap-4">
+                <div className="h-px flex-1 max-w-12 bg-white/30" />
+                <p className="text-xs tracking-[0.3em] uppercase text-neutral-400 font-bold">
+                  Walter Landor
+                </p>
+                <div className="h-px flex-1 max-w-12 bg-white/30" />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -69,6 +120,32 @@ export default function Home() {
           >
             View All
           </Link>
+        </div>
+
+        {/* Lifestyle carousel */}
+        <div className="relative aspect-[21/9] overflow-hidden rounded-sm mb-16 bg-neutral-100 dark:bg-neutral-900">
+          {LIFESTYLE_IMAGES.map((src, i) => (
+            <img
+              key={src}
+              src={src}
+              alt=""
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+                i === carouselIndex ? "opacity-100 z-10" : "opacity-0 z-0"
+              }`}
+            />
+          ))}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
+            {LIFESTYLE_IMAGES.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCarouselIndex(i)}
+                className={`h-1.5 rounded-full transition-all ${
+                  i === carouselIndex ? "w-6 bg-white" : "w-1.5 bg-white/50 hover:bg-white/70"
+                }`}
+                aria-label={`Go to slide ${i + 1}`}
+              />
+            ))}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
@@ -92,7 +169,7 @@ export default function Home() {
                   <ExternalLink className="h-3.5 w-3.5" />
                 </button>
                 <img
-                  src={product.images[0]}
+                  src={product.imageUrl ?? ""}
                   alt={product.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
                 />

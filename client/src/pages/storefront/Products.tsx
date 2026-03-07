@@ -10,9 +10,9 @@ function ProductsSkeleton() {
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="space-y-3">
-          <div className="aspect-[3/4] bg-gray-100 animate-pulse" />
-          <div className="h-3 w-3/4 bg-gray-100 animate-pulse" />
-          <div className="h-3 w-1/2 bg-gray-100 animate-pulse" />
+          <div className="aspect-[3/4] bg-neutral-800 rounded-sm animate-pulse" />
+          <div className="h-3 w-3/4 bg-neutral-800 rounded animate-pulse" />
+          <div className="h-3 w-1/2 bg-neutral-800 rounded animate-pulse" />
         </div>
       ))}
     </div>
@@ -61,6 +61,22 @@ export default function Products() {
       return matchesSearch && matchesCategory;
     });
   }, [products, search, category]);
+
+  const productsByCategory = useMemo(() => {
+    const map = new Map<string | null, ProductApi[]>();
+    for (const p of filteredProducts) {
+      const cat = p.category ?? "uncategorized";
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(p);
+    }
+    return map;
+  }, [filteredProducts]);
+
+  const getCategoryDisplayName = (slug: string | null) => {
+    if (!slug || slug === "uncategorized") return "Other";
+    const c = categories.find((x) => x.slug === slug);
+    return c?.name ?? slug.replace(/-/g, " ").replace(/\b\w/g, (w) => w.toUpperCase());
+  };
 
   return (
     <div className="container mx-auto px-4 py-20 mt-20">
@@ -117,68 +133,75 @@ export default function Products() {
           </div>
         </aside>
 
-        <div className="flex-1">
+        <div className="flex-1 bg-neutral-950 text-white rounded-xl p-8 md:p-10 border border-neutral-800/50 min-h-[400px]">
           {isLoading ? (
             <ProductsSkeleton />
           ) : isError ? (
             <div className="py-20 text-center space-y-4">
-              <p className="uppercase text-[10px] tracking-widest font-bold text-muted-foreground">
+              <p className="uppercase text-[10px] tracking-widest font-bold text-neutral-400">
                 Failed to load products. Try again.
               </p>
               <button
                 onClick={() => refetch()}
-                className="text-[10px] uppercase tracking-widest border px-4 py-2"
+                className="text-[10px] uppercase tracking-widest border border-neutral-600 px-4 py-2 rounded-lg hover:bg-neutral-800 transition-colors"
               >
                 Retry
               </button>
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
-                {filteredProducts.map((product) => (
-                  <Link
-                    key={product.id}
-                    href={`/product/${product.id}`}
-                    className="group block"
-                  >
-                    <div className="aspect-[3/4] overflow-hidden bg-gray-50 mb-4 relative">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          window.open(`/product/${product.id}`, "_blank");
-                        }}
-                        className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                        aria-label="Open product in new tab"
+              {Array.from(productsByCategory.entries()).map(([catSlug, prods]) => (
+                <div key={catSlug ?? "other"} className="mb-16 last:mb-0">
+                  <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-neutral-400 mb-6 pb-3 border-b border-neutral-800">
+                    {getCategoryDisplayName(catSlug)}
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
+                    {prods.map((product) => (
+                      <Link
+                        key={product.id}
+                        href={`/product/${product.id}`}
+                        className="group block"
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </button>
-                      {product.stock === 0 && (
-                        <div className="absolute top-3 left-3 z-10 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5">
-                          Out of Stock
+                        <div className="aspect-[3/4] overflow-hidden bg-neutral-900 mb-4 relative rounded-sm">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              window.open(`/product/${product.id}`, "_blank");
+                            }}
+                            className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                            aria-label="Open product in new tab"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </button>
+                          {product.stock === 0 && (
+                            <div className="absolute top-3 left-3 z-10 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded">
+                              Out of Stock
+                            </div>
+                          )}
+                          <img
+                            src={product.imageUrl ?? ""}
+                            alt={product.name}
+                            className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
+                          />
                         </div>
-                      )}
-                      <img
-                        src={product.imageUrl ?? ""}
-                        alt={product.name}
-                        className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="mb-2 font-semibold text-[24px] text-[#565656] dark:text-white truncate">
-                        {product.name}
-                      </h3>
-                      <p className="text-muted-foreground text-[10px]">
-                        {formatPrice(product.price)}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
+                        <div className="space-y-1">
+                          <h3 className="mb-2 font-semibold text-base text-white truncate group-hover:text-neutral-300 transition-colors">
+                            {product.name}
+                          </h3>
+                          <p className="text-neutral-400 text-[10px] font-medium uppercase tracking-wider">
+                            {formatPrice(product.price)}
+                          </p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
 
               {filteredProducts.length === 0 && !isLoading && !isError && (
-                <div className="py-20 text-center uppercase text-[10px] tracking-widest font-bold text-muted-foreground">
+                <div className="py-20 text-center uppercase text-[10px] tracking-widest font-bold text-neutral-400">
                   No products found.
                 </div>
               )}

@@ -2,7 +2,7 @@ services:
   - type: web
     name: rare-np
     runtime: node
-    buildCommand: npm install && npm run build
+    buildCommand: buildCommand: npm install && npm run build && npm run db:push
     startCommand: npm start
     envVars:
       - key: NODE_ENV

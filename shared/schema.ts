@@ -120,7 +120,7 @@ export const otpTokens = pgTable("otp_tokens", {
   id: varchar("id").primaryKey(),
   userId: varchar("user_id")
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: "cascade" }),
   token: text("token").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   used: integer("used").notNull().default(0),

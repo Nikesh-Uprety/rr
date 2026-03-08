@@ -142,3 +142,44 @@
     @apply font-serif;
   }
 }
+
+/* Quote section icon animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  25% { transform: translateY(-12px) rotate(5deg); }
+  50% { transform: translateY(-6px) rotate(-3deg); }
+  75% { transform: translateY(-14px) rotate(2deg); }
+}
+
+@keyframes float-delayed {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  25% { transform: translateY(-8px) rotate(-4deg); }
+  50% { transform: translateY(-16px) rotate(6deg); }
+  75% { transform: translateY(-4px) rotate(-2deg); }
+}
+
+@keyframes revolve {
+  0% { transform: rotate(0deg) translateX(40px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(40px) rotate(-360deg); }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float-delayed 7s ease-in-out infinite;
+}
+
+.animate-revolve {
+  animation: revolve 12s linear infinite;
+}
+
+.animate-sparkle {
+  animation: sparkle 3s ease-in-out infinite;
+}

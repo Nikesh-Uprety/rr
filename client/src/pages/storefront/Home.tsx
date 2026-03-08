@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
 import { MOCK_PRODUCTS } from "@/lib/mockData";
 import { Link } from "wouter";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Sparkles, Star, Gem, Diamond, ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 
@@ -17,6 +17,13 @@ const LIFESTYLE_IMAGES = [
 
 export default function Home() {
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+  const dragStartX = useRef(0);
+  const isDragging = useRef(false);
+  const interactionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: apiProducts = [] } = useQuery({
     queryKey: ["products", "featured"],
@@ -27,12 +34,90 @@ export default function Home() {
 
   const newArrivals = MOCK_PRODUCTS.slice(2, 6);
 
+  const goToSlide = useCallback((index: number) => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setCarouselIndex(index);
+    setTimeout(() => setIsTransitioning(false), 600);
+  }, [isTransitioning]);
+
+  const goNext = useCallback(() => {
+    goToSlide((carouselIndex + 1) % LIFESTYLE_IMAGES.length);
+  }, [carouselIndex, goToSlide]);
+
+  const goPrev = useCallback(() => {
+    goToSlide((carouselIndex - 1 + LIFESTYLE_IMAGES.length) % LIFESTYLE_IMAGES.length);
+  }, [carouselIndex, goToSlide]);
+
+  // Pause auto-scroll on interaction, resume after 5s
+  const pauseAutoScroll = useCallback(() => {
+    if (autoPlayRef.current) {
+      clearInterval(autoPlayRef.current);
+      autoPlayRef.current = null;
+    }
+    if (interactionTimeoutRef.current) {
+      clearTimeout(interactionTimeoutRef.current);
+    }
+    interactionTimeoutRef.current = setTimeout(() => {
+      autoPlayRef.current = setInterval(() => {
+        setCarouselIndex((i) => (i + 1) % LIFESTYLE_IMAGES.length);
+      }, 5000);
+    }, 5000);
+  }, []);
+
+  // Auto-scroll effect
   useEffect(() => {
-    const t = setInterval(() => {
+    autoPlayRef.current = setInterval(() => {
       setCarouselIndex((i) => (i + 1) % LIFESTYLE_IMAGES.length);
     }, 5000);
-    return () => clearInterval(t);
+    return () => {
+      if (autoPlayRef.current) clearInterval(autoPlayRef.current);
+      if (interactionTimeoutRef.current) clearTimeout(interactionTimeoutRef.current);
+    };
   }, []);
+
+  // Touch handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchEndX.current = e.touches[0].clientX;
+    pauseAutoScroll();
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = () => {
+    const diff = touchStartX.current - touchEndX.current;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) goNext();
+      else goPrev();
+    }
+  };
+
+  // Mouse drag handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    pauseAutoScroll();
+    e.preventDefault();
+  };
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+    e.preventDefault();
+  };
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    const diff = dragStartX.current - e.clientX;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) goNext();
+      else goPrev();
+    }
+  };
+  const handleMouseLeave = () => {
+    if (isDragging.current) {
+      isDragging.current = false;
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen pt-20">
@@ -70,20 +155,51 @@ export default function Home() {
       <section className="py-16 md:py-20 bg-neutral-950 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-950" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-white/5 blur-3xl" />
+        
+        {/* Floating/revolving animated icons */}
+        <div className="absolute inset-0 pointer-events-none">
+          <Sparkles className="absolute top-[15%] left-[10%] w-5 h-5 text-white/20 animate-float" />
+          <Star className="absolute top-[20%] right-[12%] w-4 h-4 text-white/15 animate-float-delayed" />
+          <Gem className="absolute bottom-[20%] left-[8%] w-4 h-4 text-white/15 animate-float-delayed" style={{ animationDelay: '1s' }} />
+          <Diamond className="absolute bottom-[25%] right-[15%] w-5 h-5 text-white/20 animate-float" style={{ animationDelay: '2s' }} />
+          <Sparkles className="absolute top-[50%] left-[5%] w-3 h-3 text-white/10 animate-sparkle" style={{ animationDelay: '0.5s' }} />
+          <Star className="absolute top-[40%] right-[6%] w-3 h-3 text-white/10 animate-sparkle" style={{ animationDelay: '1.5s' }} />
+          {/* Revolving icon around quote center */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+            <Diamond className="w-3 h-3 text-white/15 animate-revolve" />
+          </div>
+        </div>
+
         <div className="relative max-w-4xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
-            <div className="flex items-center gap-4 shrink-0">
-              <img
-                src="/images/walter-landor.png"
-                alt="Walter Landor"
-                className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover ring-2 ring-white/20 animate-in fade-in zoom-in duration-700"
-              />
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 font-bold">Designer</span>
-                <div className="flex gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-white/60 animate-pulse" />
-                  <div className="w-2 h-2 rounded-full bg-white/40 animate-pulse delay-150" />
-                  <div className="w-2 h-2 rounded-full bg-white/20 animate-pulse delay-300" />
+            <div className="flex items-center gap-4 shrink-0 relative">
+              {/* Fading image with organic shape */}
+              <div className="relative w-20 h-20 md:w-24 md:h-24">
+                <div 
+                  className="w-full h-full animate-in fade-in zoom-in duration-700"
+                  style={{
+                    clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)',
+                  }}
+                >
+                  <img
+                    src="/images/walter-landor.png"
+                    alt="Walter Landor"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                {/* Fading glow around the shape */}
+                <div 
+                  className="absolute inset-[-4px] bg-gradient-to-br from-white/20 via-transparent to-white/10 blur-sm -z-10"
+                  style={{
+                    clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)',
+                  }}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex gap-2 items-center">
+                  <Sparkles className="w-3 h-3 text-white/50 animate-sparkle" />
+                  <Gem className="w-3 h-3 text-white/30 animate-sparkle" style={{ animationDelay: '1s' }} />
+                  <Star className="w-3 h-3 text-white/20 animate-sparkle" style={{ animationDelay: '2s' }} />
                 </div>
               </div>
             </div>
@@ -122,25 +238,61 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Lifestyle carousel */}
-        <div className="relative aspect-[21/9] overflow-hidden rounded-sm mb-16 bg-neutral-100 dark:bg-neutral-900">
-          {LIFESTYLE_IMAGES.map((src, i) => (
-            <img
-              key={src}
-              src={src}
-              alt=""
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
-                i === carouselIndex ? "opacity-100 z-10" : "opacity-0 z-0"
-              }`}
-            />
-          ))}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
+        {/* Lifestyle carousel — swipeable with slide transitions */}
+        <div
+          className="relative aspect-[21/9] overflow-hidden rounded-sm mb-16 bg-neutral-100 dark:bg-neutral-900 cursor-grab active:cursor-grabbing select-none group/carousel"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+        >
+          {/* Sliding images container */}
+          <div
+            className="flex h-full transition-transform duration-600 ease-in-out"
+            style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
+          >
+            {LIFESTYLE_IMAGES.map((src, i) => (
+              <img
+                key={src}
+                src={src}
+                alt={`Featured collection image ${i + 1}`}
+                className="w-full h-full object-cover flex-shrink-0"
+                draggable={false}
+              />
+            ))}
+          </div>
+
+          {/* Left arrow */}
+          <button
+            onClick={(e) => { e.stopPropagation(); pauseAutoScroll(); goPrev(); }}
+            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover/carousel:opacity-100 transition-all duration-300 hover:bg-black/60 hover:scale-110"
+            aria-label="Previous slide"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+
+          {/* Right arrow */}
+          <button
+            onClick={(e) => { e.stopPropagation(); pauseAutoScroll(); goNext(); }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover/carousel:opacity-100 transition-all duration-300 hover:bg-black/60 hover:scale-110"
+            aria-label="Next slide"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+
+          {/* Dynamic dot indicators */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2.5 items-center bg-black/20 backdrop-blur-sm rounded-full px-3 py-2">
             {LIFESTYLE_IMAGES.map((_, i) => (
               <button
                 key={i}
-                onClick={() => setCarouselIndex(i)}
-                className={`h-1.5 rounded-full transition-all ${
-                  i === carouselIndex ? "w-6 bg-white" : "w-1.5 bg-white/50 hover:bg-white/70"
+                onClick={(e) => { e.stopPropagation(); pauseAutoScroll(); goToSlide(i); }}
+                className={`rounded-full transition-all duration-500 ease-out ${
+                  i === carouselIndex
+                    ? "w-7 h-2.5 bg-white shadow-lg shadow-white/30"
+                    : "w-2.5 h-2.5 bg-white/40 hover:bg-white/70 hover:scale-125"
                 }`}
                 aria-label={`Go to slide ${i + 1}`}
               />

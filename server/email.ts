@@ -1,18 +1,33 @@
 import nodemailer from "nodemailer";
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.SMTP_EMAIL,
-    pass: process.env.SMTP_PASSWORD,
-  },
-});
+const hasSmtp =
+  process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD && process.env.SMTP_EMAIL.trim() && process.env.SMTP_PASSWORD.trim();
+
+const transporter = hasSmtp
+  ? nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.SMTP_EMAIL,
+        pass: process.env.SMTP_PASSWORD,
+      },
+    })
+  : null;
 
 export async function sendOTPEmail(to: string, code: string, name: string) {
-  await transporter.sendMail({
-    from: `"RARE Nepal" <${process.env.SMTP_EMAIL}>`,
-    to,
-    subject: "Your RARE.np verification code",
+  if (!transporter || !hasSmtp) {
+    console.warn(
+      "[DEV] SMTP not configured (SMTP_EMAIL/SMTP_PASSWORD missing). OTP for",
+      to,
+      "->",
+      code
+    );
+    return;
+  }
+  try {
+    await transporter.sendMail({
+      from: `"RARE Nepal" <${process.env.SMTP_EMAIL}>`,
+      to,
+      subject: "Your RARE.np verification code",
     html: `
       <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px; background: #FAFAF8;">
         <h1 style="font-size: 24px; color: #111; margin-bottom: 8px;">Verification Code</h1>
@@ -25,7 +40,16 @@ export async function sendOTPEmail(to: string, code: string, name: string) {
         <p style="color: #bbb; font-size: 12px;">RARE Nepal · Khusibu, Nayabazar, Kathmandu</p>
       </div>
     `,
-  });
+    });
+  } catch (err) {
+    console.warn(
+      "[DEV] SMTP send failed (invalid Gmail creds?). OTP for",
+      to,
+      "->",
+      code,
+      err
+    );
+  }
 }
 
 export async function sendInviteEmail(
@@ -34,11 +58,21 @@ export async function sendInviteEmail(
   code: string,
   invitedBy: string,
 ) {
-  await transporter.sendMail({
-    from: `"RARE Nepal" <${process.env.SMTP_EMAIL}>`,
-    to,
-    subject: "You've been invited to RARE.np Admin",
-    html: `
+  if (!transporter || !hasSmtp) {
+    console.warn(
+      "[DEV] SMTP not configured. Invite code for",
+      to,
+      "->",
+      code
+    );
+    return;
+  }
+  try {
+    await transporter.sendMail({
+      from: `"RARE Nepal" <${process.env.SMTP_EMAIL}>`,
+      to,
+      subject: "You've been invited to RARE.np Admin",
+      html: `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px; background: #FAFAF8;">
         <h1 style="font-size: 22px; color: #111;">You're invited to RARE.np</h1>
         <p style="color: #555;">Hi ${name}, <strong>${invitedBy}</strong> has added you as an admin user for RARE Nepal.</p>
@@ -50,6 +84,9 @@ export async function sendInviteEmail(
         <p style="color: #999; font-size: 12px;">Code expires in 24 hours.</p>
       </div>
     `,
-  });
+    });
+  } catch (err) {
+    console.warn("[DEV] SMTP send failed. Invite code for", to, "->", code, err);
+  }
 }
 

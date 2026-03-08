@@ -778,7 +778,7 @@ export class PgStorage implements IStorage {
         status: users.status,
       })
       .from(users)
-      .where(eq(users.username, email))
+      .where(eq(sql`lower(${users.username})`, email.toLowerCase()))
       .limit(1);
 
     return row ?? null;
@@ -1495,7 +1495,8 @@ export class MemStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
-    return this._users.find((u) => u.username === email) ?? null;
+    const lower = email.toLowerCase();
+    return this._users.find((u) => u.username.toLowerCase() === lower) ?? null;
   }
 
   async getUserById(id: string): Promise<User | null> {

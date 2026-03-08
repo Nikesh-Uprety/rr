@@ -11,6 +11,17 @@ export interface AdminOrder {
   paymentProofUrl?: string | null;
   paymentVerified?: string | null;
   createdAt: string;
+  shippingAddress: {
+    firstName: string;
+    lastName: string;
+    addressLine1: string;
+    city: string;
+    region: string;
+    postalCode: string;
+    country: string;
+    phone: string;
+    locationCoordinates?: string;
+  };
 }
 
 export interface AdminCustomer {

@@ -101,14 +101,6 @@ export default function PaymentProcess() {
         ? "Pay with Khalti"
         : "Bank Transfer";
 
-  // Use provided eSewa QR for esewa; placeholder for others (you can add khalti/bank QR images later)
-  const qrImage =
-    method === "esewa"
-      ? "/esewa-qr.png"
-      : method === "khalti"
-        ? "/esewa-qr.png"
-        : "/esewa-qr.png";
-
   return (
     <div className="container mx-auto px-4 py-32 max-w-xl mt-10">
       <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">
@@ -119,20 +111,34 @@ export default function PaymentProcess() {
       </p>
 
       <div className="bg-gray-50 border border-gray-200 p-8 flex flex-col items-center mb-8">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground mb-4">
-          Scan QR code to pay
-        </p>
-        <div className="w-56 h-56 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200">
-          <img
-            src={qrImage}
-            alt="Payment QR Code"
-            className="w-full h-full object-contain"
-          />
-        </div>
-        {method === "esewa" && (
-          <p className="mt-4 text-xs text-muted-foreground text-center">
-            eSewa • Nikesh Uprety • 9843010717
-          </p>
+        {method === "bank" ? (
+          <div className="w-full text-center space-y-4">
+            <h3 className="font-bold text-lg uppercase tracking-widest text-black">Bank Details</h3>
+            <div className="bg-white p-6 border border-gray-200 rounded-none text-left space-y-3">
+              <p className="text-sm"><strong className="font-bold uppercase tracking-wide">Bank Name:</strong> Global IME Bank</p>
+              <p className="text-sm"><strong className="font-bold uppercase tracking-wide">Account Name:</strong> Nikesh Uprety</p>
+              <p className="text-sm"><strong className="font-bold uppercase tracking-wide">Account N.O:</strong> 01234567890123</p>
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground text-center">
+              Please transfer the exact amount and upload the screenshot below.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-4">
+              Scan QR code to pay
+            </p>
+            <div className="w-56 h-56 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 p-2">
+              <img
+                src={method === "khalti" ? "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=khalti" : "/esewa-qr.png"}
+                alt={`${method} QR Code`}
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <p className="mt-4 text-xs text-muted-foreground text-center">
+              {method === "khalti" ? "Khalti" : "eSewa"} • Nikesh Uprety • 9843010717
+            </p>
+          </>
         )}
       </div>
 

@@ -36,6 +36,7 @@ export interface CreateOrderInput {
   country: string;
   total: number;
   paymentMethod: string;
+  locationCoordinates?: string;
   items: CreateOrderItemInput[];
 }
 
@@ -416,6 +417,7 @@ export class PgStorage implements IStorage {
         paymentMethod: orders.paymentMethod,
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -446,6 +448,7 @@ export class PgStorage implements IStorage {
         paymentMethod: orders.paymentMethod,
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -476,7 +479,6 @@ export class PgStorage implements IStorage {
     const [orderRow] = await db
       .insert(orders)
       .values({
-        userId: null,
         email: data.email,
         fullName: data.fullName,
         addressLine1: data.addressLine1,
@@ -485,9 +487,10 @@ export class PgStorage implements IStorage {
         region: data.region,
         postalCode: data.postalCode,
         country: data.country,
-        total: data.total,
+        total: data.total.toString(),
         status: "pending",
         paymentMethod: data.paymentMethod ?? "cash_on_delivery",
+        locationCoordinates: data.locationCoordinates ?? null,
       })
       .returning({
         id: orders.id,
@@ -505,6 +508,7 @@ export class PgStorage implements IStorage {
         paymentMethod: orders.paymentMethod,
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -515,7 +519,7 @@ export class PgStorage implements IStorage {
           orderId: orderRow.id,
           productId: item.productId,
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
+          unitPrice: item.unitPrice.toString(),
         })),
       );
     }
@@ -544,6 +548,7 @@ export class PgStorage implements IStorage {
         paymentMethod: orders.paymentMethod,
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -575,6 +580,7 @@ export class PgStorage implements IStorage {
         paymentMethod: orders.paymentMethod,
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -606,6 +612,7 @@ export class PgStorage implements IStorage {
         paymentMethod: orders.paymentMethod,
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -681,6 +688,7 @@ export class PgStorage implements IStorage {
         paymentMethod: orders.paymentMethod,
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -748,7 +756,7 @@ export class PgStorage implements IStorage {
         firstName,
         lastName,
         email,
-        totalSpent: 0,
+        totalSpent: "0",
         orderCount: 0,
         avatarColor: "#2D4A35",
       })
@@ -1334,11 +1342,15 @@ export class MemStorage implements IStorage {
     const product: Product = {
       id: crypto.randomUUID(),
       name: data.name,
-      description: data.description,
-      price: data.price,
-      imageUrl: data.imageUrl,
-      category: data.category,
+      shortDetails: data.shortDetails ?? null,
+      description: data.description ?? null,
+      price: data.price.toString(),
+      imageUrl: data.imageUrl ?? null,
+      galleryUrls: data.galleryUrls ?? null,
+      category: data.category ?? null,
       stock: data.stock,
+      colorOptions: data.colorOptions ?? null,
+      sizeOptions: data.sizeOptions ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1390,8 +1402,9 @@ export class MemStorage implements IStorage {
   }
 
   async createOrder(data: CreateOrderInput): Promise<Order> {
+    const id = crypto.randomUUID();
     const order: Order & { items: OrderItem[] } = {
-      id: crypto.randomUUID(),
+      id,
       userId: null,
       email: data.email,
       fullName: data.fullName,
@@ -1401,20 +1414,40 @@ export class MemStorage implements IStorage {
       region: data.region,
       postalCode: data.postalCode,
       country: data.country,
-      total: data.total,
+      total: data.total.toString(),
       status: "pending",
+      paymentMethod: data.paymentMethod ?? "cash_on_delivery",
+      paymentProofUrl: null,
+      paymentVerified: null,
+      locationCoordinates: data.locationCoordinates ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
       items: data.items.map((item) => ({
         id: crypto.randomUUID(),
-        orderId: "",
+        orderId: id,
         productId: item.productId,
         quantity: item.quantity,
-        unitPrice: item.unitPrice,
+        unitPrice: item.unitPrice.toString(),
       })),
     };
     this._orders.push(order);
     return order;
+  }
+
+  async updateOrderPaymentProof(id: string, url: string): Promise<Order> {
+    const order = this._orders.find((o) => o.id === id);
+    if (!order) throw new Error("Order not found");
+    order.paymentProofUrl = url;
+    const { items: _, ...rest } = order;
+    return rest;
+  }
+
+  async updateOrderPaymentVerified(id: string, status: "verified" | "rejected"): Promise<Order> {
+    const order = this._orders.find((o) => o.id === id);
+    if (!order) throw new Error("Order not found");
+    order.paymentVerified = status;
+    const { items: _, ...rest } = order;
+    return rest;
   }
 
   async updateOrderStatus(id: string, status: string): Promise<Order> {
@@ -1451,7 +1484,7 @@ export class MemStorage implements IStorage {
       firstName: data.firstName,
       lastName: data.lastName,
       email: data.email,
-      totalSpent: data.totalSpent,
+      totalSpent: data.totalSpent.toString(),
       orderCount: data.orderCount,
       avatarColor: data.avatarColor,
       createdAt: new Date(),
@@ -1473,26 +1506,13 @@ export class MemStorage implements IStorage {
       firstName,
       lastName,
       email,
-      totalSpent: 0,
+      totalSpent: "0",
       orderCount: 0,
       avatarColor: "#2D4A35",
     });
   }
 
-  async getCategories(): Promise<Category[]> {
-    return this._categories;
-  }
 
-  async createCategory(data: { name: string; slug: string }): Promise<Category> {
-    const category: Category = {
-      id: crypto.randomUUID(),
-      name: data.name,
-      slug: data.slug,
-      createdAt: new Date(),
-    };
-    this._categories.push(category);
-    return category;
-  }
 
   async getUserByEmail(email: string): Promise<User | null> {
     const lower = email.toLowerCase();
@@ -1509,27 +1529,43 @@ export class MemStorage implements IStorage {
       username: data.username,
       password: data.password,
       role: data.role,
+      twoFactorEnabled: 0,
+      lastLoginAt: null,
+      status: "active",
     };
     this._users.push(user);
     return user;
   }
 
-  async getAnalytics(
-    _range: "7d" | "30d" | "90d" | "1y",
-  ): Promise<AnalyticsData> {
+  async updateLastLoginAt(id: string): Promise<void> {
+    const user = this._users.find((u) => u.id === id);
+    if (user) user.lastLoginAt = new Date();
+  }
+
+  async updateUserPassword(id: string, passwordHash: string): Promise<void> {
+    const user = this._users.find((u) => u.id === id);
+    if (user) user.password = passwordHash;
+  }
+
+  async inviteAdminUser(data: { name: string; email: string; role: string; passwordHash: string }): Promise<User> {
+    return this.createUser({ username: data.email, password: data.passwordHash, role: data.role, twoFactorEnabled: 0, lastLoginAt: null, status: "active" } as any);
+  }
+
+  async createOtpToken(data: { id: string; userId: string; token: string; expiresAt: Date }): Promise<OtpToken> {
+    return { ...data, used: 0, createdAt: new Date() };
+  }
+
+  async consumeOtpToken(id: string, token: string): Promise<OtpToken | null> {
+    return null;
+  }
+
+  async refreshOtpToken(id: string): Promise<{ email: string; code: string; name?: string } | null> {
+    return null;
+  }
+
+  async getAnalytics(range: "7d" | "30d" | "90d" | "1y"): Promise<AnalyticsData> {
     return {
-      kpis: {
-        revenue: 0,
-        orders: 0,
-        avgOrderValue: 0,
-        newCustomers: 0,
-        trends: {
-          revenue: 0,
-          orders: 0,
-          avgOrderValue: 0,
-          newCustomers: 0,
-        },
-      },
+      kpis: { revenue: 0, orders: 0, avgOrderValue: 0, newCustomers: 0, trends: { revenue: 0, orders: 0, avgOrderValue: 0, newCustomers: 0 } },
       revenueByDay: [],
       ordersByStatus: { completed: 0, pending: 0, cancelled: 0 },
       topProducts: [],
@@ -1540,22 +1576,12 @@ export class MemStorage implements IStorage {
   }
 
   async getAnalyticsCalendar(year: number): Promise<AnalyticsCalendarDay[]> {
-    const start = new Date(year, 0, 1);
-    const end = new Date(year + 1, 0, 1);
-    const days: AnalyticsCalendarDay[] = [];
-
-    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
-      const key = d.toISOString().slice(0, 10);
-      days.push({
-        date: key,
-        revenue: 0,
-        orderCount: 0,
-        isHoliday: false,
-      });
-    }
-
-    return days;
+    return [];
   }
+
+  async updateUserTwoFactor(id: string, enabled: boolean): Promise<void> {}
+  async revokeUser(id: string): Promise<void> {}
+  async getAdminUsers(): Promise<User[]> { return []; }
 }
 
 export const storage: IStorage = new PgStorage();

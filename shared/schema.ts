@@ -93,6 +93,7 @@ export const orders = pgTable("orders", {
   paymentMethod: text("payment_method").notNull().default("cash_on_delivery"),
   paymentProofUrl: text("payment_proof_url"),
   paymentVerified: text("payment_verified"), // null = pending, "verified" | "rejected"
+  locationCoordinates: text("location_coordinates"), // stringified JSON format {lat, lng}
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -77,9 +77,9 @@ export default function Navbar() {
               Shop
             </Link>
             <Link
-              href="/products?collection=new"
+              href="/new-collection"
               className={`text-sm font-medium px-4 py-2 rounded-full transition-all ${
-                location.includes("collection=new")
+                location === "/new-collection"
                   ? "bg-white dark:bg-background shadow-sm"
                   : "text-muted-foreground hover:text-primary"
               }`}

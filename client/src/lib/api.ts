@@ -37,9 +37,9 @@ export interface OrderInput {
     phone?: string;
     address: string;
     city: string;
-    state: string;
     zip: string;
     country: string;
+    locationCoordinates?: string;
   };
   paymentMethod: string;
 }
@@ -97,6 +97,7 @@ export interface OrderDetail {
   paymentMethod: string;
   paymentProofUrl: string | null;
   paymentVerified: string | null;
+  locationCoordinates: string | null;
   items: { id: string; quantity: number; unitPrice: number; productId: string }[];
 }
 

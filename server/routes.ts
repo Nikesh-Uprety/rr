@@ -360,9 +360,9 @@ export async function registerRoutes(
     phone: z.string().optional(),
     address: z.string().min(1),
     city: z.string().min(1),
-    state: z.string().min(1),
     zip: z.string().min(1),
     country: z.string().min(1),
+    locationCoordinates: z.string().optional(),
   });
 
   const createOrderSchema = z.object({
@@ -382,12 +382,12 @@ export async function registerRoutes(
 
       const { items, shipping } = parsed.data;
 
-      const subtotal = items.reduce(
+      const orderSubtotal = items.reduce(
         (acc, item) => acc + item.priceAtTime * item.quantity,
         0,
       );
-      const tax = subtotal * 0.15;
-      const total = subtotal + tax;
+      const orderTax = Number((orderSubtotal * 0.15).toFixed(2));
+      const orderTotal = Number((orderSubtotal + orderTax).toFixed(2));
 
       const now = new Date();
       const year = now.getFullYear();
@@ -406,10 +406,11 @@ export async function registerRoutes(
         addressLine1: shipping.address,
         addressLine2: null,
         city: shipping.city,
-        region: shipping.state,
+        region: "", // state removed
+        locationCoordinates: shipping.locationCoordinates ?? null,
         postalCode: shipping.zip,
         country: shipping.country,
-        total,
+        total: orderTotal,
         paymentMethod: parsed.data.paymentMethod,
         items: items.map((item) => ({
           productId: item.productId,
@@ -424,17 +425,18 @@ export async function registerRoutes(
         success: true,
         data: {
           orderNumber,
-          subtotal,
-          tax,
-          total,
+          subtotal: orderSubtotal,
+          tax: orderTax,
+          total: orderTotal,
           order: fullOrder,
         },
       });
     } catch (err) {
-      console.error("Error in POST /api/orders", err);
+      console.error("CRITICAL ERROR in POST /api/orders:", err);
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
       return res
         .status(500)
-        .json({ success: false, error: "Failed to create order" });
+        .json({ success: false, error: "Failed to create order", details: errorMessage });
     }
   });
 

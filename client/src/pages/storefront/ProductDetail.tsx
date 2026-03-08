@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ function parseJsonArray(s: string | null | undefined): string[] {
 
 export default function ProductDetail() {
   const [, params] = useRoute<{ id: string }>("/product/:id");
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const addItem = useCartStore((state) => state.addItem);
 
@@ -84,6 +85,7 @@ export default function ProductDetail() {
         price: Number(product.price),
         stock: product.stock,
         category: product.category ?? "",
+        sku: "",
         images: allImages.filter(Boolean),
         variants: [],
       },
@@ -91,6 +93,11 @@ export default function ProductDetail() {
       quantity,
     );
     toast({ title: "Added to bag" });
+  };
+
+  const handleBuyNow = () => {
+    handleAddToCart();
+    setLocation("/checkout");
   };
 
   return (
@@ -223,6 +230,7 @@ export default function ProductDetail() {
               </Button>
               <Button
                 variant="outline"
+                onClick={handleBuyNow}
                 disabled={product.stock === 0}
                 className="w-full h-14 border-black text-black hover:bg-black hover:text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >

@@ -9,8 +9,8 @@ import {
   fetchAdminOrders,
   updateOrderStatus,
   verifyOrderPayment,
-  type AdminOrder,
 } from "@/lib/adminApi";
+import type { AdminOrder } from "@/lib/adminApi";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
 
@@ -167,6 +167,23 @@ export default function AdminOrders() {
                           <div className="text-muted-foreground text-xs">
                             {order.email}
                           </div>
+                          {order.shippingAddress && (
+                            <div className="text-muted-foreground text-xs mt-1">
+                              <p>{order.shippingAddress.country}</p>
+                              {order.shippingAddress.locationCoordinates && (
+                                <div className="pt-2 mt-2 border-t border-gray-100">
+                                  <a
+                                    href={`https://www.google.com/maps?q=${order.shippingAddress.locationCoordinates}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors uppercase tracking-wider"
+                                  >
+                                    View on Map
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-muted-foreground">
                           {order.createdAt

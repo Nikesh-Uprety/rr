@@ -1,0 +1,138 @@
+client/src/pages/admin/Analytics.tsx(267,41): error TS18046: 'card' is of type 'unknown'.
+client/src/pages/admin/Analytics.tsx(274,20): error TS18046: 'card' is of type 'unknown'.
+client/src/pages/admin/Analytics.tsx(278,18): error TS18046: 'card' is of type 'unknown'.
+client/src/pages/admin/Analytics.tsx(281,18): error TS18046: 'card' is of type 'unknown'.
+client/src/pages/admin/Analytics.tsx(290,58): error TS18046: 'card' is of type 'unknown'.
+client/src/pages/admin/POS.tsx(73,11): error TS2353: Object literal may only specify known properties, and 'state' does not exist in type '{ firstName: string; lastName: string; email: string; phone?: string | undefined; address: string; city: string; zip: string; country: string; locationCoordinates?: string | undefined; }'.
+client/src/pages/admin/POS.tsx(259,64): error TS2339: Property 'isLoading' does not exist on type 'UseMutationResult<{ success: boolean; data?: { orderNumber: string; total: number; order: { id: string; }; } | undefined; error?: string | undefined; }, Error, void, unknown>'.
+  Property 'isLoading' does not exist on type 'Override<MutationObserverIdleResult<{ success: boolean; data?: { orderNumber: string; total: number; order: { id: string; }; } | undefined; error?: string | undefined; }, Error, void, unknown>, { ...; }> & { ...; }'.
+client/src/pages/admin/Products.tsx(214,9): error TS2322: Type 'string | undefined' is not assignable to type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+server/auth.ts(3,20): error TS7016: Could not find a declaration file for module 'bcryptjs'. '/home/n1kuhacks/rare.np/rr/node_modules/bcryptjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/bcryptjs` if it exists or add a new declaration (.d.ts) file containing `declare module 'bcryptjs';`
+server/email.ts(1,24): error TS7016: Could not find a declaration file for module 'nodemailer'. '/home/n1kuhacks/rare.np/rr/node_modules/nodemailer/lib/nodemailer.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/nodemailer` if it exists or add a new declaration (.d.ts) file containing `declare module 'nodemailer';`
+server/index.ts(7,1): error TS2578: Unused '@ts-expect-error' directive.
+server/routes.ts(54,35): error TS7016: Could not find a declaration file for module 'bcryptjs'. '/home/n1kuhacks/rare.np/rr/node_modules/bcryptjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/bcryptjs` if it exists or add a new declaration (.d.ts) file containing `declare module 'bcryptjs';`
+server/routes.ts(57,45): error TS2345: Argument of type '{ username: string; password: any; role: string; }' is not assignable to parameter of type 'Omit<{ id: string; role: string; status: string; password: string; username: string; twoFactorEnabled: number; lastLoginAt: Date | null; }, "id">'.
+  Type '{ username: string; password: any; role: string; }' is missing the following properties from type 'Omit<{ id: string; role: string; status: string; password: string; username: string; twoFactorEnabled: number; lastLoginAt: Date | null; }, "id">': status, twoFactorEnabled, lastLoginAt
+server/routes.ts(101,39): error TS7006: Parameter 'err' implicitly has an 'any' type.
+server/routes.ts(332,52): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(444,48): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(469,36): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(482,47): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(495,56): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(498,45): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(582,56): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(585,54): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(647,53): error TS2345: Argument of type '{ imageUrl: string | undefined; name: string; price: number; stock: number; description?: string | undefined; category?: string | undefined; colorOptions?: string | undefined; sizeOptions?: string | undefined; galleryUrls?: string | undefined; shortDetails?: string | undefined; }' is not assignable to parameter of type 'Omit<{ id: string; name: string; description: string | null; category: string | null; colorOptions: string | null; sizeOptions: string | null; galleryUrls: string | null; shortDetails: string | null; ... 4 more ...; updatedAt: Date; }, "id" | ... 1 more ... | "updatedAt">'.
+  Types of property 'description' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string | null'.
+      Type 'undefined' is not assignable to type 'string | null'.
+server/routes.ts(675,11): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(693,37): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(743,11): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(772,11): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(921,35): error TS7016: Could not find a declaration file for module 'bcryptjs'. '/home/n1kuhacks/rare.np/rr/node_modules/bcryptjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/bcryptjs` if it exists or add a new declaration (.d.ts) file containing `declare module 'bcryptjs';`
+server/routes.ts(956,43): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(972,34): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/routes.ts(1006,37): error TS7016: Could not find a declaration file for module 'bcryptjs'. '/home/n1kuhacks/rare.np/rr/node_modules/bcryptjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/bcryptjs` if it exists or add a new declaration (.d.ts) file containing `declare module 'bcryptjs';`
+server/routes.ts(1044,11): error TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'string'.
+  Type 'string[]' is not assignable to type 'string'.
+server/seed.ts(2,20): error TS7016: Could not find a declaration file for module 'bcryptjs'. '/home/n1kuhacks/rare.np/rr/node_modules/bcryptjs/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/bcryptjs` if it exists or add a new declaration (.d.ts) file containing `declare module 'bcryptjs';`
+server/seed.ts(140,31): error TS2802: Type 'MapIterator<[string, CsvRow[]]>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server/seed.ts(144,40): error TS7006: Parameter 'r' implicitly has an 'any' type.
+server/seed.ts(193,9): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Argument of type '{ name: string; price: number; stock: number; category: string; description: string; }[]' is not assignable to parameter of type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }'.
+      Type '{ name: string; price: number; stock: number; category: string; description: string; }[]' is missing the following properties from type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }': name, price
+  Overload 2 of 2, '(values: { name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Argument of type '{ name: string; price: number; stock: number; category: string; description: string; }[]' is not assignable to parameter of type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }[]'.
+      Type '{ name: string; price: number; stock: number; category: string; description: string; }' is not assignable to type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }'.
+        Types of property 'price' are incompatible.
+          Type 'number' is not assignable to type 'string | SQL<unknown> | Placeholder<string, any>'.
+server/seed.ts(288,7): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Argument of type '{ name: string; price: number; stock: number; category: string; description: string; }[]' is not assignable to parameter of type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }'.
+      Type '{ name: string; price: number; stock: number; category: string; description: string; }[]' is missing the following properties from type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }': name, price
+  Overload 2 of 2, '(values: { name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Argument of type '{ name: string; price: number; stock: number; category: string; description: string; }[]' is not assignable to parameter of type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }[]'.
+      Type '{ name: string; price: number; stock: number; category: string; description: string; }' is not assignable to type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }'.
+        Types of property 'price' are incompatible.
+          Type 'number' is not assignable to type 'string | SQL<unknown> | Placeholder<string, any>'.
+server/seed.ts(300,5): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Argument of type '{ name: string; price: number; stock: number; category: string; description: string | null; imageUrl: string; }[]' is not assignable to parameter of type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }'.
+      Type '{ name: string; price: number; stock: number; category: string; description: string | null; imageUrl: string; }[]' is missing the following properties from type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }': name, price
+  Overload 2 of 2, '(values: { name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Argument of type '{ name: string; price: number; stock: number; category: string; description: string | null; imageUrl: string; }[]' is not assignable to parameter of type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }[]'.
+      Type '{ name: string; price: number; stock: number; category: string; description: string | null; imageUrl: string; }' is not assignable to type '{ name: string | SQL<unknown> | Placeholder<string, any>; price: string | SQL<unknown> | Placeholder<string, any>; id?: string | SQL<unknown> | Placeholder<string, any> | undefined; ... 9 more ...; updatedAt?: Date | ... 2 more ... | undefined; }'.
+        Types of property 'price' are incompatible.
+          Type 'number' is not assignable to type 'string | SQL<unknown> | Placeholder<string, any>'.
+server/seed.ts(313,13): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { email: string | SQL<unknown> | Placeholder<string, any>; firstName: string | SQL<unknown> | Placeholder<string, any>; lastName: string | SQL<unknown> | Placeholder<...>; ... 4 more ...; createdAt?: Date | ... 2 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Argument of type '{ firstName: string; lastName: string; email: string; totalSpent: number; orderCount: number; avatarColor: string; }[]' is not assignable to parameter of type '{ email: string | SQL<unknown> | Placeholder<string, any>; firstName: string | SQL<unknown> | Placeholder<string, any>; lastName: string | SQL<unknown> | Placeholder<...>; ... 4 more ...; createdAt?: Date | ... 2 more ... | undefined; }'.
+      Type '{ firstName: string; lastName: string; email: string; totalSpent: number; orderCount: number; avatarColor: string; }[]' is missing the following properties from type '{ email: string | SQL<unknown> | Placeholder<string, any>; firstName: string | SQL<unknown> | Placeholder<string, any>; lastName: string | SQL<unknown> | Placeholder<...>; ... 4 more ...; createdAt?: Date | ... 2 more ... | undefined; }': email, firstName, lastName
+server/seed.ts(437,5): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { region: string | SQL<unknown> | Placeholder<string, any>; email: string | SQL<unknown> | Placeholder<string, any>; country: string | SQL<unknown> | Placeholder<...>; ... 14 more ...; locationCoordinates?: string | ... 3 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Argument of type '{ userId: null; email: string; fullName: string; addressLine1: string; addressLine2: null; city: string; region: string; postalCode: string; country: string; total: number; status: string; }[]' is not assignable to parameter of type '{ region: string | SQL<unknown> | Placeholder<string, any>; email: string | SQL<unknown> | Placeholder<string, any>; country: string | SQL<unknown> | Placeholder<...>; ... 14 more ...; locationCoordinates?: string | ... 3 more ... | undefined; }'.
+      Type '{ userId: null; email: string; fullName: string; addressLine1: string; addressLine2: null; city: string; region: string; postalCode: string; country: string; total: number; status: string; }[]' is missing the following properties from type '{ region: string | SQL<unknown> | Placeholder<string, any>; email: string | SQL<unknown> | Placeholder<string, any>; country: string | SQL<unknown> | Placeholder<...>; ... 14 more ...; locationCoordinates?: string | ... 3 more ... | undefined; }': region, email, country, city, and 4 more.
+  Overload 2 of 2, '(values: { region: string | SQL<unknown> | Placeholder<string, any>; email: string | SQL<unknown> | Placeholder<string, any>; country: string | SQL<unknown> | Placeholder<...>; ... 14 more ...; locationCoordinates?: string | ... 3 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Argument of type '{ userId: null; email: string; fullName: string; addressLine1: string; addressLine2: null; city: string; region: string; postalCode: string; country: string; total: number; status: string; }[]' is not assignable to parameter of type '{ region: string | SQL<unknown> | Placeholder<string, any>; email: string | SQL<unknown> | Placeholder<string, any>; country: string | SQL<unknown> | Placeholder<...>; ... 14 more ...; locationCoordinates?: string | ... 3 more ... | undefined; }[]'.
+      Type '{ userId: null; email: string; fullName: string; addressLine1: string; addressLine2: null; city: string; region: string; postalCode: string; country: string; total: number; status: string; }' is not assignable to type '{ region: string | SQL<unknown> | Placeholder<string, any>; email: string | SQL<unknown> | Placeholder<string, any>; country: string | SQL<unknown> | Placeholder<...>; ... 14 more ...; locationCoordinates?: string | ... 3 more ... | undefined; }'.
+        Types of property 'total' are incompatible.
+          Type 'number' is not assignable to type 'string | SQL<unknown> | Placeholder<string, any>'.
+server/storage.ts(452,9): error TS1117: An object literal cannot have multiple properties with the same name.
+server/storage.ts(482,8): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { region: string | SQL<unknown> | Placeholder<string, any>; email: string | SQL<unknown> | Placeholder<string, any>; country: string | SQL<unknown> | Placeholder<...>; ... 14 more ...; locationCoordinates?: string | ... 3 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Type 'number' is not assignable to type 'string | SQL<unknown> | Placeholder<string, any>'.
+  Overload 2 of 2, '(values: { region: string | SQL<unknown> | Placeholder<string, any>; email: string | SQL<unknown> | Placeholder<string, any>; country: string | SQL<unknown> | Placeholder<...>; ... 14 more ...; locationCoordinates?: string | ... 3 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'userId' does not exist in type '{ region: string | SQL<unknown> | Placeholder<string, any>; email: string | SQL<unknown> | Placeholder<string, any>; country: string | SQL<unknown> | Placeholder<...>; ... 14 more ...; locationCoordinates?: string | ... 3 more ... | undefined; }[]'.
+server/storage.ts(520,9): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { quantity: number | SQL<unknown> | Placeholder<string, any>; orderId: string | SQL<unknown> | Placeholder<string, any>; productId: string | SQL<unknown> | Placeholder<...>; unitPrice: string | ... 1 more ... | Placeholder<...>; id?: string | ... 2 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Argument of type '{ orderId: string; productId: string; quantity: number; unitPrice: number; }[]' is not assignable to parameter of type '{ quantity: number | SQL<unknown> | Placeholder<string, any>; orderId: string | SQL<unknown> | Placeholder<string, any>; productId: string | SQL<unknown> | Placeholder<...>; unitPrice: string | ... 1 more ... | Placeholder<...>; id?: string | ... 2 more ... | undefined; }'.
+      Type '{ orderId: string; productId: string; quantity: number; unitPrice: number; }[]' is missing the following properties from type '{ quantity: number | SQL<unknown> | Placeholder<string, any>; orderId: string | SQL<unknown> | Placeholder<string, any>; productId: string | SQL<unknown> | Placeholder<...>; unitPrice: string | ... 1 more ... | Placeholder<...>; id?: string | ... 2 more ... | undefined; }': quantity, orderId, productId, unitPrice
+  Overload 2 of 2, '(values: { quantity: number | SQL<unknown> | Placeholder<string, any>; orderId: string | SQL<unknown> | Placeholder<string, any>; productId: string | SQL<unknown> | Placeholder<...>; unitPrice: string | ... 1 more ... | Placeholder<...>; id?: string | ... 2 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Argument of type '{ orderId: string; productId: string; quantity: number; unitPrice: number; }[]' is not assignable to parameter of type '{ quantity: number | SQL<unknown> | Placeholder<string, any>; orderId: string | SQL<unknown> | Placeholder<string, any>; productId: string | SQL<unknown> | Placeholder<...>; unitPrice: string | ... 1 more ... | Placeholder<...>; id?: string | ... 2 more ... | undefined; }[]'.
+      Type '{ orderId: string; productId: string; quantity: number; unitPrice: number; }' is not assignable to type '{ quantity: number | SQL<unknown> | Placeholder<string, any>; orderId: string | SQL<unknown> | Placeholder<string, any>; productId: string | SQL<unknown> | Placeholder<...>; unitPrice: string | ... 1 more ... | Placeholder<...>; id?: string | ... 2 more ... | undefined; }'.
+        Types of property 'unitPrice' are incompatible.
+          Type 'number' is not assignable to type 'string | SQL<unknown> | Placeholder<string, any>'.
+server/storage.ts(554,9): error TS1117: An object literal cannot have multiple properties with the same name.
+server/storage.ts(695,9): error TS1117: An object literal cannot have multiple properties with the same name.
+server/storage.ts(759,8): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { email: string | SQL<unknown> | Placeholder<string, any>; firstName: string | SQL<unknown> | Placeholder<string, any>; lastName: string | SQL<unknown> | Placeholder<...>; ... 4 more ...; createdAt?: Date | ... 2 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Type 'number' is not assignable to type 'string | SQL<unknown> | Placeholder<string, any> | undefined'.
+  Overload 2 of 2, '(values: { email: string | SQL<unknown> | Placeholder<string, any>; firstName: string | SQL<unknown> | Placeholder<string, any>; lastName: string | SQL<unknown> | Placeholder<...>; ... 4 more ...; createdAt?: Date | ... 2 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'firstName' does not exist in type '{ email: string | SQL<unknown> | Placeholder<string, any>; firstName: string | SQL<unknown> | Placeholder<string, any>; lastName: string | SQL<unknown> | Placeholder<...>; ... 4 more ...; createdAt?: Date | ... 2 more ... | undefined; }[]'.
+server/storage.ts(1317,14): error TS2420: Class 'MemStorage' incorrectly implements interface 'IStorage'.
+  Type 'MemStorage' is missing the following properties from type 'IStorage': updateOrderPaymentProof, updateOrderPaymentVerified, updateLastLoginAt, updateUserPassword, and 7 more.
+server/storage.ts(1346,11): error TS2739: Type '{ id: `${string}-${string}-${string}-${string}-${string}`; name: string; description: string | null; price: string; imageUrl: string | null; category: string | null; stock: number; createdAt: Date; updatedAt: Date; }' is missing the following properties from type '{ id: string; name: string; description: string | null; category: string | null; colorOptions: string | null; sizeOptions: string | null; galleryUrls: string | null; shortDetails: string | null; ... 4 more ...; updatedAt: Date; }': colorOptions, sizeOptions, galleryUrls, shortDetails
+server/storage.ts(1377,9): error TS2393: Duplicate function implementation.
+server/storage.ts(1381,9): error TS2393: Duplicate function implementation.
+server/storage.ts(1416,7): error TS2322: Type 'number' is not assignable to type 'string'.
+server/storage.ts(1420,7): error TS2322: Type '{ id: `${string}-${string}-${string}-${string}-${string}`; orderId: string; productId: string; quantity: number; unitPrice: number; }[]' is not assignable to type '{ id: string; quantity: number; orderId: string; productId: string; unitPrice: string; }[]'.
+  Type '{ id: `${string}-${string}-${string}-${string}-${string}`; orderId: string; productId: string; quantity: number; unitPrice: number; }' is not assignable to type '{ id: string; quantity: number; orderId: string; productId: string; unitPrice: string; }'.
+    Types of property 'unitPrice' are incompatible.
+      Type 'number' is not assignable to type 'string'.
+server/storage.ts(1488,7): error TS2322: Type 'number' is not assignable to type 'string'.
+server/storage.ts(1494,9): error TS2393: Duplicate function implementation.
+server/storage.ts(1498,9): error TS2393: Duplicate function implementation.
+server/storage.ts(1519,11): error TS2739: Type '{ id: `${string}-${string}-${string}-${string}-${string}`; username: string; password: string; role: string; }' is missing the following properties from type '{ id: string; role: string; status: string; password: string; username: string; twoFactorEnabled: number; lastLoginAt: Date | null; }': status, twoFactorEnabled, lastLoginAt

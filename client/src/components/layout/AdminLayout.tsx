@@ -8,10 +8,15 @@ import {
   ShoppingBag,
   Receipt,
   Tags,
+  Settings,
+  Bell,
+  ChevronLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { ThemeToggle } from "@/components/admin/ThemeToggle";
+import { NotificationBadge } from "@/components/admin/NotificationBadge";
 
 const ADMIN_NAV = [
   { href: "/admin", icon: LayoutGrid, label: "Dashboard" },
@@ -51,14 +56,26 @@ export default function AdminLayout({
     <div className="min-h-screen bg-[#F5F5F3] dark:bg-background flex text-[#2C3E2D] dark:text-foreground font-sans">
       {/* Sidebar */}
       <aside className="w-64 bg-white dark:bg-card border-r border-[#E5E5E0] dark:border-border hidden md:flex flex-col h-screen sticky top-0">
-        <div className="h-16 flex items-center px-6 border-b border-[#E5E5E0] dark:border-border">
-          <Link
-            href="/"
-            className="font-serif font-bold text-xl tracking-tight"
-            data-testid="link-admin-home"
-          >
-            RARE@admin
-          </Link>
+        <div className="h-16 flex items-center justify-between px-4 border-b border-[#E5E5E0] dark:border-border">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/profile"
+              className="w-8 h-8 rounded-full bg-[#2C3E2D] text-white flex items-center justify-center text-xs font-bold hover:scale-105 transition-transform"
+              title="View Profile"
+            >
+              {initials}
+            </Link>
+            <Link
+              href="/admin/profile"
+              className="text-sm font-bold tracking-tight text-[#2C3E2D] dark:text-foreground hover:opacity-70 transition-opacity"
+            >
+              /profile
+            </Link>
+          </div>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <NotificationBadge />
+          </div>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -104,13 +121,25 @@ export default function AdminLayout({
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Header - only on mobile or if needed */}
-        <header className="h-16 bg-white dark:bg-card border-b border-[#E5E5E0] dark:border-border flex items-center justify-between px-6 md:hidden">
-          <Link href="/" className="font-serif font-bold text-xl tracking-tight">
-            RARE@admin
-          </Link>
-          <Button variant="ghost" size="icon">
-            <LayoutGrid className="h-5 w-5" />
-          </Button>
+        <header className="h-16 bg-white dark:bg-card border-b border-[#E5E5E0] dark:border-border flex items-center justify-between px-4 md:hidden">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/admin/profile"
+              className="w-8 h-8 rounded-full bg-[#2C3E2D] text-white flex items-center justify-center text-xs font-bold"
+            >
+              {initials}
+            </Link>
+            <Link href="/admin/profile" className="text-sm font-bold tracking-tight text-[#2C3E2D] dark:text-foreground">
+              /profile
+            </Link>
+          </div>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <NotificationBadge />
+            <Button variant="ghost" size="icon" onClick={() => window.location.href = "/admin"}>
+              <LayoutGrid className="h-5 w-5" />
+            </Button>
+          </div>
         </header>
 
         <div className="flex-1 overflow-auto p-6 md:p-10">{children}</div>

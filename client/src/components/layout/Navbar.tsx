@@ -14,6 +14,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
+import SearchBar from "./SearchBar";
 
 export default function Navbar() {
   const { theme, setTheme } = useThemeStore();
@@ -112,6 +113,8 @@ export default function Navbar() {
           </nav>
 
           <div className="flex items-center space-x-2 sm:space-x-4">
+            <SearchBar />
+
             <button 
               onClick={() => setTheme(theme === "light" ? "dark" : "light")}
               className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
@@ -154,16 +157,7 @@ export default function Navbar() {
                   Logout
                 </button>
               </div>
-            ) : (
-              <Link href="/login">
-                <Button
-                  variant="default"
-                  className="hidden sm:flex rounded-full px-6 bg-black hover:bg-gray-800 text-white dark:bg-white dark:text-black dark:hover:bg-gray-200 h-10 text-xs uppercase tracking-widest font-bold"
-                >
-                  Sign in
-                </Button>
-              </Link>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -214,19 +208,7 @@ export default function Navbar() {
               </nav>
 
               <div className="mt-auto space-y-6 border-t pt-8 border-gray-100 dark:border-neutral-900">
-                {!isAuthenticated ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    <Link href="/login">
-                      <Button className="w-full h-16 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white uppercase tracking-[0.2em] font-black text-xs transition-all shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] border-none">
-                        Sign In to Account
-                      </Button>
-                    </Link>
-                  </motion.div>
-                ) : (
+                {!isAuthenticated ? null : (
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}

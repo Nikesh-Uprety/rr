@@ -21,6 +21,12 @@ export const users = pgTable("users", {
   status: text("status").notNull().default("active"),
 });
 
+export const sessions = pgTable("session", {
+  sid: varchar("sid").primaryKey(),
+  sess: jsonb("sess").notNull(),
+  expire: timestamp("expire", { precision: 6 }).notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -255,3 +261,26 @@ export const newsletterSubscribers = pgTable("newsletter_subscribers", {
 export const insertNewsletterSubscriberSchema = createInsertSchema(newsletterSubscribers).pick({
   email: true,
 });
+
+// ── Admin Notifications ─────────────────────────────────
+export const adminNotifications = pgTable("admin_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").notNull(), // 'order', 'product', 'system', etc.
+  isRead: integer("is_read").notNull().default(0), // 0 for false, 1 for true
+  link: text("link"), // Optional URL to navigate to when clicked
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertAdminNotificationSchema = createInsertSchema(adminNotifications).pick({
+  title: true,
+  message: true,
+  type: true,
+  link: true,
+});
+
+export type AdminNotification = typeof adminNotifications.$inferSelect;
+export type InsertAdminNotification = z.infer<typeof insertAdminNotificationSchema>;

@@ -10,8 +10,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
 const HERO_IMAGES = [
-  "/images/landingpage1.webp",
-  "/images/landingpage2.webp"
+  "/images/landingpage3.webp",
+  "/images/landingpage4.webp"
 ];
 
 const LIFESTYLE_IMAGES = [

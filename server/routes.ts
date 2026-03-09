@@ -25,6 +25,8 @@ import {
   posSessions,
   insertProductAttributeSchema,
   Product,
+  adminNotifications,
+  insertAdminNotificationSchema,
 } from "../shared/schema";
 import { eq, desc, sum, sql, and, gte, lte } from "drizzle-orm";
 import { db } from "./db";
@@ -1237,6 +1239,55 @@ export async function registerRoutes(
           success: false,
           error: "Failed to load analytics calendar",
         });
+      }
+    },
+  );
+
+  // Admin notifications
+  app.get(
+    "/api/admin/notifications",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const notifications = await storage.getAdminNotifications();
+        return res.json({ success: true, data: notifications });
+      } catch (err) {
+        console.error("Error in GET /api/admin/notifications", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load notifications" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/notifications/read-all",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        await storage.markAdminNotificationsRead();
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/notifications/read-all", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to mark notifications as read" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/notifications/:id/read",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        await storage.markAdminNotificationRead(req.params.id);
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/notifications/:id/read", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to mark notification as read" });
       }
     },
   );

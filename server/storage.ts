@@ -10,6 +10,7 @@ import {
   contactMessages,
   productAttributes,
   newsletterSubscribers,
+  adminNotifications,
   type Category,
   type Customer,
   type Order,
@@ -20,6 +21,8 @@ import {
   type ContactMessage,
   type ProductAttribute,
   type InsertProductAttribute,
+  type AdminNotification,
+  type InsertAdminNotification,
 } from "@shared/schema";
 import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 
@@ -220,6 +223,12 @@ export interface IStorage {
 
   // Newsletter
   subscribeToNewsletter(email: string): Promise<void>;
+
+  // Admin Notifications
+  getAdminNotifications(): Promise<AdminNotification[]>;
+  createAdminNotification(data: InsertAdminNotification): Promise<AdminNotification>;
+  markAdminNotificationsRead(): Promise<void>;
+  markAdminNotificationRead(id: string): Promise<void>;
 }
 
 export class PgStorage implements IStorage {
@@ -337,6 +346,14 @@ export class PgStorage implements IStorage {
         updatedAt: products.updatedAt,
       });
 
+    // Create a notification for the new product
+    await this.createAdminNotification({
+      title: "New Product Added",
+      message: `${row.name} has been added to the catalog.`,
+      type: "product",
+      link: "/admin/products",
+    });
+
     return row;
   }
 
@@ -374,6 +391,22 @@ export class PgStorage implements IStorage {
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       });
+
+    if (row && row.stock === 0) {
+      await this.createAdminNotification({
+        title: "Product Out of Stock",
+        message: `${row.name} is now out of stock.`,
+        type: "product",
+        link: "/admin/products",
+      });
+    } else if (row) {
+      await this.createAdminNotification({
+        title: "Product Details Updated",
+        message: `${row.name} has been updated.`,
+        type: "product",
+        link: "/admin/products",
+      });
+    }
 
     return row;
   }
@@ -571,6 +604,14 @@ export class PgStorage implements IStorage {
       );
     }
 
+    // Create a notification for the new order
+    await this.createAdminNotification({
+      title: "New Order Received",
+      message: `Order #${orderRow.id.substring(0, 8)} placed by ${orderRow.fullName}.`,
+      type: "order",
+      link: "/admin/orders",
+    });
+
     return orderRow;
   }
 
@@ -599,6 +640,15 @@ export class PgStorage implements IStorage {
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
+
+    if (status === "cancelled") {
+      await this.createAdminNotification({
+        title: "Order Cancelled",
+        message: `Order #${row.id.substring(0, 8)} has been cancelled.`,
+        type: "order",
+        link: "/admin/orders",
+      });
+    }
 
     return row;
   }
@@ -826,6 +876,37 @@ export class PgStorage implements IStorage {
       .insert(newsletterSubscribers)
       .values({ email: email.toLowerCase() })
       .onConflictDoNothing();
+  }
+
+  // Admin Notifications Implementations
+  async getAdminNotifications(): Promise<AdminNotification[]> {
+    return db
+      .select()
+      .from(adminNotifications)
+      .orderBy(desc(adminNotifications.createdAt))
+      .limit(50);
+  }
+
+  async createAdminNotification(data: InsertAdminNotification): Promise<AdminNotification> {
+    const [row] = await db
+      .insert(adminNotifications)
+      .values(data)
+      .returning();
+    return row;
+  }
+
+  async markAdminNotificationsRead(): Promise<void> {
+    await db
+      .update(adminNotifications)
+      .set({ isRead: 1 })
+      .where(eq(adminNotifications.isRead, 0));
+  }
+
+  async markAdminNotificationRead(id: string): Promise<void> {
+    await db
+      .update(adminNotifications)
+      .set({ isRead: 1 })
+      .where(eq(adminNotifications.id, id));
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
@@ -1376,6 +1457,8 @@ export class MemStorage implements IStorage {
     { id: "4", name: "Winter '25", slug: "WINTER_25", createdAt: new Date() },
   ];
   private _productAttributes: ProductAttribute[] = [];
+  private adminNotifications: Map<string, AdminNotification> = new Map();
+  private currentId: number = 1;
 
   async getProducts(_filters?: {
     category?: string;
@@ -1410,6 +1493,15 @@ export class MemStorage implements IStorage {
       updatedAt: new Date(),
     };
     this._products.push(product);
+
+    // Notification for new product
+    await this.createAdminNotification({
+      title: "New Product Added",
+      message: `${product.name} has been added to the catalog.`,
+      type: "product",
+      link: "/admin/products",
+    });
+
     return product;
   }
 
@@ -1422,6 +1514,23 @@ export class MemStorage implements IStorage {
       throw new Error("Product not found");
     }
     Object.assign(product, data, { updatedAt: new Date() });
+
+    if (product.stock === 0) {
+      await this.createAdminNotification({
+        title: "Product Out of Stock",
+        message: `${product.name} is now out of stock.`,
+        type: "product",
+        link: "/admin/products",
+      });
+    } else {
+      await this.createAdminNotification({
+        title: "Product Details Updated",
+        message: `${product.name} has been updated.`,
+        type: "product",
+        link: "/admin/products",
+      });
+    }
+
     return product;
   }
 
@@ -1591,7 +1700,41 @@ export class MemStorage implements IStorage {
   }
 
   async subscribeToNewsletter(email: string): Promise<void> {
-    // No-op for MemStorage in this context or implement simple check
+    // No-op for memory storage
+  }
+
+  async getAdminNotifications(): Promise<AdminNotification[]> {
+    return Array.from(this.adminNotifications.values())
+      .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+      .slice(0, 50);
+  }
+
+  async createAdminNotification(data: InsertAdminNotification): Promise<AdminNotification> {
+    const id = String(this.currentId++);
+    const notification: AdminNotification = {
+      ...data,
+      link: data.link ?? null,
+      id,
+      isRead: 0,
+      createdAt: new Date(),
+    };
+    this.adminNotifications.set(id, notification);
+    return notification;
+  }
+
+  async markAdminNotificationsRead(): Promise<void> {
+    this.adminNotifications.forEach((notif, id) => {
+      if (notif.isRead === 0) {
+        this.adminNotifications.set(id, { ...notif, isRead: 1 });
+      }
+    });
+  }
+
+  async markAdminNotificationRead(id: string): Promise<void> {
+    const notif = this.adminNotifications.get(id);
+    if (notif) {
+      this.adminNotifications.set(id, { ...notif, isRead: 1 });
+    }
   }
 
   async getUserByEmail(email: string): Promise<User | null> {

@@ -28,6 +28,7 @@ import AdminAnalytics from "@/pages/admin/Analytics";
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminProfilePage from "@/pages/admin/Profile";
 import AdminAttributes from "@/pages/admin/Attributes";
+import AdminNotifications from "@/pages/admin/Notifications";
 
 import LoginPage from "@/pages/auth/Login";
 import NotFound from "@/pages/not-found";
@@ -133,6 +134,13 @@ function Router() {
           </AdminLayout>
         </ProtectedRoute>
       </Route>
+      <Route path="/admin/notifications">
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminNotifications />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
 
       {/* Storefront Routes */}
       <Route path="/">
@@ -180,7 +188,7 @@ function Router() {
           <OrderSuccess />
         </StorefrontLayout>
       </Route>
-      <Route path="/login">
+      <Route path="/admin/login">
         <LoginRoute />
       </Route>
       

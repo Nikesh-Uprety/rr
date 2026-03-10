@@ -383,42 +383,45 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
-          {featuredProducts.map((product) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {featuredProducts.map((product, i) => (
             <Link
               key={product.id}
               href={`/product/${product.id}`}
               className="group cursor-pointer relative"
             >
-              <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5] rounded-xl shadow-2xl transition-all duration-700 hover:shadow-white/5">
+              <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5] rounded-xl shadow-2xl transition-all duration-300 hover:shadow-white/5">
                 <AnimatePresence mode="wait">
                   <motion.div
                     className="absolute inset-0 z-0"
                     whileHover={{ scale: 1.1 }}
-                    transition={{ duration: 1.5, ease: [0.33, 1, 0.68, 1] }}
+                    transition={{ duration: 0.4, ease: [0.33, 1, 0.68, 1] }}
                   >
                     {/* Primary Image */}
                     <OptimizedImage
-                      src={product.imageUrl ?? ""}
-                      alt={product.name}
-                      className="w-full h-full object-cover transition-opacity duration-700 group-hover:opacity-0"
+                      src={i === 0 ? "/images/hoodie_left_landscape.webp" : i === 1 ? "/images/hoodie_right_landscape.webp" : (product.galleryUrls ? JSON.parse(product.galleryUrls)[0] : product.imageUrl ?? "")}
+                      alt={`${product.name} lifestyle`}
+                      className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-0"
                     />
                     {/* Secondary Image (Model/Action) */}
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       <OptimizedImage
-                        src={product.galleryUrls ? JSON.parse(product.galleryUrls)[0] : product.imageUrl ?? ""}
-                        alt={`${product.name} lifestyle`}
+                        src={product.imageUrl ?? ""}
+                        alt={product.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
                   </motion.div>
                 </AnimatePresence>
 
+                {/* Dark Gradient Overlay on Hover for Text Visibility */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10" />
+
                 {/* Glassmorphism Detail Reveal */}
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   whileHover={{ opacity: 1, y: 0 }}
-                  className="absolute inset-x-4 bottom-4 z-20 p-6 backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl shadow-xl flex justify-between items-center"
+                  className="absolute inset-x-4 bottom-4 z-20 p-6 backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl shadow-xl flex justify-between items-center"
                 >
                   <div>
                     <h3 className="text-white text-xl font-black uppercase tracking-tighter mb-1">

@@ -307,6 +307,78 @@ PORT=5000
 
 ---
 
+## Team Skills & Roles
+
+### Nikesh Uprety (Project Lead & Full-Stack Developer)
+
+#### Core Developer Skills
+| Area | Expertise | Proficiency |
+|------|-----------|------------|
+| **Frontend Development** | React, TypeScript, Vite, TailwindCSS, Radix UI, Framer Motion | Expert |
+| **Backend Development** | Node.js, Express.js, Drizzle ORM, PostgreSQL, API Design | Expert |
+| **Full-Stack Architecture** | Monolithic codebase design, shared schemas, type safety across tiers | Expert |
+| **Authentication & Security** | Passport.js, 2FA implementation, bcryptjs, CORS, rate-limiting, session management | Advanced |
+| **Database Design** | PostgreSQL schema design, migrations, data modeling, optimization | Advanced |
+
+#### Design & UX Skills
+| Area | Expertise | Proficiency |
+|------|-----------|------------|
+| **UI/UX Design** | Component design, design systems, user flows, wireframing | Advanced |
+| **Visual Design** | Graphics design, brand identity, color theory, typography | Advanced |
+| **Design Systems** | TailwindCSS implementation, CSS variables, theme management (light/dark/warm modes) | Expert |
+| **Responsive Design** | Mobile-first approach, cross-browser compatibility, accessibility | Advanced |
+
+#### System Architecture & Infrastructure
+| Area | Expertise | Proficiency |
+|------|-----------|------------|
+| **System Architecture** | Full-stack application design, microservice patterns, API design | Expert |
+| **Deployment & DevOps** | Render.yaml configuration, environment management, production deployment | Advanced |
+| **Performance Optimization** | Bundle optimization, caching strategies, database query optimization | Advanced |
+| **Security Architecture** | CORS, rate-limiting, secure headers (CSP, STS, X-Frame-Options), data protection | Advanced |
+
+#### Digital Marketing & SEO
+| Area | Expertise | Proficiency |
+|------|-----------|------------|
+| **SEO Strategy** | On-page SEO, meta tags, structured data, keyword optimization | Advanced |
+| **Technical SEO** | Performance optimization for search, Core Web Vitals, crawlability | Intermediate |
+| **Brand Management** | Brand identity (RARE/RARE.np), visual consistency, messaging | Advanced |
+| **E-commerce Marketing** | Product page optimization, conversion optimization, user retention | Intermediate |
+
+#### Project Management
+| Area | Expertise | Proficiency |
+|------|-----------|------------|
+| **Planning & Requirements** | Feature roadmapping, technical specification, scope management | Advanced |
+| **Quality Assurance** | Pre-push verification, manual testing, code review | Advanced |
+| **Documentation** | Technical documentation, architecture docs, contributor guides | Advanced |
+
+---
+
+### Key Project Contributions
+- **Full-stack e-commerce platform** design and implementation
+- **Admin dashboard** with analytics, product management, and order tracking
+- **Secure authentication system** with 2FA support
+- **Brand-aligned design system** with three theme modes (light/dark/warm)
+- **Database architecture** with Drizzle ORM and PostgreSQL
+- **Security hardening** (CORS fixes, rate-limiting, security headers)
+- **Performance optimization** (bundle optimization, image compression)
+- **SEO implementation** (meta tags, structured data, accessibility)
+
+---
+
+## Skill Application Matrix
+
+| Feature | Frontend Skills | Backend Skills | Design Skills | Architecture |
+|---------|-----------------|-----------------|---------------|-------------|
+| Storefront UI | ✓ React/TypeScript | ✓ API design | ✓ Visual design | ✓ Monolithic |
+| Admin Dashboard | ✓ Complex UX | ✓ Admin API | ✓ Design system | ✓ RBAC auth |
+| Product Management | ✓ Forms/validation | ✓ CRUD ops | ✓ Thumbnail design | ✓ Schema design |
+| Order Processing | ✓ Real-time updates | ✓ Transaction handling | ✓ Status badges | ✓ State flow |
+| Authentication | ✓ Protected routes | ✓ Passport + 2FA | ✓ Login UI | ✓ Session store |
+| Analytics | ✓ Recharts viz | ✓ Data aggregation | ✓ Dashboard layout | ✓ Query optimization |
+| SEO & Metadata | ✓ Meta tag helpers | ✓ Structured data API | ✓ OG images | ✓ Performance |
+
+---
+
 ## Coding Rules for Cursor
 
 1. **Never use `any` type.** Use Drizzle's `InferSelectModel<typeof table>` for DB types.

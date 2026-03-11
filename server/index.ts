@@ -1,14 +1,14 @@
-import "dotenv/config";
-import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
-import { createServer } from "http";
-import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { passport, configurePassport } from "./auth";
+import "dotenv/config";
+import express, { NextFunction, type Request, Response } from "express";
+import session from "express-session";
+import { createServer } from "http";
+import { configurePassport, passport } from "./auth";
 import { pool } from "./db";
 import { logger } from "./logger";
-import { securityHeaders, corsHeaders, rateLimit } from "./middleware/security";
+import { corsHeaders, securityHeaders } from "./middleware/security";
+import { registerRoutes } from "./routes";
+import { serveStatic } from "./static";
 
 const app = express();
 // Behind Render's proxy, trust X-Forwarded-* so secure cookies work
@@ -124,7 +124,7 @@ app.use((req, res, next) => {
 (async () => {
   // Serve uploaded files - MUST be before registerRoutes and vite
   const path = await import("path");
-  const uploadsPath = path.resolve(import.meta.dirname, "..", "uploads");
+  const uploadsPath = path.resolve(process.cwd(), "uploads");
   app.use("/uploads", express.static(uploadsPath));
 
   await registerRoutes(httpServer, app);

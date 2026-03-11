@@ -1,43 +1,36 @@
-import type { Express, Request, Response, NextFunction } from "express";
+import type { Express, NextFunction, Request, Response } from "express";
+import fs from "fs";
 import { type Server } from "http";
 import path from "path";
-import fs from "fs";
-import { storage } from "./storage";
-import { passport } from "./auth";
 import sharp from "sharp";
 import { z } from "zod";
+import { passport } from "./auth";
+import { storage } from "./storage";
 
+import { and, desc, eq, gte, sql } from "drizzle-orm";
+import {
+    bills,
+    emailTemplates,
+    insertNewsletterSubscriberSchema,
+    insertProductAttributeSchema,
+    newsletterSubscribers,
+    posSessions,
+    Product,
+    products
+} from "../shared/schema";
+import { db } from "./db";
+import {
+    sendContactReplyEmail,
+    sendInviteEmail,
+    sendMarketingBroadcastEmail,
+    sendNewsletterWelcomeEmail,
+    sendOTPEmail,
+} from "./email";
+import { getQueryParam, handleApiError, sendError } from "./errorHandler";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
-import { validateRequest } from "./middleware/validateRequest";
 import { rateLimit } from "./middleware/security";
-import { sendOTPEmail,  sendInviteEmail,
-  sendContactReplyEmail,
-  sendMarketingBroadcastEmail,
-  sendNewsletterWelcomeEmail,
-} from "./email";
-import { handleApiError, sendError, getQueryParam } from "./errorHandler";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
-import {
-  users,
-  customers,
-  orders,
-  insertCustomerSchema,
-  insertOrderSchema,
-  insertProductSchema,
-  products,
-  insertNewsletterSubscriberSchema,
-  newsletterSubscribers,
-  bills,
-  posSessions,
-  insertProductAttributeSchema,
-  Product,
-  adminNotifications,
-  insertAdminNotificationSchema,
-  emailTemplates,
-} from "../shared/schema";
-import { eq, desc, sum, sql, and, gte, lte } from "drizzle-orm";
-import { db } from "./db";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
@@ -1287,7 +1280,7 @@ export async function registerRoutes(
 
         const fs = await import("fs");
         const path = await import("path");
-        const avatarDir = path.resolve(import.meta.dirname, "..", "uploads", "avatars");
+        const avatarDir = path.resolve(process.cwd(), "uploads", "avatars");
         fs.mkdirSync(avatarDir, { recursive: true });
 
         const filename = `avatar-${user.id}-${Date.now()}.webp`;

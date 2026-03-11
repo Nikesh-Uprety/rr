@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useLocation } from "wouter";
@@ -11,6 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { AdvancedEmailEditor } from "@/components/admin/AdvancedEmailEditor";
+
+const SecuritySection = lazy(() => import("@/components/admin/SecuritySection"));
+
 import {
   type AdminCustomer,
   type AdminOrder,
@@ -22,13 +25,13 @@ import {
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { format } from "date-fns";
-import { 
-  Search, 
-  Mail, 
-  MessageSquare, 
-  Send, 
-  MoreHorizontal, 
-  CheckCircle2, 
+import {
+  Search,
+  Mail,
+  MessageSquare,
+  Send,
+  MoreHorizontal,
+  CheckCircle2,
   Clock,
   ExternalLink,
   ChevronRight,
@@ -362,15 +365,15 @@ export default function AdminProfilePage() {
   const [marketingBody, setMarketingBody] = useState(`<div style="font-family: 'serif', 'Times New Roman', serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; text-align: center;">
   <h1 style="font-size: 32px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 24px; color: #f2efe8;">RARE ATELIER</h1>
   <div style="width: 40px; height: 1px; background: rgba(242, 239, 232, 0.3); margin: 0 auto 32px;"></div>
-  
+
   <h2 style="font-size: 24px; font-style: italic; margin-bottom: 16px;">The Latest from the Atelier</h2>
-  
+
   <p style="font-size: 16px; line-height: 1.6; color: rgba(242, 239, 232, 0.7); margin-bottom: 32px; text-align: left;">
     Dear community,
     <br><br>
     [Edit your message here...]
   </p>
-  
+
   <div style="margin: 40px 0; padding: 32px; border: 1px solid rgba(242, 239, 232, 0.1);">
      <p style="font-size: 14px; color: #f2efe8; letter-spacing: 0.1em; margin-bottom: 24px;">EXPLORE THE ARCHIVE</p>
      <a href="https://rarenp.com" style="display: inline-block; padding: 14px 28px; background: #f2efe8; color: #07060a; text-decoration: none; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;">Shop Now</a>
@@ -389,64 +392,13 @@ export default function AdminProfilePage() {
   const [newSubscriberEmail, setNewSubscriberEmail] = useState("");
   const [showSplitEditor, setShowSplitEditor] = useState(true);
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState<string | null>(null);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>("template1");
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("template6");
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isBroadcastConfirmOpen, setIsBroadcastConfirmOpen] = useState(false);
+  const [templateSearchQuery, setTemplateSearchQuery] = useState("");
 
   // Email Templates
   const emailTemplates = {
-    template1: {
-      name: "RARE Atelier Classic",
-      subject: "New Seasonal Collection — RARE ATELIER",
-      html: `<div style="font-family: 'serif', 'Times New Roman', serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; text-align: center;">
-  <h1 style="font-size: 32px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 24px; color: #f2efe8;">RARE ATELIER</h1>
-  <div style="width: 40px; height: 1px; background: rgba(242, 239, 232, 0.3); margin: 0 auto 32px;"></div>
-  <h2 style="font-size: 24px; font-style: italic; margin-bottom: 16px;">The Latest from the Atelier</h2>
-  <p style="font-size: 16px; line-height: 1.6; color: rgba(242, 239, 232, 0.7); margin-bottom: 32px;">Dear community,<br><br>[Edit your message here...]</p>
-  <div style="margin: 40px 0; padding: 32px; border: 1px solid rgba(242, 239, 232, 0.1);">
-    <p style="font-size: 14px; color: #f2efe8; letter-spacing: 0.1em; margin-bottom: 24px;">EXPLORE THE ARCHIVE</p>
-    <a href="https://rarenp.com" style="display: inline-block; padding: 14px 28px; background: #f2efe8; color: #07060a; text-decoration: none; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;">Shop Now</a>
-  </div>
-  <div style="margin-top: 60px; padding-top: 32px; border-top: 1px solid rgba(242, 239, 232, 0.1);">
-    <p style="font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242, 239, 232, 0.4);">RARE Nepal · Kathmandu · Heritage Meets Future</p>
-  </div>
-</div>`,
-    },
-    template2: {
-      name: "Modern Gradient",
-      subject: "Exclusive Offer Inside",
-      html: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-  <div style="padding: 60px 30px; text-align: center;">
-    <h1 style="font-size: 36px; color: white; margin: 0 0 16px 0; font-weight: 700;">Special Announcement</h1>
-    <p style="font-size: 18px; color: rgba(255,255,255,0.9); margin: 0 0 32px 0;">Discover what's new at RARE</p>
-    <a href="https://rarenp.com" style="display: inline-block; padding: 16px 40px; background: white; color: #667eea; text-decoration: none; font-weight: 600; border-radius: 50px; font-size: 14px;">View Collection</a>
-  </div>
-  <div style="background: white; padding: 40px; text-align: center;">
-    <p style="font-size: 14px; color: #666; margin: 0;">[Add your content here...]</p>
-  </div>
-  <div style="background: #f8f9fa; padding: 24px; text-align: center; font-size: 12px; color: #999;">
-    <p style="margin: 0;">© 2026 RARE Nepal. All rights reserved.</p>
-  </div>
-</div>`,
-    },
-    template3: {
-      name: "Elegant White",
-      subject: "Introducing our latest collection",
-      html: `<div style="font-family: Georgia, 'Times New Roman', serif; max-width: 600px; margin: 0 auto; background: white;">
-  <div style="padding: 60px 40px; border-bottom: 2px solid #e8d5c4; text-align: center;">
-    <h1 style="font-size: 28px; color: #2c2c2c; margin: 0; font-weight: 300; letter-spacing: 2px;">RARE</h1>
-    <p style="font-size: 12px; color: #999; margin: 8px 0 0 0; letter-spacing: 1px;">LUXURY COLLECTIONS</p>
-  </div>
-  <div style="padding: 40px; text-align: center;">
-    <h2 style="font-size: 24px; color: #2c2c2c; margin: 0 0 16px 0;">New Arrivals</h2>
-    <p style="font-size: 14px; color: #666; line-height: 1.8; margin: 0 0 24px 0;">Discover our curated selection of premium artisanal crafts</p>
-    <a href="https://rarenp.com" style="display: inline-block; padding: 14px 32px; border: 2px solid #2c2c2c; color: #2c2c2c; text-decoration: none; font-size: 12px; letter-spacing: 1px; background: white;">SHOP NOW</a>
-  </div>
-  <div style="background: #f5f5f5; padding: 24px; text-align: center; font-size: 11px; color: #999;">
-    <p style="margin: 0;">You're receiving this because you subscribed to RARE updates.</p>
-  </div>
-</div>`,
-    },
     template4: {
       name: "Colorful Creative",
       subject: "🎨 Creative Update from RARE",
@@ -580,7 +532,7 @@ export default function AdminProfilePage() {
   <div style="padding: 40px 30px;">
     <p style="font-size: 14px; color: #555; margin: 0 0 20px 0; line-height: 1.8;">Dear Stakeholders,</p>
     <p style="font-size: 14px; color: #555; margin: 0 0 24px 0; line-height: 1.8;">We are pleased to present our comprehensive quarterly performance report highlighting significant achievements and strategic initiatives.</p>
-    
+
     <div style="margin: 24px 0; padding: 0;">
       <h3 style="font-size: 14px; color: #1e293b; margin: 0 0 12px 0; font-weight: 600; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">Financial Overview</h3>
       <table style="width: 100%; margin-top: 12px; font-size: 13px; border-collapse: collapse;">
@@ -602,12 +554,12 @@ export default function AdminProfilePage() {
         </tr>
       </table>
     </div>
-    
+
     <div style="margin: 24px 0; padding: 16px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
       <p style="font-size: 13px; color: #1e293b; margin: 0; font-weight: 600;">Strategic Initiatives</p>
       <p style="font-size: 12px; color: #555; margin: 8px 0 0 0; line-height: 1.6;">• Market expansion in key regions<br>• Product innovation pipeline<br>• Team development programs</p>
     </div>
-    
+
     <div style="text-align: center; margin: 32px 0;">
       <a href="https://rarenp.com" style="display: inline-block; padding: 12px 32px; background: #3b82f6; color: white; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px; letter-spacing: 0.5px;">VIEW DETAILED REPORT</a>
     </div>
@@ -643,7 +595,7 @@ export default function AdminProfilePage() {
 
   const messages = messagesQuery.data?.data ?? [];
   const subscribers = subscribersQuery.data?.data ?? [];
-  const filteredSubscribers = subscribers.filter(s => 
+  const filteredSubscribers = subscribers.filter(s =>
     s.email.toLowerCase().includes(subscriberSearch.toLowerCase())
   );
 
@@ -805,14 +757,14 @@ export default function AdminProfilePage() {
         <TabsContent value="account" className="mt-4">
           <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 flex flex-col sm:flex-row gap-6 items-center sm:items-start">
             <div className="flex flex-col items-center gap-3">
-              <div 
+              <div
                 className="relative w-20 h-20 rounded-full bg-[#2D4A35] text-white flex items-center justify-center text-2xl font-semibold overflow-hidden cursor-pointer group"
                 onClick={() => document.getElementById('avatar-upload')?.click()}
               >
                 {profileImage || user?.profileImageUrl ? (
-                  <img 
-                    src={profileImage || user?.profileImageUrl || ""} 
-                    alt="Profile" 
+                  <img
+                    src={profileImage || user?.profileImageUrl || ""}
+                    alt="Profile"
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -938,9 +890,13 @@ export default function AdminProfilePage() {
 
         {/* Security tab */}
         <TabsContent value="security" className="mt-4 space-y-6">
+          <Suspense fallback={<div className="p-10 text-center animate-pulse text-xs tracking-widest text-muted-foreground uppercase">Initialising secure protocols...</div>}>
+            <SecuritySection />
+          </Suspense>
+
           <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
-            <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-              Reset Password
+            <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground text-center">
+              Account Security & Credentials
             </h2>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
@@ -1576,9 +1532,22 @@ export default function AdminProfilePage() {
               </div>
             </div>
 
-            {/* Template Selector */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Template</label>
+            {/* Template Selector with Search */}
+            <div className="space-y-3">
+              <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Templates</label>
+              
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input 
+                  placeholder="Search templates..." 
+                  className="h-9 pl-9 text-sm"
+                  value={templateSearchQuery}
+                  onChange={(e) => setTemplateSearchQuery(e.target.value.toLowerCase())}
+                />
+              </div>
+
+              {/* Template Selector */}
               <select 
                 value={selectedTemplate}
                 onChange={(e) => {
@@ -1586,12 +1555,17 @@ export default function AdminProfilePage() {
                   setSelectedTemplate(e.target.value);
                   setMarketingSubject(tpl.subject);
                   setMarketingBody(tpl.html);
+                  setTemplateSearchQuery("");
                 }}
                 className="w-full h-9 px-3 text-sm border border-[#E5E5E0] dark:border-border rounded-md bg-white dark:bg-card"
               >
-                {Object.entries(emailTemplates).map(([key, template]) => (
-                  <option key={key} value={key}>{template.name}</option>
-                ))}
+                <option value="">-- Select Template --</option>
+                {Object.entries(emailTemplates)
+                  .filter(([_, template]) => template.name.toLowerCase().includes(templateSearchQuery))
+                  .map(([key, template]) => (
+                    <option key={key} value={key}>{template.name}</option>
+                  ))
+                }
               </select>
             </div>
 

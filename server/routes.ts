@@ -34,6 +34,7 @@ import {
   Product,
   adminNotifications,
   insertAdminNotificationSchema,
+  emailTemplates,
 } from "../shared/schema";
 import { eq, desc, sum, sql, and, gte, lte } from "drizzle-orm";
 import { db } from "./db";
@@ -57,6 +58,52 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Security Logging Middleware
+  app.use(async (req, res, next) => {
+    const start = Date.now();
+    const url = req.originalUrl || req.url;
+    
+    // Skip static files and health checks to keep logs clean/performant
+    if (url.startsWith("/uploads") || url.startsWith("/assets") || url === "/api/health") {
+      return next();
+    }
+
+    res.on("finish", async () => {
+      const duration = Date.now() - start;
+      const user = req.user as Express.User | undefined;
+      
+      // Basic threat detection logic
+      let threat: string | null = null;
+      if (res.statusCode >= 400) {
+        if (url.includes(".php") || url.includes(".env") || url.includes("/wp-admin")) {
+          threat = "Suspicious Path Probe";
+        } else if (res.statusCode === 401 || res.statusCode === 403) {
+          threat = "Access Denied";
+        } else if (res.statusCode === 429) {
+          threat = "Rate Limit Exceeded";
+        }
+      }
+
+      try {
+        await storage.insertSecurityLog({
+          userId: user?.id || null,
+          userRole: user?.role || "guest",
+          method: req.method,
+          url: url,
+          status: res.statusCode,
+          durationMs: duration,
+          ip: req.ip || req.headers["x-forwarded-for"]?.toString() || null,
+          userAgent: req.headers["user-agent"] || null,
+          threat: threat,
+        });
+      } catch (err) {
+        console.error("Failed to insert security log:", err);
+      }
+    });
+
+    next();
+  });
+
   // Auth routes
   const registerSchema = z.object({
     name: z.string().min(1),
@@ -1689,6 +1736,68 @@ export async function registerRoutes(
     },
   );
 
+  // ── Email Templates Management ──────────────────────────────────
+
+  app.post(
+    "/api/admin/templates/upload",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { name, subject, html } = req.body;
+        if (!name || !subject || !html) {
+          return sendError(res, "Missing name, subject, or html", undefined, 400);
+        }
+
+        const template = await db.insert(emailTemplates).values({
+          name: name.trim(),
+          subject: subject.trim(),
+          html: html.trim(),
+          createdBy: req.user?.id || "unknown",
+        }).returning();
+
+        return res.json({ 
+          success: true, 
+          data: template[0],
+          message: "Template uploaded successfully" 
+        });
+      } catch (err: any) {
+        return handleApiError(res, err, "POST /api/admin/templates/upload");
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/templates",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const templates = await db.select().from(emailTemplates).orderBy(emailTemplates.createdAt);
+        return res.json({ 
+          success: true, 
+          data: templates 
+        });
+      } catch (err: any) {
+        return handleApiError(res, err, "GET /api/admin/templates");
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/templates/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const id = getQueryParam(req.params.id);
+        if (!id) return sendError(res, "Invalid template ID", undefined, 400);
+
+        await db.delete(emailTemplates).where(eq(emailTemplates.id, id));
+        return res.json({ success: true, message: "Template deleted" });
+      } catch (err: any) {
+        return handleApiError(res, err, "DELETE /api/admin/templates/:id");
+      }
+    },
+  );
+
   // ── Add Single Email ────────────────────────────────────
   app.post(
     "/api/admin/newsletter/add",
@@ -2012,6 +2121,21 @@ export async function registerRoutes(
       res.status(500).json({ success: false, error: "Failed to fetch session" });
     }
   });
+
+  // Security Logs
+  app.get(
+    "/api/admin/logs/recent",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const logs = await storage.getSecurityLogs(50);
+        return res.json({ success: true, data: logs });
+      } catch (err) {
+        console.error("Error in GET /api/admin/logs/recent", err);
+        return res.status(500).json({ success: false, error: "Failed to load logs" });
+      }
+    },
+  );
 
   return httpServer;
 }

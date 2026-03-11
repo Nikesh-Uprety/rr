@@ -1,9 +1,26 @@
 import { db } from "./server/db";
-import { users } from "./shared/schema";
+import { sql } from "drizzle-orm";
 
 async function run() {
-  const allUsers = await db.select().from(users);
-  console.log("Users:", allUsers.map(u => ({ id: u.id, email: u.username, profileImageUrl: u.profileImageUrl })));
+  try {
+    const result = await db.execute(sql`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'security_logs'
+    `);
+    console.log("Table 'security_logs' exists:", result.rowCount > 0);
+    
+    if (result.rowCount > 0) {
+      const columns = await db.execute(sql`
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'security_logs'
+      `);
+      console.log("Columns:", columns.rows);
+    }
+  } catch (err) {
+    console.error("Error checking table:", err);
+  }
   process.exit(0);
 }
 run().catch(console.error);

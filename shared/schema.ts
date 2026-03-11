@@ -264,6 +264,30 @@ export const insertNewsletterSubscriberSchema = createInsertSchema(newsletterSub
   email: true,
 });
 
+// ── Email Templates (Custom/Uploaded) ─────────────────────────────────
+export const emailTemplates = pgTable("email_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  html: text("html").notNull(),
+  createdBy: varchar("created_by").notNull(), // user ID
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).pick({
+  name: true,
+  subject: true,
+  html: true,
+});
+
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
+
 // ── Admin Notifications ─────────────────────────────────
 export const adminNotifications = pgTable("admin_notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -286,3 +310,26 @@ export const insertAdminNotificationSchema = createInsertSchema(adminNotificatio
 
 export type AdminNotification = typeof adminNotifications.$inferSelect;
 export type InsertAdminNotification = z.infer<typeof insertAdminNotificationSchema>;
+export const securityLogs = pgTable("security_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),
+  userRole: text("user_role"), // admin, staff, customer, unauth
+  method: text("method").notNull(),
+  url: text("url").notNull(),
+  status: integer("status").notNull(),
+  durationMs: integer("duration_ms").notNull(),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  threat: text("threat"), // e.g., "BRUTE_FORCE", "SQL_INJECTION", null
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertSecurityLogSchema = createInsertSchema(securityLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type SecurityLog = typeof securityLogs.$inferSelect;
+export type InsertSecurityLog = z.infer<typeof insertSecurityLogSchema>;

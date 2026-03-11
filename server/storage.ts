@@ -11,6 +11,7 @@ import {
   productAttributes,
   newsletterSubscribers,
   adminNotifications,
+  securityLogs,
   type Category,
   type Customer,
   type Order,
@@ -23,6 +24,8 @@ import {
   type InsertProductAttribute,
   type AdminNotification,
   type InsertAdminNotification,
+  type SecurityLog,
+  type InsertSecurityLog,
 } from "@shared/schema";
 import { and, asc, desc, eq, gte, ilike, sql } from "drizzle-orm";
 
@@ -241,6 +244,9 @@ export interface IStorage {
   createContactMessage(data: Omit<ContactMessage, "id" | "createdAt" | "status">): Promise<ContactMessage>;
   getContactMessages(): Promise<ContactMessage[]>;
   updateContactMessageStatus(id: string, status: "unread" | "read" | "replied"): Promise<ContactMessage>;
+  // Security Logs
+  getSecurityLogs(limit?: number): Promise<SecurityLog[]>;
+  insertSecurityLog(data: InsertSecurityLog): Promise<SecurityLog>;
 }
 
 export class PgStorage implements IStorage {
@@ -939,6 +945,23 @@ export class PgStorage implements IStorage {
       .update(adminNotifications)
       .set({ isRead: 1 })
       .where(eq(adminNotifications.id, id));
+  }
+
+  // Security Logs
+  async getSecurityLogs(limit = 100): Promise<SecurityLog[]> {
+    return db
+      .select()
+      .from(securityLogs)
+      .orderBy(desc(securityLogs.createdAt))
+      .limit(limit);
+  }
+
+  async insertSecurityLog(data: InsertSecurityLog): Promise<SecurityLog> {
+    const [row] = await db
+      .insert(securityLogs)
+      .values(data)
+      .returning();
+    return row;
   }
 
   // ── Contact Messages ─────────────────────────────────────
@@ -1895,6 +1918,12 @@ export class MemStorage implements IStorage {
   async updateUserPassword(id: string, passwordHash: string): Promise<void> {
     const user = this._users.find((u) => u.id === id);
     if (user) user.password = passwordHash;
+  }
+
+  // No-op for security logs in memory
+  async getSecurityLogs(): Promise<SecurityLog[]> { return []; }
+  async insertSecurityLog(data: InsertSecurityLog): Promise<SecurityLog> {
+    return { ...data, id: crypto.randomUUID(), createdAt: new Date() } as SecurityLog;
   }
 
   async inviteAdminUser(data: { name: string; email: string; role: string; passwordHash: string }): Promise<User> {

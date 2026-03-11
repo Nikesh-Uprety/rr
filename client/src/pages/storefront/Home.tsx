@@ -42,15 +42,28 @@ export default function Home() {
   const { scrollYProgress } = useScroll();
   const yParallax = useTransform(scrollYProgress, [0, 1], [0, -200]);
 
-  const { data: featuredProducts = [] } = useQuery({
+  const { data: featuredProducts = [], isSuccess: isFeaturedSuccess } = useQuery({
     queryKey: ["products", "featured", { limit: 2 }],
     queryFn: () => fetchProducts({ limit: 2 }),
   });
 
-  const { data: newArrivals = [] } = useQuery({
+  const { data: newArrivals = [], isSuccess: isNewArrivalsSuccess } = useQuery({
     queryKey: ["products", "new-arrivals", { limit: 4 }],
     queryFn: () => fetchProducts({ limit: 4 }),
   });
+
+  // Finish pre-loader only when data is ready (Hydration-First)
+  useEffect(() => {
+    if (isFeaturedSuccess && isNewArrivalsSuccess) {
+      // Small delay to ensure browser paint
+      const timer = setTimeout(() => {
+        if (typeof (window as any).finishLoading === 'function') {
+          (window as any).finishLoading();
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isFeaturedSuccess, isNewArrivalsSuccess]);
 
   // Preload static campaign images
   useEffect(() => {
@@ -197,7 +210,7 @@ export default function Home() {
         <AnimatePresence mode="popLayout">
           <motion.div
             key={heroIndex}
-            initial={{ opacity: 0 }}
+            initial={heroIndex === 0 ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ 
@@ -217,8 +230,8 @@ export default function Home() {
         </AnimatePresence>
         <div className="absolute inset-0 bg-black/40 dark:bg-luminous-glow transition-colors duration-700 pointer-events-none" />
 
-        <div className="absolute inset-0 flex items-center justify-center container mx-auto px-6">
-          <div className="animate-in fade-in zoom-in duration-1000 max-w-4xl w-full text-white text-center flex flex-col items-center gap-y-6 md:gap-y-8 mx-auto">
+        <div className="absolute inset-0 flex items-center justify-start container mx-auto px-6">
+          <div className="hero-fade-in-float max-w-[600px] w-full text-white text-left flex flex-col items-start gap-y-6 md:gap-y-8">
             <h1 className="font-serif text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold leading-[1.1] tracking-tighter drop-shadow-xl">
               Beyond Trends.
               <br />
@@ -227,7 +240,7 @@ export default function Home() {
             <p className="text-xs md:text-sm tracking-[0.6em] uppercase opacity-80 font-light">
               Authenticity In Motion
             </p>
-            <div className="mt-4 md:mt-8">
+            <div className="mt-4 md:mt-8 hero-fade-in-float hero-delay-200">
               <Button
                 size="lg"
                 asChild

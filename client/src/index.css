@@ -205,6 +205,27 @@
   animation: sparkle 3s ease-in-out infinite;
 }
 
+/* Hero Performance Animations */
+@keyframes heroFadeInFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-fade-in-float {
+  opacity: 0;
+  animation: heroFadeInFloat 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.hero-delay-200 {
+  animation-delay: 200ms;
+}
+
 .bg-luminous-glow {
   background: radial-gradient(circle at center, rgba(255, 255, 255, 0.1) 0%, rgba(0, 0, 0, 0.3) 100%);
   mix-blend-mode: plus-lighter;

@@ -121,15 +121,21 @@ export default function NewCollection() {
     );
   };
 
-  const productsByCategory = useMemo(() => {
-    if (!products) return new Map<string, ProductApi[]>();
-    const map = new Map<string, ProductApi[]>();
-    for (const p of products) {
-      const cat = p.category ?? "uncategorized";
-      if (!map.has(cat)) map.set(cat, []);
-      map.get(cat)!.push(p);
-    }
-    return map;
+  const sortedProducts = useMemo(() => {
+    if (!products) return [];
+    return [...products].sort((a, b) => {
+      const getPriority = (p: ProductApi) => {
+        const cat = p.category?.toUpperCase();
+        if (cat === "HOODIE") return 1;
+        if (cat === "TROUSER") return 2;
+        return 3;
+      };
+      const prioA = getPriority(a);
+      const prioB = getPriority(b);
+      
+      if (prioA !== prioB) return prioA - prioB;
+      return a.name.localeCompare(b.name);
+    });
   }, [products]);
 
   return (
@@ -164,27 +170,13 @@ export default function NewCollection() {
             <BrandedLoader />
           </div>
         ) : (
-          Array.from(productsByCategory.entries()).map(([catSlug, prods]) => (
-            <div key={catSlug} className="mb-20 last:mb-0">
-              {/* Category heading */}
-              <div className="flex items-center gap-4 mb-10">
-                <div className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
-                <h2 className="text-[11px] md:text-xs font-bold uppercase tracking-[0.35em] text-neutral-400 dark:text-neutral-500 shrink-0">
-                  {getCategoryDisplayName(catSlug)}
-                </h2>
-                <div className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
+          <div className="columns-2 md:columns-3 xl:columns-4 gap-3 md:gap-4">
+            {sortedProducts.map((product, i) => (
+              <div key={product.id} className="break-inside-avoid mb-3 md:mb-4">
+                <RevealImage product={product} index={i} />
               </div>
-
-              {/* Masonry grid */}
-              <div className="columns-2 md:columns-3 xl:columns-4 gap-3 md:gap-4">
-                {prods.map((product, i) => (
-                  <div key={product.id} className="break-inside-avoid mb-3 md:mb-4">
-                    <RevealImage product={product} index={i} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
 
         {!isLoading && products && products.length === 0 && (

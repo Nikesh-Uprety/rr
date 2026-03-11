@@ -10,28 +10,31 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
+import { lazy, Suspense } from "react";
 import Home from "@/pages/storefront/Home";
-import Products from "@/pages/storefront/Products";
-import ProductDetail from "@/pages/storefront/ProductDetail";
-import NewCollection from "@/pages/storefront/NewCollection";
-import Contact from "@/pages/storefront/Contact";
-import Cart from "@/pages/storefront/Cart";
-import Checkout from "@/pages/storefront/Checkout";
-import PaymentProcess from "@/pages/storefront/PaymentProcess";
-import OrderSuccess from "@/pages/storefront/OrderSuccess";
 
-import AdminProducts from "@/pages/admin/Products";
-import AdminOrders from "@/pages/admin/Orders";
-import AdminBills from "@/pages/admin/Bills";
-import AdminCustomers from "@/pages/admin/Customers";
-import AdminPOS from "@/pages/admin/POS";
-import AdminAnalytics from "@/pages/admin/Analytics";
-import AdminDashboard from "@/pages/admin/Dashboard";
-import AdminProfilePage from "@/pages/admin/Profile";
-import AdminNotifications from "@/pages/admin/Notifications";
+// Lazy load non-critical components
+const Products = lazy(() => import("@/pages/storefront/Products"));
+const ProductDetail = lazy(() => import("@/pages/storefront/ProductDetail"));
+const NewCollection = lazy(() => import("@/pages/storefront/NewCollection"));
+const Contact = lazy(() => import("@/pages/storefront/Contact"));
+const Cart = lazy(() => import("@/pages/storefront/Cart"));
+const Checkout = lazy(() => import("@/pages/storefront/Checkout"));
+const PaymentProcess = lazy(() => import("@/pages/storefront/PaymentProcess"));
+const OrderSuccess = lazy(() => import("@/pages/storefront/OrderSuccess"));
 
-import LoginPage from "@/pages/auth/Login";
-import NotFound from "@/pages/not-found";
+const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
+const AdminProducts = lazy(() => import("@/pages/admin/Products"));
+const AdminOrders = lazy(() => import("@/pages/admin/Orders"));
+const AdminBills = lazy(() => import("@/pages/admin/Bills"));
+const AdminCustomers = lazy(() => import("@/pages/admin/Customers"));
+const AdminPOS = lazy(() => import("@/pages/admin/POS"));
+const AdminAnalytics = lazy(() => import("@/pages/admin/Analytics"));
+const AdminProfilePage = lazy(() => import("@/pages/admin/Profile"));
+const AdminNotifications = lazy(() => import("@/pages/admin/Notifications"));
+
+const LoginPage = lazy(() => import("@/pages/auth/Login"));
+const NotFound = lazy(() => import("@/pages/not-found"));
 
 function StorefrontLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -196,7 +199,9 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <Suspense fallback={null}>
+            <Router />
+          </Suspense>
         </TooltipProvider>
       </QueryClientProvider>
     </HelmetProvider>

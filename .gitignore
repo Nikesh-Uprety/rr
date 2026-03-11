@@ -9,3 +9,8 @@ PROJECT_PROGRESS.md
 CURSOR_BUILD_PROMPTS.md
 package-lock.json
 package.json
+CURSOR_BUILD_PROMPTS.md
+vite.config.ts
+errors.txt
+dev_server.log
+check-db.ts

@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ChartContainer,
@@ -23,6 +23,7 @@ import {
 import {
   fetchAnalytics,
   fetchAnalyticsCalendar,
+  exportAnalyticsCSV,
   type AdminAnalytics,
   type AdminAnalyticsCalendarDay,
 } from "@/lib/adminApi";
@@ -215,43 +216,53 @@ export default function AdminAnalytics() {
             </button>
           ))}
         </div>
+        <Button 
+          variant="outline" 
+          onClick={() => exportAnalyticsCSV(range)}
+          className="rounded-full gap-2"
+        >
+          <Download className="w-4 h-4" />
+          Export CSV
+        </Button>
       </div>
 
       {/* Top KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {(isLoading || !kpis
-          ? Array.from({ length: 4 })
-          : [
-              {
-                label: "Total Revenue",
-                subtitle: "vs last period",
-                value:
-                  kpis && formatPrice(kpis.revenue)
-                    ? formatPrice(kpis.revenue)
-                    : "Rs. 0",
-                trend: kpis ? kpis.trends.revenue : 0,
-              },
-              {
-                label: "Total Orders",
-                subtitle: "vs last period",
-                value: kpis ? kpis.orders.toLocaleString("en-NP") : "0",
-                trend: kpis ? kpis.trends.orders : 0,
-              },
-              {
-                label: "Avg Order Value",
-                subtitle: "vs last period",
-                value: kpis ? formatPrice(kpis.avgOrderValue) : "Rs. 0",
-                trend: kpis ? kpis.trends.avgOrderValue : 0,
-              },
-              {
-                label: "New Customers",
-                subtitle: "vs last period",
-                value: kpis ? kpis.newCustomers.toLocaleString("en-NP") : "0",
-                trend: kpis ? kpis.trends.newCustomers : 0,
-              },
-            ]
+        {(
+          (isLoading || !kpis
+            ? Array.from({ length: 4 })
+            : [
+                {
+                  label: "Total Revenue",
+                  subtitle: "vs last period",
+                  value:
+                    kpis && formatPrice(kpis.revenue)
+                      ? formatPrice(kpis.revenue)
+                      : "Rs. 0",
+                  trend: kpis ? kpis.trends.revenue : 0,
+                },
+                {
+                  label: "Total Orders",
+                  subtitle: "vs last period",
+                  value: kpis ? kpis.orders.toLocaleString("en-NP") : "0",
+                  trend: kpis ? kpis.trends.orders : 0,
+                },
+                {
+                  label: "Avg Order Value",
+                  subtitle: "vs last period",
+                  value: kpis ? formatPrice(kpis.avgOrderValue) : "Rs. 0",
+                  trend: kpis ? kpis.trends.avgOrderValue : 0,
+                },
+                {
+                  label: "New Customers",
+                  subtitle: "vs last period",
+                  value: kpis ? kpis.newCustomers.toLocaleString("en-NP") : "0",
+                  trend: kpis ? kpis.trends.newCustomers : 0,
+                },
+              ]
+          ) as Array<{ label: string; subtitle: string; value: string; trend: number } | undefined>
         ).map((card, idx) => {
-          if (isLoading || !kpis) {
+          if (isLoading || !kpis || !card) {
             return (
               <div
                 key={idx}

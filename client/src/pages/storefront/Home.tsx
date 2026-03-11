@@ -11,6 +11,7 @@ import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Helmet } from "react-helmet-async";
 
 const HERO_IMAGES = [
   "/images/landingpage3.webp",
@@ -185,6 +186,12 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen pt-20">
+      <Helmet>
+        <title>Rare Atelier | Home - Premium Streetwear</title>
+        <meta name="description" content="Welcome to Rare Atelier. Explore our premium streetwear and minimal luxury collection. Authentic style, timeless designs." />
+        <meta property="og:title" content="Rare Atelier | Premium Streetwear" />
+        <meta property="og:url" content={window.location.origin} />
+      </Helmet>
       {/* Hero Section */}
       <section className="relative h-[90vh] w-full overflow-hidden bg-neutral-900">
         <AnimatePresence mode="popLayout">
@@ -203,7 +210,8 @@ export default function Home() {
               src={HERO_IMAGES[heroIndex]}
               alt="Luxury street style campaign"
               className="w-full h-full object-cover"
-              priority={true}
+              priority={heroIndex === 0}
+              loading={heroIndex === 0 ? "eager" : "lazy"}
             />
           </motion.div>
         </AnimatePresence>
@@ -402,6 +410,7 @@ export default function Home() {
                       src={i === 0 ? "/images/hoodie_left_landscape.webp" : i === 1 ? "/images/hoodie_right_landscape.webp" : (product.galleryUrls ? JSON.parse(product.galleryUrls)[0] : product.imageUrl ?? "")}
                       alt={`${product.name} lifestyle`}
                       className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-0"
+                      priority={i < 2}
                     />
                     {/* Secondary Image (Model/Action) */}
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">

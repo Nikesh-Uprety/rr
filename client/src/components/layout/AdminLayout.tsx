@@ -29,7 +29,6 @@ const ADMIN_NAV = [
   { href: "/admin/customers", icon: User, label: "Customers" },
   { href: "/admin/analytics", icon: BarChart, label: "Analytics" },
   { href: "/admin/pos", icon: CreditCard, label: "Point of Sale" },
-  { href: "/admin/attributes", icon: Tags, label: "Attributes" },
 ];
 
 export default function AdminLayout({

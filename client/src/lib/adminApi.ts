@@ -1,6 +1,9 @@
 import { apiRequest } from "./queryClient";
 import type { ProductApi, CategoryApi } from "./api";
 
+// Type alias for admin product view
+export type AdminProduct = ProductApi;
+
 export interface AdminOrder {
   id: string;
   email: string;
@@ -124,6 +127,19 @@ export async function createCategory(data: {
   return json.data;
 }
 
+export async function updateCategory(
+  id: string,
+  data: { name: string; slug: string },
+): Promise<CategoryApi> {
+  const res = await apiRequest("PUT", `/api/admin/categories/${id}`, data);
+  const json = (await res.json()) as { success: boolean; data: CategoryApi };
+  return json.data;
+}
+
+export async function deleteCategory(id: string): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/categories/${id}`);
+}
+
 export async function uploadProductImage(
   imageBase64: string,
 ): Promise<string> {
@@ -186,6 +202,14 @@ export async function verifyOrderPayment(
 
 export function exportOrdersCSV(): void {
   window.location.href = "/api/admin/orders/export";
+}
+
+export function exportAnalyticsCSV(range: string): void {
+  window.location.href = `/api/admin/analytics/export?range=${encodeURIComponent(range)}`;
+}
+
+export function exportSubscribersCSV(): void {
+  window.location.href = "/api/admin/subscribers/export";
 }
 
 export async function fetchAdminCustomers(

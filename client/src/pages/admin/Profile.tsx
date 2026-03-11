@@ -13,6 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   type AdminCustomer,
   type AdminOrder,
+  exportSubscribersCSV,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { format } from "date-fns";
@@ -872,7 +873,7 @@ export default function AdminProfilePage() {
                   variant="outline" 
                   size="sm" 
                   className="h-8 text-xs font-mono tracking-tighter"
-                  onClick={() => window.open('/api/admin/newsletter/export', '_blank')}
+                  onClick={() => exportSubscribersCSV()}
                 >
                   <Download className="h-3 w-3 mr-2" />
                   Export CSV

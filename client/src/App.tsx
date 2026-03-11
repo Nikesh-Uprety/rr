@@ -3,6 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { HelmetProvider } from "react-helmet-async";
 
 import Navbar from "@/components/layout/Navbar";
 import AdminLayout from "@/components/layout/AdminLayout";
@@ -27,7 +28,6 @@ import AdminPOS from "@/pages/admin/POS";
 import AdminAnalytics from "@/pages/admin/Analytics";
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminProfilePage from "@/pages/admin/Profile";
-import AdminAttributes from "@/pages/admin/Attributes";
 import AdminNotifications from "@/pages/admin/Notifications";
 
 import LoginPage from "@/pages/auth/Login";
@@ -96,13 +96,6 @@ function Router() {
         <ProtectedRoute requireAdmin>
           <AdminLayout>
             <AdminProducts />
-          </AdminLayout>
-        </ProtectedRoute>
-      </Route>
-      <Route path="/admin/attributes">
-        <ProtectedRoute requireAdmin>
-          <AdminLayout>
-            <AdminAttributes />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
@@ -199,12 +192,14 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <HelmetProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </HelmetProvider>
   );
 }
 

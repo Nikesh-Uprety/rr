@@ -137,11 +137,12 @@ async function loadProductsFromCsv(): Promise<AggregatedProduct[]> {
 
   const aggregated: AggregatedProduct[] = [];
 
-  for (const [name, group] of byProduct.entries()) {
+  const entries = Array.from(byProduct.entries());
+  for (const [name, group] of entries) {
     const first = group[0];
     const price = Number.parseFloat(first.price || "0") || 0;
 
-    const inStockCount = group.filter((r) => {
+    const inStockCount = group.filter((r: CsvRow) => {
       const value = r.in_stock.toLowerCase();
       return value === "true" || value === "1" || value === "yes";
     }).length;

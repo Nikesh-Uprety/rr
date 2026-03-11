@@ -648,7 +648,7 @@ export default function AdminDashboard() {
                           {item.productId.slice(0, 6)}… × {item.quantity}
                         </span>
                         <span className="font-medium">
-                          {formatPrice(item.quantity * item.unitPrice)}
+                          {formatPrice(item.quantity * Number(item.unitPrice))}
                         </span>
                       </div>
                     ))}

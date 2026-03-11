@@ -9,11 +9,14 @@ import { z } from "zod";
 
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
+import { validateRequest } from "./middleware/validateRequest";
+import { rateLimit } from "./middleware/security";
 import { sendOTPEmail,  sendInviteEmail,
   sendContactReplyEmail,
   sendMarketingBroadcastEmail,
   sendNewsletterWelcomeEmail,
 } from "./email";
+import { handleApiError, sendError, getQueryParam } from "./errorHandler";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
 import {
   users,
@@ -39,12 +42,6 @@ const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
 const PRODUCTS_UPLOADS_DIR = path.join(process.cwd(), "uploads", "products");
 
-function getQueryParam(param: any): string | undefined {
-  if (typeof param === "string") return param;
-  if (Array.isArray(param) && typeof param[0] === "string") return param[0];
-  return undefined;
-}
-
 function ensureUploadsDir() {
   if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -67,22 +64,24 @@ export async function registerRoutes(
     password: z.string().min(6),
   });
 
-  app.post("/api/auth/register", async (req: Request, res: Response) => {
+  // Apply rate limiting to auth endpoints
+  app.post("/api/auth/register", rateLimit(), async (req: Request, res: Response) => {
     try {
       const parsed = registerSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid request body" });
+        return handleApiError(
+          res,
+          parsed.error,
+          "auth/register",
+          400,
+        );
       }
 
       const { email, password, name } = parsed.data;
 
       const existing = await storage.getUserByEmail(email);
       if (existing) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Email already in use" });
+        return sendError(res, "Email already in use", undefined, 400, "EMAIL_IN_USE");
       }
 
       const bcrypt = await import("bcryptjs");
@@ -106,7 +105,8 @@ export async function registerRoutes(
 
       req.login(expressUser, (err) => {
         if (err) {
-          throw err;
+          handleApiError(res, err, "auth/register-login", 500);
+          return;
         }
         return res.status(201).json({
           success: true,
@@ -114,10 +114,7 @@ export async function registerRoutes(
         });
       });
     } catch (err) {
-      console.error("Error in /api/auth/register", err);
-      return res
-        .status(500)
-        .json({ success: false, error: "Internal server error" });
+      handleApiError(res, err, "auth/register", 500);
     }
   });
 
@@ -128,6 +125,7 @@ export async function registerRoutes(
 
   app.post(
     "/api/auth/login",
+    rateLimit(),
     (req: Request, res: Response, next: NextFunction) => {
       const parsed = loginSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -465,9 +463,7 @@ export async function registerRoutes(
     try {
       const parsed = createOrderSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid order payload" });
+        return handleApiError(res, parsed.error, "orders/create", 400);
       }
 
       const { items, shipping } = parsed.data;
@@ -522,17 +518,17 @@ export async function registerRoutes(
         },
       });
     } catch (err) {
-      console.error("CRITICAL ERROR in POST /api/orders:", err);
-      const errorMessage = err instanceof Error ? err.message : "Unknown error";
-      return res
-        .status(500)
-        .json({ success: false, error: "Failed to create order", details: errorMessage });
+      handleApiError(res, err, "orders/create", 500);
     }
   });
 
   app.get("/api/orders/:id", async (req: Request, res: Response) => {
     try {
-      const order = await storage.getOrderById(req.params.id);
+      const id = getQueryParam(req.params.id);
+      if (!id) {
+        return res.status(400).json({ success: false, error: "Order ID is required" });
+      }
+      const order = await storage.getOrderById(id);
       return res.json({ success: true, data: order });
     } catch (err) {
       console.error("Error in GET /api/orders/:id", err);
@@ -640,6 +636,45 @@ export async function registerRoutes(
       } catch (err) {
         console.error("Error in POST /api/admin/categories", err);
         return res.status(500).json({ success: false, error: "Failed to create category" });
+      }
+    },
+  );
+
+  app.put(
+    "/api/admin/categories/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const id = getQueryParam(req.params.id);
+        if (!id) {
+          return res.status(400).json({ success: false, error: "Invalid category ID" });
+        }
+        const parsed = z.object({ name: z.string().min(1), slug: z.string().min(1) }).safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ success: false, error: "Invalid payload" });
+        }
+        const updated = await storage.updateCategory(id, parsed.data);
+        return res.json({ success: true, data: updated });
+      } catch (err: any) {
+        console.error("Error in PUT /api/admin/categories/:id", err);
+        return res.status(err.status || 500).json({ success: false, error: err.message || "Failed to update category" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/categories/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const id = getQueryParam(req.params.id);
+        if (!id) {
+          return sendError(res, "Invalid category ID", undefined, 400, "INVALID_ID");
+        }
+        await storage.deleteCategory(id);
+        return res.json({ success: true });
+      } catch (err: any) {
+        return handleApiError(res, err, "DELETE /api/admin/categories/:id");
       }
     },
   );
@@ -1377,7 +1412,10 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const { id } = req.params;
+        const id = getQueryParam(req.params.id);
+        if (!id) {
+          return res.status(400).json({ success: false, error: "Message ID is required" });
+        }
         const { html, to, subject } = req.body;
         if (!html || !to || !subject) {
           return res.status(400).json({ success: false, error: "Missing fields" });

@@ -4,10 +4,11 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import session from "express-session";
-// @ts-expect-error connect-pg-simple has no default TS export types
 import connectPgSimple from "connect-pg-simple";
 import { passport, configurePassport } from "./auth";
 import { pool } from "./db";
+import { logger } from "./logger";
+import { securityHeaders, corsHeaders, rateLimit } from "./middleware/security";
 
 const app = express();
 // Behind Render's proxy, trust X-Forwarded-* so secure cookies work
@@ -19,6 +20,12 @@ declare module "http" {
     rawBody: unknown;
   }
 }
+
+// Apply security headers to all responses
+app.use(securityHeaders);
+
+// Apply CORS headers
+app.use(corsHeaders);
 
 // 5 MB in bytes – payment screenshot uploads (base64 ~33% larger than binary)
 const JSON_BODY_LIMIT = 5 * 1024 * 1024;
@@ -74,6 +81,7 @@ export function log(message: string, source = "express") {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+  const method = req.method;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -85,12 +93,28 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      // Extract user info if authenticated
+      const user = (req as any).user;
+      const userId = user?.id || "anonymous";
+      
+      const logData = {
+        timestamp: new Date().toISOString(),
+        method,
+        path,
+        status: res.statusCode,
+        duration: `${duration}ms`,
+        userId,
+        success: res.statusCode >= 200 && res.statusCode < 400,
+      };
+
+      if (res.statusCode >= 400) {
+        logger.error(`${method} ${path} ${res.statusCode}`, logData, 
+          capturedJsonResponse?.error || "Unknown error");
+      } else {
+        logger.info(`${method} ${path} ${res.statusCode}`, logData);
       }
 
-      log(logLine);
+      log(`${method} ${path} ${res.statusCode} in ${duration}ms [${userId}]`);
     }
   });
 

@@ -216,6 +216,8 @@ export interface IStorage {
   // Categories
   getCategories(): Promise<Category[]>;
   createCategory(data: { name: string; slug: string }): Promise<Category>;
+  updateCategory(id: string, data: { name: string; slug: string }): Promise<Category>;
+  deleteCategory(id: string): Promise<void>;
 
   // Product Attributes
   getProductAttributes(type?: string): Promise<ProductAttribute[]>;
@@ -431,6 +433,20 @@ export class PgStorage implements IStorage {
       .values({ name: data.name, slug: data.slug })
       .returning();
     return row;
+  }
+
+  async updateCategory(id: string, data: { name: string; slug: string }): Promise<Category> {
+    const [row] = await db
+      .update(categories)
+      .set({ name: data.name, slug: data.slug })
+      .where(eq(categories.id, id))
+      .returning();
+    if (!row) throw new Error("Category not found");
+    return row;
+  }
+
+  async deleteCategory(id: string): Promise<void> {
+    await db.delete(categories).where(eq(categories.id, id));
   }
 
   // Product Attributes
@@ -1602,6 +1618,17 @@ export class MemStorage implements IStorage {
     };
     this._categories.push(cat);
     return cat;
+  }
+
+  async updateCategory(id: string, data: { name: string; slug: string }): Promise<Category> {
+    const cat = this._categories.find((c) => c.id === id);
+    if (!cat) throw new Error("Category not found");
+    Object.assign(cat, data);
+    return cat;
+  }
+
+  async deleteCategory(id: string): Promise<void> {
+    this._categories = this._categories.filter((c) => c.id !== id);
   }
 
   async getProductAttributes(type?: string): Promise<ProductAttribute[]> {

@@ -10,6 +10,7 @@ import { formatPrice } from "@/lib/format";
 import useEmblaCarousel from "embla-carousel-react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { Helmet } from "react-helmet-async";
 
 function parseJsonArray(s: string | null | undefined): string[] {
   if (!s || !s.trim()) return [];
@@ -109,8 +110,40 @@ export default function ProductDetail() {
     setLocation("/checkout");
   };
 
+  const structuredData = {
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    "name": product.name,
+    "image": allImages.filter(Boolean),
+    "description": product.description || product.shortDetails || "",
+    "brand": {
+      "@type": "Brand",
+      "name": "Rare Atelier"
+    },
+    "offers": {
+      "@type": "Offer",
+      "url": window.location.href,
+      "priceCurrency": "NPR",
+      "price": product.price,
+      "availability": product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      "itemCondition": "https://schema.org/NewCondition"
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-24 max-w-6xl mt-10">
+      <Helmet>
+        <title>{`${product.name} | Rare Atelier`}</title>
+        <meta name="description" content={product.shortDetails || product.description?.substring(0, 160) || `Buy ${product.name} at Rare Atelier.`} />
+        <meta property="og:title" content={`${product.name} | Rare Atelier`} />
+        <meta property="og:description" content={product.shortDetails || `Rare Atelier: ${product.name}`} />
+        <meta property="og:image" content={mainImageUrl} />
+        <meta property="og:type" content="product" />
+        <meta property="og:url" content={window.location.href} />
+        <script type="application/ld+json">
+          {JSON.stringify(structuredData)}
+        </script>
+      </Helmet>
       <div className="flex flex-col lg:flex-row gap-12 lg:gap-16">
         {/* Media Gallery: Mobile Carousel + Desktop Thumbnail Sidebar */}
         <div className="lg:flex lg:w-3/5 lg:gap-6">

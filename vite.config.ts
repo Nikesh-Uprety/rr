@@ -7,6 +7,7 @@ import { metaImagesPlugin } from "./vite-plugin-meta-images";
 import viteImagemin from 'vite-plugin-imagemin';
 
 
+
 export default defineConfig({
   plugins: [
     react(),

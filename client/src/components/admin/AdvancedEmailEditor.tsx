@@ -36,14 +36,14 @@ interface ElementStyle {
 interface AdvancedEmailEditorProps {
   htmlContent: string;
   onHtmlChange: (html: string) => void;
-  showSplitView: boolean;
-  onSplitViewChange: (show: boolean) => void;
+  showSplitView?: boolean;
+  onSplitViewChange?: (show: boolean) => void;
 }
 
 export function AdvancedEmailEditor({
   htmlContent,
   onHtmlChange,
-  showSplitView,
+  showSplitView: initialSplitView = true,
   onSplitViewChange,
 }: AdvancedEmailEditorProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -54,8 +54,16 @@ export function AdvancedEmailEditor({
   const [currentMatch, setCurrentMatch] = useState(0);
   const [showElementTree, setShowElementTree] = useState(false);
   const [elementTree, setElementTree] = useState<any[]>([]);
+  const [showSplitView, setShowSplitViewLocal] = useState(initialSplitView);
+  const [editMode, setEditMode] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const contentEditableSnapshot = useRef<string>("");
+
+  const handleSplitViewChange = (value: boolean) => {
+    setShowSplitViewLocal(value);
+    onSplitViewChange?.(value);
+  };
 
   // Update element tree when HTML changes
   useEffect(() => {
@@ -91,6 +99,48 @@ export function AdvancedEmailEditor({
       });
     }
   }, [htmlContent, showSplitView, selectedElement]);
+
+  // Setup contenteditable for inline editing when in edit mode
+  useEffect(() => {
+    if (iframeRef.current?.contentDocument && editMode && showSplitView) {
+      const doc = iframeRef.current.contentDocument;
+      const editableSelectors = ["h1", "h2", "h3", "p", "a", "span", "div"];
+      
+      editableSelectors.forEach((selector) => {
+        doc.querySelectorAll(selector).forEach((el: Element) => {
+          const htmlEl = el as HTMLElement;
+          
+          // Skip elements with no text content
+          if (!htmlEl.textContent?.trim()) return;
+          
+          htmlEl.contentEditable = "true";
+          htmlEl.style.outline = "1px dashed #667eea";
+          htmlEl.style.outlineOffset = "2px";
+          htmlEl.style.cursor = "text";
+          
+          // Add focus listener for visual feedback
+          htmlEl.addEventListener("focus", () => {
+            htmlEl.style.outline = "2px solid #667eea";
+            htmlEl.style.backgroundColor = "rgba(102, 126, 234, 0.05)";
+          });
+          
+          htmlEl.addEventListener("blur", () => {
+            htmlEl.style.outline = "1px dashed #667eea";
+            htmlEl.style.backgroundColor = "transparent";
+            
+            // Sync changes back to HTML code
+            if (iframeRef.current?.contentDocument) {
+              const newHtml = iframeRef.current.contentDocument.documentElement.innerHTML;
+              onHtmlChange(newHtml);
+            }
+          });
+          
+          // Prevent context menu on contenteditable
+          htmlEl.addEventListener("contextmenu", (e) => e.stopPropagation());
+        });
+      });
+    }
+  }, [editMode, showSplitView, htmlContent, onHtmlChange]);
 
   const buildElementTree = (el: Element, depth = 0): any[] => {
     const children: any[] = [];
@@ -229,7 +279,7 @@ export function AdvancedEmailEditor({
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => onSplitViewChange(!showSplitView)}
+          onClick={() => handleSplitViewChange(!showSplitView)}
           title={showSplitView ? "Compact View" : "Split View"}
         >
           {showSplitView ? (
@@ -301,8 +351,19 @@ export function AdvancedEmailEditor({
           {/* Preview Panel with Element Inspector */}
           <div className="flex flex-col space-y-2 border border-[#E5E5E0] dark:border-border rounded-lg overflow-hidden">
             <div className="flex items-center justify-between p-2 bg-muted/30 border-b border-[#E5E5E0] dark:border-border">
-              <span className="text-xs font-semibold text-muted-foreground">Live Preview</span>
-              {selectedElement && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-muted-foreground">Edit Template</span>
+                <Button
+                  size="sm"
+                  variant={editMode ? "default" : "outline"}
+                  onClick={() => setEditMode(!editMode)}
+                  className="h-6 px-2 text-[10px]"
+                  title={editMode ? "Disable inline editing" : "Enable inline editing"}
+                >
+                  {editMode ? "Editing ON" : "Editing OFF"}
+                </Button>
+              </div>
+              {selectedElement && !editMode && (
                 <span className="text-xs text-muted-foreground">
                   &lt;{selectedElement.tagName.toLowerCase()}&gt; selected
                 </span>

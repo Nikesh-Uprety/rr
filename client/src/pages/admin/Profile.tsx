@@ -387,7 +387,7 @@ export default function AdminProfilePage() {
 </div>`);
   const [subscriberSearch, setSubscriberSearch] = useState("");
   const [newSubscriberEmail, setNewSubscriberEmail] = useState("");
-  const [showSplitEditor, setShowSplitEditor] = useState(false);
+  const [showSplitEditor, setShowSplitEditor] = useState(true);
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("template1");
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -482,6 +482,139 @@ export default function AdminProfilePage() {
   </div>
   <div style="background: #0a0a0a; padding: 24px; text-align: center; border-top: 1px solid #333; font-size: 11px; color: #666;">
     <p style="margin: 0;">Unsubscribe • Contact • Website</p>
+  </div>
+</div>`,
+    },
+    template6: {
+      name: "Professional Campaign",
+      subject: "Important Update: Q1 2026 Business Highlights",
+      html: `<div style="font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; color: #2c3e50;">
+  <div style="background: linear-gradient(90deg, #34495e 0%, #2c3e50 100%); padding: 40px 30px; text-align: left;">
+    <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #ecf0f1; margin-bottom: 8px; font-weight: 600;">RARE NEPAL</div>
+    <h1 style="font-size: 28px; color: #ecf0f1; margin: 0; font-weight: 400; letter-spacing: 0.5px;">Business Update</h1>
+  </div>
+  <div style="padding: 40px 30px;">
+    <h2 style="font-size: 20px; color: #2c3e50; margin: 0 0 16px 0; font-weight: 500;">Dear Valued Partner,</h2>
+    <p style="font-size: 14px; color: #34495e; line-height: 1.8; margin: 0 0 20px 0;">We are pleased to share the highlights and key metrics from our operations this quarter.</p>
+    <div style="background: #ecf0f1; border-left: 4px solid #34495e; padding: 20px; margin: 24px 0; border-radius: 4px;">
+      <p style="font-size: 13px; color: #2c3e50; margin: 0; font-weight: 500;">📊 Key Metrics</p>
+      <p style="font-size: 12px; color: #34495e; margin: 12px 0 0 0; line-height: 1.6;">• Revenue Growth: [+X%]<br>• Customer Satisfaction: [+X%]<br>• Market Expansion: [Details]</p>
+    </div>
+    <p style="font-size: 14px; color: #34495e; line-height: 1.8; margin: 24px 0;">We continue our commitment to excellence and innovation in the global marketplace.</p>
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="https://rarenp.com" style="display: inline-block; padding: 12px 32px; background: #34495e; color: #ecf0f1; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px; letter-spacing: 0.5px;">VIEW FULL REPORT</a>
+    </div>
+  </div>
+  <div style="background: #34495e; padding: 24px 30px; text-align: center; font-size: 11px; color: #bdc3c7;">
+    <p style="margin: 0;">© 2026 RARE Nepal Ltd. All rights reserved.</p>
+    <p style="margin: 8px 0 0 0;">This is an official business communication.</p>
+  </div>
+</div>`,
+    },
+    template7: {
+      name: "Corporate Newsletter",
+      subject: "Your Monthly Newsletter - March 2026",
+      html: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #f9f9f9; color: #333;">
+  <div style="background: white; padding: 30px; border-bottom: 3px solid #2563eb; text-align: center;">
+    <h1 style="font-size: 24px; color: #2563eb; margin: 0; font-weight: 600; letter-spacing: -0.5px;">RARE Newsletter</h1>
+    <p style="font-size: 12px; color: #666; margin: 8px 0 0 0; letter-spacing: 0.5px;">MONTHLY INSIGHTS & UPDATES</p>
+  </div>
+  <div style="background: white; padding: 30px; margin: 16px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+    <h2 style="font-size: 18px; color: #2563eb; margin: 0 0 12px 0; font-weight: 600;">Featured Story</h2>
+    <p style="font-size: 14px; color: #555; line-height: 1.8; margin: 0 0 16px 0;">This month, we highlight the latest developments in our organization, emerging trends, and opportunities ahead.</p>
+    <a href="https://rarenp.com" style="display: inline-block; padding: 10px 24px; background: #2563eb; color: white; text-decoration: none; font-size: 12px; font-weight: 600; border-radius: 4px;">READ MORE</a>
+  </div>
+  <div style="padding: 0 30px;">
+    <h3 style="font-size: 14px; color: #333; font-weight: 600; margin: 24px 0 12px 0;">What's New</h3>
+    <div style="background: white; padding: 16px; margin-bottom: 12px; border-left: 3px solid #2563eb; border-radius: 2px;">
+      <p style="font-size: 12px; color: #666; margin: 0; font-weight: 600;">New Product Launch</p>
+      <p style="font-size: 12px; color: #888; margin: 4px 0 0 0;">Introducing our latest innovation in Q1</p>
+    </div>
+    <div style="background: white; padding: 16px; border-left: 3px solid #2563eb; border-radius: 2px;">
+      <p style="font-size: 12px; color: #666; margin: 0; font-weight: 600;">Team Recognition</p>
+      <p style="font-size: 12px; color: #888; margin: 4px 0 0 0;">Celebrating our outstanding team members</p>
+    </div>
+  </div>
+  <div style="background: #f5f5f5; padding: 24px 30px; text-align: center; font-size: 11px; color: #888; margin-top: 24px;">
+    <p style="margin: 0;">RARE Newsletter | © 2026</p>
+  </div>
+</div>`,
+    },
+    template8: {
+      name: "Product Launch Announcement",
+      subject: "🎉 Introducing: Revolutionary Product Launch",
+      html: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; background: white;">
+  <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 50px 30px; text-align: center; color: white;">
+    <div style="font-size: 48px; margin-bottom: 16px;">🚀</div>
+    <h1 style="font-size: 32px; margin: 0 0 12px 0; font-weight: 700;">Revolutionary Launch</h1>
+    <p style="font-size: 16px; margin: 0; opacity: 0.95;">Introducing Something Extraordinary</p>
+  </div>
+  <div style="padding: 40px 30px; text-align: center;">
+    <h2 style="font-size: 22px; color: #2c3e50; margin: 0 0 16px 0; font-weight: 600;">What's New?</h2>
+    <p style="font-size: 14px; color: #555; line-height: 1.8; margin: 0 0 24px 0;">We're excited to announce the availability of our breakthrough product designed to transform the way you work and create.</p>
+    <div style="display: inline-block; background: #f0f4ff; padding: 20px; border-radius: 8px; margin: 24px 0; text-align: left; font-size: 13px; color: #555; line-height: 1.7;">
+      <strong style="color: #667eea;">Key Features:</strong><br>
+      ✓ Advanced capabilities<br>
+      ✓ Seamless integration<br>
+      ✓ Unmatched performance<br>
+      ✓ Enterprise-ready security
+    </div>
+    <div style="margin: 32px 0;">
+      <a href="https://rarenp.com" style="display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; font-weight: 600; border-radius: 6px; font-size: 14px; letter-spacing: 0.5px;">LEARN MORE & GET EARLY ACCESS</a>
+    </div>
+    <p style="font-size: 12px; color: #888; margin: 20px 0 0 0;">Limited time offer for early adopters</p>
+  </div>
+  <div style="background: #f8f9fa; padding: 24px 30px; text-align: center; font-size: 11px; color: #999;">
+    <p style="margin: 0;">© 2026 RARE Nepal. All rights reserved.</p>
+  </div>
+</div>`,
+    },
+    template9: {
+      name: "Quarterly Business Report",
+      subject: "Q1 2026 Performance Report - Key Insights Inside",
+      html: `<div style="font-family: 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: white; color: #2c3e50;">
+  <div style="background: #1e293b; padding: 40px 30px; text-align: center; border-bottom: 4px solid #3b82f6;">
+    <h1 style="font-size: 26px; color: white; margin: 0 0 8px 0; font-weight: 600;">Quarterly Report</h1>
+    <p style="font-size: 13px; color: #cbd5e1; margin: 0; letter-spacing: 1px;">Q1 2026 - BUSINESS PERFORMANCE</p>
+  </div>
+  <div style="padding: 40px 30px;">
+    <p style="font-size: 14px; color: #555; margin: 0 0 20px 0; line-height: 1.8;">Dear Stakeholders,</p>
+    <p style="font-size: 14px; color: #555; margin: 0 0 24px 0; line-height: 1.8;">We are pleased to present our comprehensive quarterly performance report highlighting significant achievements and strategic initiatives.</p>
+    
+    <div style="margin: 24px 0; padding: 0;">
+      <h3 style="font-size: 14px; color: #1e293b; margin: 0 0 12px 0; font-weight: 600; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">Financial Overview</h3>
+      <table style="width: 100%; margin-top: 12px; font-size: 13px; border-collapse: collapse;">
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 8px 0; color: #555;">Revenue</td>
+          <td style="padding: 8px 0; text-align: right; color: #2c3e50; font-weight: 600;">$X,XXX,XXX</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 8px 0; color: #555;">Growth Rate</td>
+          <td style="padding: 8px 0; text-align: right; color: #16a34a; font-weight: 600;">+XX%</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 8px 0; color: #555;">Market Share</td>
+          <td style="padding: 8px 0; text-align: right; color: #2c3e50; font-weight: 600;">XX%</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #555;">Customer Satisfaction</td>
+          <td style="padding: 8px 0; text-align: right; color: #2c3e50; font-weight: 600;">XX/100</td>
+        </tr>
+      </table>
+    </div>
+    
+    <div style="margin: 24px 0; padding: 16px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+      <p style="font-size: 13px; color: #1e293b; margin: 0; font-weight: 600;">Strategic Initiatives</p>
+      <p style="font-size: 12px; color: #555; margin: 8px 0 0 0; line-height: 1.6;">• Market expansion in key regions<br>• Product innovation pipeline<br>• Team development programs</p>
+    </div>
+    
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="https://rarenp.com" style="display: inline-block; padding: 12px 32px; background: #3b82f6; color: white; text-decoration: none; font-size: 13px; font-weight: 600; border-radius: 4px; letter-spacing: 0.5px;">VIEW DETAILED REPORT</a>
+    </div>
+  </div>
+  <div style="background: #f1f5f9; padding: 24px 30px; text-align: center; font-size: 11px; color: #666; border-top: 1px solid #e2e8f0;">
+    <p style="margin: 0;">RARE Nepal | Confidential Business Communication</p>
+    <p style="margin: 8px 0 0 0;">© 2026 All rights reserved.</p>
   </div>
 </div>`,
     },

@@ -386,7 +386,7 @@ export default function Home() {
         <meta property="og:url" content={window.location.origin} />
       </Helmet>
       {/* Hero Section */}
-      <section className="relative h-[90vh] w-full overflow-hidden bg-neutral-900">
+      <section className="relative h-[90vh] min-h-[650px] md:min-h-[750px] lg:min-h-[850px] w-full overflow-hidden bg-neutral-900">
         <AnimatePresence mode="popLayout">
           <motion.div
             key={heroIndex}

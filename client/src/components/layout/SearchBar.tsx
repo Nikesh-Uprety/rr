@@ -17,8 +17,9 @@ export default function SearchBar() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useClickAway(containerRef, () => {
-    if (isOpen && !query) {
+    if (isOpen) {
       setIsOpen(false);
+      setQuery("");
     }
   });
 

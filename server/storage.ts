@@ -30,7 +30,7 @@ import {
   type PromoCode,
   type InsertPromoCode,
 } from "@shared/schema";
-import { and, asc, desc, eq, gte, ilike, sql } from "drizzle-orm";
+import { and, or, asc, desc, eq, gte, ilike, sql } from "drizzle-orm";
 
 export interface CreateOrderItemInput {
   productId: string;
@@ -280,10 +280,17 @@ export class PgStorage implements IStorage {
     }
 
     if (filters?.search) {
-      const q = `%${filters.search}%`;
-      conditions.push(
-        ilike(products.name, q),
-      );
+      const terms = filters.search.trim().split(/\s+/).filter(Boolean);
+      if (terms.length > 0) {
+        const termConditions = terms.map(term =>
+          or(
+            ilike(products.name, `%${term}%`),
+            ilike(products.category, `%${term}%`),
+            ilike(products.description, `%${term}%`)
+          )
+        );
+        conditions.push(or(...termConditions)!);
+      }
     }
 
     if (!filters?.includeInactive && "isActive" in products) {

@@ -39,6 +39,16 @@ const LoginPage = lazy(() => import("@/pages/auth/Login"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 function StorefrontLayout({ children }: { children: React.ReactNode }) {
+  // Finish the pre-loader when the main app layout has mounted
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).finishLoading) {
+      // Small timeout to allow the layout to fully render first
+      setTimeout(() => {
+        (window as any).finishLoading();
+      }, 100);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-background flex flex-col transition-colors duration-300">
       <Navbar />
@@ -57,14 +67,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
 function LoginRoute() {
   const { user, isLoading } = useCurrentUser();
 
-  // Finish the pre-loader when authentication check is complete
-  useEffect(() => {
-    if (!isLoading) {
-      if (typeof window !== 'undefined' && (window as any).finishLoading) {
-        (window as any).finishLoading();
-      }
-    }
-  }, [isLoading]);
+  // Authentication check complete
 
   if (isLoading) {
     return <BrandedLoader fullScreen />;

@@ -180,7 +180,7 @@ export default function Cart() {
                       </div>
                       <button 
                         onClick={() => removeItem(item.id)} 
-                        className="text-[9px] uppercase tracking-widest text-red-500 hover:bg-red-500 hover:text-white transition-all font-black border border-red-500/20 px-4 py-2 rounded-full backdrop-blur-sm"
+                        className="text-[9px] uppercase tracking-widest text-white bg-red-500 md:bg-transparent md:text-red-500 md:hover:bg-red-500 md:hover:text-white transition-all font-black border border-red-500 md:border-red-500/20 px-4 py-2 rounded-full backdrop-blur-sm"
                       >
                         Remove
                       </button>

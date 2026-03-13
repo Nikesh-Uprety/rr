@@ -37,8 +37,12 @@
       document.documentElement.classList.remove("dark");
     }
   </script>
-  <title>Rare Atelier | Premium Streetwear</title>
   <style>
+    /* Prevent white flash before any CSS loads by forcing dark background immediately */
+    html {
+      background-color: #050505;
+    }
+
     /* PRE-LOADER STYLES - Must be inline for instant rendering */
     #pre-loader {
       position: fixed;
@@ -157,7 +161,7 @@
   <div id="root"></div>
 
   <script>
-    // Robust Loader Implementation
+    // Optimized Smooth Loader Implementation using requestAnimationFrame
     var finishLoading; // Global for the skip button
     
     (function() {
@@ -168,9 +172,7 @@
       var body = document.body;
       
       var BRAND_NAME = "RARE ATELIER";
-      var currentProgress = 0;
-      var interval;
-
+      
       // Setup letters
       var chars = BRAND_NAME.split('');
       for (var i = 0; i < chars.length; i++) {
@@ -180,14 +182,26 @@
         span.textContent = char === ' ' ? '\u00A0' : char;
         brandContainer.appendChild(span);
       }
-      
       var letters = brandContainer.querySelectorAll('.letter');
 
-      function updateUI(prog) {
+      var animationId;
+      var currentProgress = 0; // The actual visual value (0-100)
+      var targetProgress = 0; // Where the visual value is animating towards
+      var isFinishing = false; // Flag to indicate React is ready
+
+      // Smooth easing function
+      function lerp(start, end, amt) {
+        return (1 - amt) * start + amt * end;
+      }
+
+      function updateUI() {
         if (!progress) return;
-        progress.style.width = prog + '%';
         
-        var revealThreshold = Math.floor((prog / 100) * letters.length);
+        // Progress the bar
+        progress.style.width = currentProgress + '%';
+        
+        // Stagger the letters smoothly based on continuous visual progress
+        var revealThreshold = (currentProgress / 100) * letters.length;
         for (var j = 0; j < letters.length; j++) {
           if (j < revealThreshold) {
             letters[j].classList.add('visible');
@@ -195,21 +209,30 @@
         }
       }
 
-      function startSimulatedProgress() {
-        interval = setInterval(function() {
-          if (currentProgress < 90) {
-            currentProgress += Math.random() * 5;
-            if (currentProgress > 90) currentProgress = 90;
-            updateUI(currentProgress);
-          }
-        }, 150);
+      function loop() {
+        // If not finishing, slowly increment the target to build suspense
+        if (!isFinishing && targetProgress < 90) {
+           targetProgress += 0.2; 
+        }
+
+        // Lerp towards the target smoothly (0.1 is the speed of easing)
+        currentProgress = lerp(currentProgress, targetProgress, 0.1);
+        
+        updateUI();
+
+        // If we are finishing and visual progress reaches 99.5%, trigger the exit
+        if (isFinishing && currentProgress > 99.5) {
+          progress.style.width = '100%';
+          cancelAnimationFrame(animationId);
+          completeLoadSequence();
+          return;
+        }
+
+        animationId = requestAnimationFrame(loop);
       }
 
-      finishLoading = function() {
+      function completeLoadSequence() {
         if (!loader || loader.classList.contains('loaded')) return;
-        
-        clearInterval(interval);
-        updateUI(100);
         
         setTimeout(function() {
           loader.classList.add('loaded');
@@ -222,18 +245,28 @@
               if (loader.parentNode) loader.parentNode.removeChild(loader);
             }, 1000);
           }, 800);
-        }, 600);
+        }, 200);
+      }
+
+      finishLoading = function() {
+        if (isFinishing || !loader || loader.classList.contains('loaded')) return;
+        
+        // React is ready! Accelerate the target to 100 immediately
+        isFinishing = true;
+        targetProgress = 100;
+        
+        // If we want it to close extremely fast, we can also speed up the lerp
+        // by overriding the loop behavior in a timeout, but standard lerp looks smooth.
       };
 
-      // Start the progress
-      startSimulatedProgress();
+      // Start the render loop
+      animationId = requestAnimationFrame(loop);
 
-      // Finalize on full load
-      // The React app is now responsible for calling this when ready (Hydration-First)
+      // The React app is now responsible for calling this when ready
       window.finishLoading = finishLoading;
 
-      // Extended Safety timeout (10s) in case React fails
-      setTimeout(finishLoading, 10000);
+      // Extended Safety timeout (5s) in case React fails entirely
+      setTimeout(finishLoading, 5000);
     })();
   </script>
   <script type="module" src="/src/main.tsx"></script>

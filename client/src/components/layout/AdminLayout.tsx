@@ -294,12 +294,6 @@ export default function AdminLayout({
             >
               <Menu className="h-5 w-5" />
             </button>
-            <Link href="/admin" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-white dark:bg-black flex items-center justify-center">
-                <span className="text-black dark:text-white font-black text-sm tracking-tighter">R</span>
-              </div>
-              <span className="text-white dark:text-black font-black text-sm tracking-[0.2em] uppercase">Atelier</span>
-            </Link>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />

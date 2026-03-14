@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ export default function AdminBills() {
     queryKey: ["admin", "bills"],
     queryFn: fetchBills,
     staleTime: 60_000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   const voidMutation = useMutation({
@@ -114,7 +114,7 @@ export default function AdminBills() {
       {/* Table */}
       <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-sm text-left min-w-[640px]">
             <thead className="bg-transparent border-b border-[#E5E5E0] dark:border-border text-xs uppercase text-muted-foreground font-semibold tracking-wider">
               <tr>
                 <th className="px-6 py-4 font-medium">Bill No.</th>

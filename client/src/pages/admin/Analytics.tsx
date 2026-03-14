@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowDownRight, ArrowUpRight, Download } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ChartContainer,
@@ -29,6 +29,7 @@ import {
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { ExportButton } from "@/components/admin/ExportButton";
 
 type RangeKey = "7d" | "30d" | "90d" | "1y";
 
@@ -216,14 +217,7 @@ export default function AdminAnalytics() {
             </button>
           ))}
         </div>
-        <Button 
-          variant="outline" 
-          onClick={() => exportAnalyticsCSV(range)}
-          className="rounded-full gap-2"
-        >
-          <Download className="w-4 h-4" />
-          Export CSV
-        </Button>
+        <ExportButton onExport={() => exportAnalyticsCSV(range)} />
       </div>
 
       {/* Top KPI Row */}

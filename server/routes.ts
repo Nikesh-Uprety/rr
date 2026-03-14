@@ -1023,7 +1023,7 @@ export async function registerRoutes(
   );
 
   const statusSchema = z.object({
-    status: z.enum(["pending", "completed", "cancelled"]),
+    status: z.enum(["pending", "processing", "completed", "cancelled", "pos"]),
   });
 
   app.put(

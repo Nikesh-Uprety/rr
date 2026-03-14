@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutGrid,
   User,
@@ -15,6 +15,8 @@ import {
   LogOut,
   Megaphone,
   Terminal,
+  Menu,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,7 +26,7 @@ import { ThemeToggle } from "@/components/admin/ThemeToggle";
 import { NotificationBadge } from "@/components/admin/NotificationBadge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 
 const ADMIN_NAV = [
@@ -48,6 +50,7 @@ export default function AdminLayout({
   const { user } = useCurrentUser();
   const { toast } = useToast();
   const { getUnreadCountByType, markTypeRead } = useNotifications();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -189,11 +192,108 @@ export default function AdminLayout({
         </div>
       </aside>
 
+      {/* Mobile Drawer Sidebar */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] md:hidden"
+            />
+            {/* Drawer */}
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="fixed top-0 left-0 w-72 h-screen bg-neutral-950 dark:bg-white border-r border-white/5 dark:border-black/5 flex flex-col z-[70] md:hidden overflow-hidden"
+            >
+              {/* Close button */}
+              <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/10 dark:border-black/5">
+                <Link href="/admin" onClick={() => setSidebarOpen(false)} className="block">
+                  <img 
+                    src="/images/logo.webp" 
+                    alt="Rare Logo" 
+                    className="h-8 object-contain brightness-0 invert dark:brightness-100 dark:filter-none" 
+                  />
+                </Link>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-2 rounded-lg hover:bg-white/10 dark:hover:bg-black/10 text-white dark:text-black transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Nav links */}
+              <nav className="flex-1 p-6 space-y-1.5 overflow-y-auto">
+                {ADMIN_NAV.map((item) => {
+                  const isActive = location === item.href;
+                  const count = getUnreadCountByType(item.type);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => {
+                        if (count > 0) markTypeRead(item.type);
+                        setSidebarOpen(false);
+                      }}
+                      className={cn(
+                        "flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-bold tracking-wide uppercase transition-all duration-300",
+                        isActive
+                          ? "bg-white dark:bg-black text-black dark:text-white shadow-xl"
+                          : "text-white/50 dark:text-black/50 hover:text-white dark:hover:text-black hover:bg-white/5 dark:hover:bg-black/5",
+                      )}
+                    >
+                      <item.icon className={cn(
+                        "h-5 w-5",
+                        isActive ? "text-black dark:text-white" : "opacity-70"
+                      )} />
+                      <span className="text-[11px] tracking-widest">{item.label}</span>
+                      {count > 0 && (
+                        <div className="ml-auto min-w-[18px] h-[18px] rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] font-black px-1">
+                          {count > 99 ? "99+" : count}
+                        </div>
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              <div className="p-6 border-t border-white/5 dark:border-black/5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-center gap-3 text-red-500 hover:text-white hover:bg-red-500 transition-all duration-300 rounded-xl font-black uppercase tracking-widest text-[10px] h-10 border border-red-500/20"
+                  onClick={() => {
+                    handleLogout();
+                    setSidebarOpen(false);
+                  }}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </Button>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#F5F5F3] dark:bg-neutral-900 transition-colors duration-500">
         {/* Header - only on mobile */}
         <header className="h-20 bg-neutral-950 dark:bg-white border-b border-white/10 dark:border-black/5 flex items-center justify-between px-6 md:hidden relative z-50">
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 -ml-2 rounded-lg hover:bg-white/10 dark:hover:bg-black/10 text-white dark:text-black transition-colors"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
             <Link href="/admin" className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-white dark:bg-black flex items-center justify-center">
                 <span className="text-black dark:text-white font-black text-sm tracking-tighter">R</span>

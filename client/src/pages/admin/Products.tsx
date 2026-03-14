@@ -11,9 +11,11 @@ import {
   Loader2, Plus, Trash2, Palette, Ruler, Tags, Pipette, 
   Share2, FileText, Download, Check, X, Pencil, Search, Table as TableIcon,
   ChevronRight, FileSpreadsheet, Eye, EyeOff, LayoutTemplate, Shirt, Footprints, Tag,
-  MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar, Percent
+  MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar, Percent,
+  FolderInput
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -128,6 +130,9 @@ export default function AdminProducts() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [attrSheetOpen, setAttrSheetOpen] = useState(false);
+  const [moveMode, setMoveMode] = useState(false);
+  const [moveTargetCategory, setMoveTargetCategory] = useState<string>('');
+  const [moveNewCategoryName, setMoveNewCategoryName] = useState('');
 
   const { data: attributes } = useQuery<ProductAttribute[]>({
     queryKey: ["admin", "attributes"],
@@ -436,73 +441,7 @@ export default function AdminProducts() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">Products</h1>
-          <p className="text-muted-foreground mt-1">
-            {filteredProducts.length} products • All
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {selectedProductIds.size > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setSelectedProductIds(new Set())}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Deselect All
-            </Button>
-          )}
-          {selectedProductIds.size > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10 dark:border-destructive dark:text-destructive dark:hover:bg-destructive/20">
-                  Bulk Actions ({selectedProductIds.size})
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem 
-                  className="text-destructive"
-                  onClick={() => {
-                    if (confirm(`Are you sure you want to delete ${selectedProductIds.size} products?`)) {
-                      selectedProductIds.forEach(id => deleteMutation.mutate(id));
-                      setSelectedProductIds(new Set());
-                    }
-                  }}
-                >
-                  Delete Selected
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          <Sheet open={attrSheetOpen} onOpenChange={setAttrSheetOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="outline"
-                className="border-[#2C3E2D] text-[#2C3E2D] hover:bg-[#2C3E2D]/5 dark:border-border dark:text-foreground dark:hover:bg-accent"
-              >
-                <Tags className="w-4 h-4 mr-2" /> Attributes
-              </Button>
-            </SheetTrigger>
-            <SheetContent className="sm:max-w-xl md:max-w-2xl overflow-y-auto w-full p-0 border-none bg-[#FDFDFB] dark:bg-card">
-              <AttributesManager onClose={() => setAttrSheetOpen(false)} />
-            </SheetContent>
-          </Sheet>
-          <Button
-            className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground"
-            onClick={() => {
-              if (categoryFilter !== "all") {
-                addForm.setValue("category", categoryFilter);
-              } else {
-                addForm.setValue("category", "");
-              }
-              setAddOpen(true);
-            }}
-          >
-            <Plus className="w-4 h-4 mr-2" /> Add Product
-          </Button>
-        </div>
-      </div>
+
 
       {/* Full-page Add Product overlay */}
       {addOpen && (
@@ -966,7 +905,7 @@ export default function AdminProducts() {
                         </div>
                       </div>
 
-                      <div className="pt-8 space-y-4 border-t border-gray-100">
+                      <div className="pt-8 space-y-4 border-t border-border">
                         <h4 className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground">
                           Product Details
                         </h4>
@@ -983,158 +922,290 @@ export default function AdminProducts() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-        {/* Premium Admin Search Engine */}
-        <div className="relative w-full max-w-md group">
-          <motion.div
-            initial={false}
-            animate={{
-              scale: search.length > 0 ? 1.02 : 1,
-              boxShadow: search.length > 0 ? "0 10px 25px -5px rgba(0, 0, 0, 0.1)" : "0 1px 2px 0 rgba(0, 0, 0, 0.05)"
-            }}
-            className="flex items-center bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-12 px-4 transition-all duration-300 focus-within:border-primary/50"
-          >
-            <Search className={`h-5 w-5 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
-            <Input 
-              placeholder="Search product name, category, or status..." 
-              className="border-none focus-visible:ring-0 bg-transparent h-full text-base placeholder:text-muted-foreground/50"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {search && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 rounded-full hover:bg-muted"
-                onClick={() => setSearch("")}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </motion.div>
-
-          <AnimatePresence>
-            {search.length > 1 && (
-              <motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute top-full left-0 right-0 mt-3 p-2 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-2xl shadow-2xl z-[50] max-h-[400px] overflow-auto"
-              >
-                <div className="px-3 py-2 text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 border-b border-muted/30 mb-2">
-                  Quick Results
-                </div>
-                {filteredProducts.slice(0, 5).map(p => (
-                   <div 
-                    key={p.id} 
-                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => {
-                      setEditProduct(p);
-                      setEditOpen(true);
-                    }}
-                  >
-                    <img src={p.imageUrl || "/placeholder.png"} className="w-10 h-10 rounded-lg object-cover" alt="" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold truncate">{p.name}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase">{p.category}</p>
-                    </div>
-                    <div className="text-right">
-                       <p className="text-xs font-bold">{formatPrice(p.price)}</p>
-                       <p className={`text-[9px] font-bold ${p.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>{p.stock} in stock</p>
-                    </div>
-                   </div>
-                ))}
-                {filteredProducts.length === 0 && (
-                  <div className="py-8 text-center text-muted-foreground text-sm italic">
-                    No matches found for "{search}"
-                  </div>
-                )}
-                {filteredProducts.length > 5 && (
-                   <div className="p-2 mt-2 border-t text-center">
-                      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                        + {filteredProducts.length - 5} more matches
-                      </p>
-                   </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-        
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 w-full sm:w-auto scrollbar-hide">
-          <Button
-            variant={categoryFilter === "all" ? "default" : "outline"}
-            className={`rounded-full ${categoryFilter === "all" ? "bg-[#2C3E2D] text-white dark:bg-primary dark:text-primary-foreground" : "bg-white dark:bg-card border-[#E5E5E0] dark:border-border dark:text-muted-foreground"}`}
-            onClick={() => setCategoryFilter("all")}
-          >
-            All Products
-            <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px] bg-muted/50">
-              {categoryCounts["all"] || 0}
-            </Badge>
-          </Button>
-
-          {categories.map((cat) => (
-            <div key={cat.id} className="relative flex items-center group">
-              <Button
-                variant={categoryFilter === cat.slug ? "default" : "outline"}
-                className={`rounded-full pr-2 ${categoryFilter === cat.slug ? "bg-[#2C3E2D] text-white dark:bg-primary dark:text-primary-foreground" : "bg-white dark:bg-card border-[#E5E5E0] dark:border-border dark:text-muted-foreground"}`}
-                onClick={() => setCategoryFilter(cat.slug)}
-              >
-                {cat.name}
-                <Badge 
-                  variant="secondary" 
-                  className={`ml-2 px-1.5 py-0 text-[10px] ${categoryFilter === cat.slug ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}
+      <div className="flex flex-wrap gap-4 items-center">
+        {/* Left: Select all + bulk actions */}
+        <div className="flex items-center gap-2">
+          {selectedProductIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setSelectedProductIds(new Set())}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Deselect All
+            </Button>
+          )}
+          {selectedProductIds.size > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10 dark:border-destructive dark:text-destructive dark:hover:bg-destructive/20">
+                  Bulk Actions ({selectedProductIds.size})
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem 
+                  className="text-destructive"
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to delete ${selectedProductIds.size} products?`)) {
+                      selectedProductIds.forEach(id => deleteMutation.mutate(id));
+                      setSelectedProductIds(new Set());
+                    }
+                  }}
                 >
-                  {categoryCounts[cat.slug.toLowerCase()] || 0}
-                </Badge>
-              </Button>
-              
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => {
-                    setEditingCategoryId(cat.id);
-                    setNewCategoryName(cat.name);
-                    setNewCategorySlug(cat.slug);
-                    setPendingCategoryForm("edit");
-                    setNewCategoryOpen(true);
-                  }}>
-                    <Pencil className="mr-2 h-4 w-4" /> Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    className="text-destructive"
-                    onClick={() => {
-                      if (confirm(`Are you sure you want to delete the category "${cat.name}"?`)) {
-                        deleteCategoryMutation.mutate(cat.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" /> Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          ))}
+                  Delete Selected
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
 
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="rounded-full shrink-0 h-10 w-10 border border-dashed border-muted-foreground/30 hover:border-primary hover:text-primary transition-all"
-            onClick={() => { 
-              setNewCategoryName("");
-              setNewCategorySlug("");
-              setPendingCategoryForm("add"); 
-              setNewCategoryOpen(true); 
+        {/* Center: Search bar */}
+        <div className="flex-1 flex justify-center">
+          <div className="relative w-full max-w-md group">
+            <motion.div
+              initial={false}
+              animate={{
+                scale: search.length > 0 ? 1.02 : 1,
+                boxShadow: search.length > 0 ? "0 10px 25px -5px rgba(0, 0, 0, 0.1)" : "0 1px 2px 0 rgba(0, 0, 0, 0.05)"
+              }}
+              className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full h-12 px-4 transition-all duration-300 focus-within:border-primary/50"
+            >
+              <Search className={`h-5 w-5 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+              <Input 
+                placeholder="Search product name, category, or status..." 
+                className="border-none focus-visible:ring-0 bg-transparent h-full text-base placeholder:text-muted-foreground/50"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 rounded-full hover:bg-muted"
+                  onClick={() => setSearch("")}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </motion.div>
+
+            <AnimatePresence>
+              {search.length > 1 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute top-full left-0 right-0 mt-3 p-2 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-2xl shadow-2xl z-[50] max-h-[400px] overflow-auto"
+                >
+                  <div className="px-3 py-2 text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 border-b border-muted/30 mb-2">
+                    Quick Results
+                  </div>
+                  {filteredProducts.slice(0, 5).map(p => (
+                     <div 
+                      key={p.id} 
+                      className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setEditProduct(p);
+                        setEditOpen(true);
+                      }}
+                    >
+                      <img src={p.imageUrl || "/placeholder.png"} className="w-10 h-10 rounded-lg object-cover" alt="" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold truncate">{p.name}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">{p.category}</p>
+                      </div>
+                      <div className="text-right">
+                         <p className="text-xs font-bold">{formatPrice(p.price)}</p>
+                         <p className={`text-[9px] font-bold ${p.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>{p.stock} in stock</p>
+                      </div>
+                     </div>
+                  ))}
+                  {filteredProducts.length === 0 && (
+                    <div className="py-8 text-center text-muted-foreground text-sm italic">
+                      No matches found for "{search}"
+                    </div>
+                  )}
+                  {filteredProducts.length > 5 && (
+                     <div className="p-2 mt-2 border-t text-center">
+                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                          + {filteredProducts.length - 5} more matches
+                        </p>
+                     </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Right: Action buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMoveMode(prev => !prev)}
+            disabled={selectedProductIds.size === 0}
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all",
+              moveMode ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-foreground hover:border-primary",
+              selectedProductIds.size === 0 && "opacity-40 cursor-not-allowed"
+            )}
+          >
+            <FolderInput size={15} />
+            Move
+          </button>
+          <Sheet open={attrSheetOpen} onOpenChange={setAttrSheetOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="outline"
+                className="border-[#2C3E2D] text-[#2C3E2D] hover:bg-[#2C3E2D]/5 dark:border-border dark:text-foreground dark:hover:bg-accent"
+              >
+                <Tags className="w-4 h-4 mr-2" /> Attributes
+              </Button>
+            </SheetTrigger>
+            <SheetContent className="sm:max-w-xl md:max-w-2xl overflow-y-auto w-full p-0 border-none bg-[#FDFDFB] dark:bg-card">
+              <AttributesManager onClose={() => setAttrSheetOpen(false)} />
+            </SheetContent>
+          </Sheet>
+          <Button
+            className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground"
+            onClick={() => {
+              if (categoryFilter !== "all") {
+                addForm.setValue("category", categoryFilter);
+              } else {
+                addForm.setValue("category", "");
+              }
+              setAddOpen(true);
             }}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="w-4 h-4 mr-2" /> Add Product
           </Button>
         </div>
       </div>
+
+      {/* Category filter pills — clean, no counts */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setCategoryFilter("all")}
+          className={cn(
+            "px-3 py-1 rounded-full text-xs font-medium border transition-all",
+            categoryFilter === "all"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+          )}
+        >
+          All
+        </button>
+        {categories.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setCategoryFilter(cat.slug)}
+            className={cn(
+              "px-3 py-1 rounded-full text-xs font-medium border transition-all",
+              categoryFilter === cat.slug
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+            )}
+          >
+            {cat.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Move Panel */}
+      {moveMode && selectedProductIds.size > 0 && (
+        <div className="border border-border rounded-xl p-4 bg-card mt-3">
+          <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">
+            Moving {selectedProductIds.size} product{selectedProductIds.size > 1 ? 's' : ''}
+          </p>
+          {/* Product chips */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {filteredProducts.filter(p => selectedProductIds.has(p.id)).map(product => (
+              <div
+                key={product.id}
+                className="flex items-center gap-1.5 bg-muted rounded-lg px-2 py-1 text-xs font-medium group cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
+                onClick={() => {
+                  const next = new Set(selectedProductIds);
+                  next.delete(product.id);
+                  setSelectedProductIds(next);
+                }}
+              >
+                {product.name}
+                <span className="text-muted-foreground group-hover:text-destructive">×</span>
+              </div>
+            ))}
+          </div>
+          {/* Move options */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <select
+                value={moveTargetCategory}
+                onChange={e => setMoveTargetCategory(e.target.value)}
+                className="flex-1 bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">Move to existing category...</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.slug}>{cat.name}</option>
+                ))}
+              </select>
+              <button
+                onClick={async () => {
+                  if (!moveTargetCategory) return;
+                  try {
+                    await Promise.all(
+                      Array.from(selectedProductIds).map(id =>
+                        updateAdminProduct(id, { category: moveTargetCategory })
+                      )
+                    );
+                    queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                    toast({ title: `Moved ${selectedProductIds.size} products` });
+                    setSelectedProductIds(new Set());
+                    setMoveMode(false);
+                    setMoveTargetCategory('');
+                  } catch {
+                    toast({ title: "Failed to move products", variant: "destructive" });
+                  }
+                }}
+                disabled={!moveTargetCategory}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm disabled:opacity-40"
+              >
+                Move
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                value={moveNewCategoryName}
+                onChange={e => setMoveNewCategoryName(e.target.value)}
+                placeholder="Or create new category..."
+                className="flex-1 bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm placeholder:text-muted-foreground"
+              />
+              <button
+                onClick={async () => {
+                  if (!moveNewCategoryName.trim()) return;
+                  try {
+                    const slug = slugify(moveNewCategoryName);
+                    const newCat = await createCategory({ name: moveNewCategoryName.trim(), slug });
+                    await Promise.all(
+                      Array.from(selectedProductIds).map(id =>
+                        updateAdminProduct(id, { category: newCat.slug })
+                      )
+                    );
+                    queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                    queryClient.invalidateQueries({ queryKey: ["categories"] });
+                    toast({ title: `Created "${newCat.name}" and moved ${selectedProductIds.size} products` });
+                    setSelectedProductIds(new Set());
+                    setMoveMode(false);
+                    setMoveNewCategoryName('');
+                  } catch {
+                    toast({ title: "Failed to create category & move", variant: "destructive" });
+                  }
+                }}
+                disabled={!moveNewCategoryName.trim()}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm disabled:opacity-40"
+              >
+                Create & Move
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 mb-4">
         <Checkbox 
@@ -1172,7 +1243,7 @@ export default function AdminProducts() {
               <div
                 key={product.id}
                 className={`bg-white dark:bg-card rounded-xl border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative ${
-                  selectedProductIds.has(product.id) ? "border-primary ring-1 ring-primary dark:bg-[rgba(99,102,241,0.15)] dark:border-[#6366f1] dark:ring-[#6366f1]" : "border-[#E5E5E0] dark:border-border"
+                  selectedProductIds.has(product.id) ? "border-primary ring-2 ring-primary dark:bg-primary/10" : "border-[#E5E5E0] dark:border-border"
                 }`}
               >
                 {/* Selection Checkbox */}
@@ -1185,7 +1256,7 @@ export default function AdminProducts() {
                       else next.delete(product.id);
                       setSelectedProductIds(next);
                     }}
-                    className="bg-white/90 dark:bg-background/90 shadow-sm"
+                    className="data-[state=unchecked]:bg-white/90 dark:data-[state=unchecked]:bg-background/90 shadow-sm"
                   />
                 </div>
 
@@ -1197,44 +1268,7 @@ export default function AdminProducts() {
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                   />
                   
-                  {/* Hover Edit Icon (Center) */}
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer z-10"
-                    onClick={() => {
-                      setEditProduct(product);
-                      setEditOpen(true);
-                    }}
-                  >
-                    <div className="bg-white/20 backdrop-blur-md p-3 rounded-full border border-white/30 transform scale-75 group-hover:scale-100 transition-transform duration-300">
-                      <Pencil className="h-6 w-6 text-white" />
-                    </div>
-                  </div>
 
-                  {/* Top-Right Quick Actions (Visible on Hover) */}
-                  <div className="absolute top-3 right-3 z-20 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity translate-x-4 group-hover:translate-x-0 duration-300">
-                    <Button
-                      size="icon"
-                      variant="destructive"
-                      className="h-9 w-9 rounded-full shadow-lg"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm("Are you sure you want to delete this product?")) {
-                          deleteMutation.mutate(product.id);
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      className="h-9 w-9 rounded-full shadow-lg bg-white text-foreground hover:bg-gray-100 dark:bg-muted dark:text-foreground"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(`/product/${product.id}`, "_blank");
-                      }}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
-                  </div>
 
                   {/* Bottom Stats Overlay (Modern aesthetic) */}
                   <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/80 to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-20">
@@ -1290,7 +1324,7 @@ export default function AdminProducts() {
                   </div>
                   
                   {/* Always Visible Edit/Delete Buttons (as requested) */}
-                  <div className="mt-6 pt-4 border-t flex gap-2">
+                  <div className="mt-6 pt-4 border-t border-border flex gap-2">
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -1813,7 +1847,7 @@ export default function AdminProducts() {
                         </div>
                       </div>
 
-                      <div className="pt-8 space-y-4 border-t border-gray-100">
+                      <div className="pt-8 space-y-4 border-t border-border">
                         <h4 className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground">
                           Product Details
                         </h4>

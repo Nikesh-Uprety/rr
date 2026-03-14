@@ -31,6 +31,7 @@ import {
 import type { ProductApi, OrderDetail } from "@/lib/api";
 import { fetchOrderById } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { ExportButton } from "@/components/admin/ExportButton";
 import {
   Sheet,
   SheetContent,
@@ -231,14 +232,11 @@ export default function AdminDashboard() {
           <span className="text-sm font-medium">View All Orders</span>
           <ArrowRight className="h-4 w-4 text-muted-foreground" />
         </Button>
-        <Button
-          variant="outline"
+        <ExportButton
+          onExport={() => exportOrdersCSV()}
+          label="Export Report"
           className="flex items-center justify-between rounded-xl border-[#D6D6CC] bg-white dark:bg-card h-12 px-4"
-          onClick={() => exportOrdersCSV()}
-        >
-          <span className="text-sm font-medium">Export Report</span>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-        </Button>
+        />
         <Button
           variant="outline"
           className="flex items-center justify-between rounded-xl border-[#D6D6CC] bg-white dark:bg-card h-12 px-4"

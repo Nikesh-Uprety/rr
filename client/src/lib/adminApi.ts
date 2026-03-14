@@ -24,9 +24,9 @@ export interface AdminOrder {
     country: string;
     phone: string;
     locationCoordinates?: string;
-    promoCode?: string;
-    promoDiscountAmount?: number;
   };
+  promoCode?: string;
+  promoDiscountAmount?: number;
 }
 
 export interface AdminCustomer {

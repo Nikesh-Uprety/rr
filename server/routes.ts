@@ -1963,8 +1963,6 @@ export async function registerRoutes(
         const { email } = req.body;
         const target = email || "upretynikesh021@gmail.com";
         
-        // Use a generic send function or one of the existing ones
-        // Since we want to test SMTP, let's use the invite one as a template or add a generic one
         const { sendInviteEmail } = await import("./email");
         await sendInviteEmail(target, "Test User", "123456", "System Admin (SMTP Test)");
 
@@ -1976,6 +1974,30 @@ export async function registerRoutes(
           .json({ success: false, error: "Failed to send test email. Check SMTP logs." });
       }
     },
+  );
+
+  app.post(
+    "/api/admin/marketing/test-broadcast",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { subject, html } = req.body;
+        const user = req.user as any;
+        const target = user?.email || "upretynikesh021@gmail.com";
+
+        if (!subject || !html) {
+          return sendError(res, "Subject and HTML are required", undefined, 400);
+        }
+
+        const { sendContactReplyEmail } = await import("./email");
+        await sendContactReplyEmail(target, `[TEST] ${subject}`, html);
+
+        return res.json({ success: true, message: `Test broadcast sent to ${target}` });
+      } catch (err) {
+        console.error("Error in POST /api/admin/marketing/test-broadcast", err);
+        return res.status(500).json({ success: false, error: "Failed to send test broadcast" });
+      }
+    }
   );
 
   // ── Bill Routes ─────────────────────────────────────────

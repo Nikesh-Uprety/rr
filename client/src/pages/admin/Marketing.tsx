@@ -169,6 +169,23 @@ export default function AdminMarketingPage() {
       }
     },
   });
+  
+  const sendTestMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/marketing/test-broadcast", {
+        subject: marketingSubject,
+        html: marketingBody,
+      });
+      return res.json();
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        toast({ title: "Test email sent to your inbox" });
+      } else {
+        toast({ title: "Failed to send test email", variant: "destructive" });
+      }
+    },
+  });
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -285,6 +302,7 @@ export default function AdminMarketingPage() {
               onHtmlChange={setMarketingBody}
               showSplitView={showSplitEditor}
               onSplitViewChange={setShowSplitEditor}
+              onSendTest={() => sendTestMutation.mutate()}
             />
 
             <div className="flex justify-end">

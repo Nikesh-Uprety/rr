@@ -14,6 +14,9 @@ import {
   Type,
   Maximize2,
   Minimize2,
+  Smartphone,
+  Monitor,
+  Send,
 } from "lucide-react";
 import {
   Dialog,
@@ -38,6 +41,7 @@ interface AdvancedEmailEditorProps {
   onHtmlChange: (html: string) => void;
   showSplitView?: boolean;
   onSplitViewChange?: (show: boolean) => void;
+  onSendTest?: () => void;
 }
 
 export function AdvancedEmailEditor({
@@ -45,6 +49,7 @@ export function AdvancedEmailEditor({
   onHtmlChange,
   showSplitView: initialSplitView = true,
   onSplitViewChange,
+  onSendTest,
 }: AdvancedEmailEditorProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(null);
@@ -56,6 +61,7 @@ export function AdvancedEmailEditor({
   const [elementTree, setElementTree] = useState<any[]>([]);
   const [showSplitView, setShowSplitViewLocal] = useState(initialSplitView);
   const [editMode, setEditMode] = useState(false);
+  const [isPreviewMobile, setIsPreviewMobile] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const contentEditableSnapshot = useRef<string>("");
@@ -265,29 +271,59 @@ export function AdvancedEmailEditor({
             </Button>
           )}
         </div>
-        <Button size="sm" variant="ghost" onClick={copyHtmlToClipboard} title="Copy HTML">
-          <Copy className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => setShowElementTree(!showElementTree)}
-          title="Element Tree"
-        >
-          <FileCode className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => handleSplitViewChange(!showSplitView)}
-          title={showSplitView ? "Compact View" : "Split View"}
-        >
-          {showSplitView ? (
-            <Minimize2 className="h-3.5 w-3.5" />
-          ) : (
-            <Maximize2 className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-1">
+          {onSendTest && (
+            <Button size="sm" variant="outline" onClick={onSendTest} className="h-8 gap-2 border-primary/20 hover:bg-primary/5">
+              <Send className="h-3.5 w-3.5" />
+              <span className="text-xs">Send Test</span>
+            </Button>
           )}
-        </Button>
+          <div className="w-[1px] h-4 bg-border mx-1" />
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsPreviewMobile(false)}
+            className={`h-8 w-8 p-0 ${!isPreviewMobile ? "bg-primary/10 text-primary" : ""}`}
+            title="Desktop Preview"
+          >
+            <Monitor className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsPreviewMobile(true)}
+            className={`h-8 w-8 p-0 ${isPreviewMobile ? "bg-primary/10 text-primary" : ""}`}
+            title="Mobile Preview"
+          >
+            <Smartphone className="h-4 w-4" />
+          </Button>
+          <div className="w-[1px] h-4 bg-border mx-1" />
+          <Button size="sm" variant="ghost" onClick={copyHtmlToClipboard} title="Copy HTML" className="h-8 w-8 p-0">
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowElementTree(!showElementTree)}
+            title="Element Tree"
+            className="h-8 w-8 p-0"
+          >
+            <FileCode className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => handleSplitViewChange(!showSplitView)}
+            title={showSplitView ? "Compact View" : "Split View"}
+            className="h-8 w-8 p-0"
+          >
+            {showSplitView ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        </div>
       </div>
 
       {showSplitView ? (
@@ -369,13 +405,19 @@ export function AdvancedEmailEditor({
                 </span>
               )}
             </div>
-            <div className="flex-1 overflow-auto bg-white rounded">
-              <iframe
-                ref={iframeRef}
-                srcDoc={htmlContent}
-                className="w-full h-full border-0"
-                title="Email Preview"
-              />
+            <div className={`flex-1 overflow-auto bg-[#F7F7F5] dark:bg-muted/10 p-4 transition-all duration-300 flex items-center justify-center`}>
+              <div 
+                className={`bg-white shadow-xl transition-all duration-300 overflow-hidden rounded-lg ${
+                  isPreviewMobile ? "w-[375px] h-[667px]" : "w-full h-full"
+                }`}
+              >
+                <iframe
+                  ref={iframeRef}
+                  srcDoc={htmlContent}
+                  className="w-full h-full border-0"
+                  title="Email Preview"
+                />
+              </div>
             </div>
           </div>
         </div>

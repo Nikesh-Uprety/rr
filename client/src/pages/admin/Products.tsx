@@ -1027,7 +1027,7 @@ export default function AdminProducts() {
               <select
                 value={moveTargetCategory}
                 onChange={e => setMoveTargetCategory(e.target.value)}
-                className="flex-1 bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm"
+                className="flex-1 bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm cursor-pointer"
               >
                 <option value="">Move to existing category...</option>
                 {categories.map(cat => (

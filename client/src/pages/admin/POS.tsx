@@ -6,13 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { useToast } from "@/hooks/use-toast";
-import type { AdminBill, AdminProduct, POSSession } from "@/lib/adminApi";
+import type {
+  AdminBill,
+  AdminProduct,
+  POSSession,
+  AdminCustomer,
+} from "@/lib/adminApi";
 import {
   closePosSession,
   createPosBill,
   fetchAdminProducts,
   fetchTodaySession,
   openPosSession,
+  fetchAdminCustomers,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -31,7 +37,27 @@ import {
   Smartphone,
   Trash2,
   X,
+  UserPlus,
+  History,
+  ParkingCircle as ParkIcon,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { useEffect, useMemo, useState } from "react";
 
 interface CartItem {
@@ -54,10 +80,14 @@ export default function AdminPOS() {
   const [notes, setNotes] = useState("");
   const [completedBill, setCompletedBill] = useState<AdminBill | null>(null);
   const [session, setSession] = useState<POSSession | null>(null);
+  const [lastClosedSession, setLastClosedSession] = useState<POSSession | null>(null);
+  const [showSummaryDialog, setShowSummaryDialog] = useState(false);
   const [openingCash, setOpeningCash] = useState<string>("");
   const [closingCash, setClosingCash] = useState<string>("");
   const [showEndOfDay, setShowEndOfDay] = useState(false);
   const [openingLoading, setOpeningLoading] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<AdminCustomer | null>(null);
+  const [customerSearch, setCustomerSearch] = useState("");
   const [parkedSales, setParkedSales] = useState<
     { name: string; cart: CartItem[] }[]
   >(() => {
@@ -70,31 +100,64 @@ export default function AdminPOS() {
   });
   const [showQR, setShowQR] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Fetch today's session on mount
+  // Fetch today's session via useQuery (no flash)
+  const { data: sessionData, isLoading: sessionLoading } = useQuery<POSSession | null>({
+    queryKey: ["pos", "session"],
+    queryFn: async () => {
+      try {
+        return await fetchTodaySession();
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  // Sync session state from query
   useEffect(() => {
-    fetchTodaySession()
-      .then((s) => setSession(s))
-      .catch(() => {});
-  }, []);
+    if (sessionData !== undefined) {
+      setSession(sessionData);
+    }
+  }, [sessionData]);
 
   const { data: products } = useQuery<AdminProduct[]>({
-    queryKey: ["admin", "products"],
-    queryFn: () => fetchAdminProducts(),
+    queryKey: ["admin", "products", "pos"],
+    queryFn: () => fetchAdminProducts({ limit: 1000 }),
   });
+
+  // Extract unique categories
+  const categories = useMemo(() => {
+    if (!products) return ["All"];
+    const cats = Array.from(new Set(products.map((p) => p.category || "General").filter(Boolean)));
+    return ["All", ...cats.sort()];
+  }, [products]);
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
-    const q = search.toLowerCase();
-    if (!q) return products;
-    return products.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.category ?? "").toLowerCase().includes(q),
-    );
-  }, [products, search]);
+    let result = products;
+    // Category filter
+    if (selectedCategory !== "All") {
+      result = result.filter((p) => (p.category || "General") === selectedCategory);
+    }
+    // Multi-word search: ALL words must match product name or category
+    const q = search.trim().toLowerCase();
+    if (q) {
+      const words = q.split(/\s+/);
+      result = result.filter((p) => {
+        const haystack = `${p.name} ${p.category || ""}`.toLowerCase();
+        return words.every((word) => haystack.includes(word));
+      });
+    }
+    return result;
+  }, [products, search, selectedCategory]);
+
+  const { data: customers } = useQuery<AdminCustomer[]>({
+    queryKey: ["admin", "customers", customerSearch],
+    queryFn: () => fetchAdminCustomers(customerSearch),
+  });
 
   // Persist parked sales
   useEffect(() => {
@@ -148,22 +211,65 @@ export default function AdminPOS() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [products]);
+  }, [products, cart]); // Add cart to dependencies for stock check in barcode scanner
 
-  // Cart calculations
+  // Cart calculations (VAT removed per user request)
   const subtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
   const discountAmount = Number(discount) || 0;
-  const taxAmount = Math.round(subtotal * 0.13);
-  const total = subtotal + taxAmount - discountAmount;
+  const total = subtotal - discountAmount;
   const cashReceivedNum = Number(cashReceived) || 0;
   const changeAmount =
     paymentMethod === "cash" ? Math.max(0, cashReceivedNum - total) : 0;
 
-  // Cart operations
+  // Cart operations — toggle: click to add, click again to remove
+  const toggleCartItem = (product: AdminProduct) => {
+    const existingInCart = cart.find((i) => i.productId === product.id);
+
+    if (existingInCart) {
+      // Second click → remove from cart
+      setCart((prev) => prev.filter((i) => i.productId !== product.id));
+      return;
+    }
+
+    // First click → add 1 unit
+    if (product.stock <= 0) {
+      toast({
+        title: "Out of Stock",
+        description: `${product.name} is currently unavailable`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCart((prev) => [
+      ...prev,
+      {
+        productId: product.id,
+        productName: product.name,
+        imageUrl: product.imageUrl ?? "",
+        unitPrice: Number(product.price),
+        quantity: 1,
+        lineTotal: Number(product.price),
+      },
+    ]);
+  };
+
+  // For quantity adjustment only (used in cart sidebar)
   const addToCart = (product: AdminProduct) => {
+    const existingInCart = cart.find((i) => i.productId === product.id);
+    const currentQty = existingInCart ? existingInCart.quantity : 0;
+
+    if (currentQty + 1 > product.stock) {
+      toast({
+        title: "Insufficient Stock",
+        description: `Only ${product.stock} units available for ${product.name}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setCart((prev) => {
-      const existing = prev.find((i) => i.productId === product.id);
-      if (existing) {
+      if (existingInCart) {
         return prev.map((i) =>
           i.productId === product.id
             ? {
@@ -189,16 +295,29 @@ export default function AdminPOS() {
   };
 
   const updateQuantity = (productId: string, delta: number) => {
-    setCart(
-      (prev) =>
-        prev
-          .map((i) => {
-            if (i.productId !== productId) return i;
-            const qty = i.quantity + delta;
-            if (qty <= 0) return null;
-            return { ...i, quantity: qty, lineTotal: qty * i.unitPrice };
-          })
-          .filter(Boolean) as CartItem[],
+    const product = products?.find(p => p.id === productId);
+    if (!product) return;
+
+    setCart((prev) =>
+      prev
+        .map((i) => {
+          if (i.productId !== productId) return i;
+          const qty = i.quantity + delta;
+          
+          // Stock Check on Increase
+          if (delta > 0 && qty > product.stock) {
+             toast({
+              title: "Stock Limit Reached",
+              description: `Maximum available stock is ${product.stock}`,
+              variant: "destructive",
+            });
+            return i;
+          }
+
+          if (qty <= 0) return null;
+          return { ...i, quantity: qty, lineTotal: qty * i.unitPrice };
+        })
+        .filter(Boolean) as CartItem[],
     );
   };
 
@@ -210,8 +329,10 @@ export default function AdminPOS() {
   const chargeMutation = useMutation({
     mutationFn: () =>
       createPosBill({
-        customerName: customerName || "Walk-in Customer",
-        customerPhone: customerPhone || undefined,
+        customerName: selectedCustomer 
+          ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` 
+          : (customerName || "Walk-in Customer"),
+        customerPhone: "phoneNumber" in (selectedCustomer || {}) ? (selectedCustomer as any).phoneNumber : customerPhone || undefined,
         items: cart.map((i) => ({
           productId: i.productId,
           productName: i.productName,
@@ -227,36 +348,16 @@ export default function AdminPOS() {
         discountAmount: discountAmount,
         notes: notes || undefined,
       }),
-    onSuccess: (bill) => {
-      setCompletedBill(bill);
-      setCart([]);
-      setCustomerName("Walk-in Customer");
-      setCustomerPhone("");
-      setCashReceived("");
-      setDiscount("0");
-      setNotes("");
-      queryClient.invalidateQueries({ queryKey: ["admin", "bills"] });
-      toast({ title: `Bill ${bill.billNumber} created!` });
-    },
-    onError: () => {
-      toast({ title: "Failed to process sale", variant: "destructive" });
-    },
-  });
 
-  // Session management
-  const handleOpenSession = async () => {
-    setOpeningLoading(true);
-    try {
-      const s = await openPosSession(Number(openingCash) || 0);
-      setSession(s);
-      setOpeningCash("");
-      toast({ title: "POS session opened" });
-    } catch {
-      toast({ title: "Failed to open session", variant: "destructive" });
-    } finally {
-      setOpeningLoading(false);
+    onError: (error) => {
+      toast({ 
+        title: "Checkout Failed", 
+        description: error instanceof Error ? error.message : "An error occurred during checkout.", 
+        variant: "destructive" 
+      });
+      // Deliberately NOT clearing cart/customer state here so user can retry
     }
-  };
+  });
 
   const handleCloseSession = async () => {
     if (!session) return;
@@ -266,12 +367,10 @@ export default function AdminPOS() {
         openedAt: session.openedAt,
       });
       setSession(null);
+      setLastClosedSession(closed);
       setShowEndOfDay(false);
-      toast({ title: "Session closed. End-of-day summary recorded." });
-      // Show summary
-      alert(
-        `End of Day Summary:\n\nTotal Sales: ${formatPrice(closed.totalSales)}\nTotal Orders: ${closed.totalOrders}\nCash Sales: ${formatPrice(closed.totalCashSales)}\nDigital Sales: ${formatPrice(closed.totalDigitalSales)}\nOpening Cash: ${formatPrice(closed.openingCash)}\nClosing Cash: ${formatPrice(closingCash)}`,
-      );
+      setShowSummaryDialog(true);
+      toast({ title: "Session closed successfully" });
     } catch {
       toast({ title: "Failed to close session", variant: "destructive" });
     }
@@ -303,6 +402,20 @@ export default function AdminPOS() {
     { key: "card", label: "Card", icon: CreditCard },
   ];
 
+  // ── Loading session? Show skeleton ──────────────────
+  if (sessionLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 animate-in fade-in">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-64" />
+        <div className="w-full max-w-sm space-y-4">
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <Skeleton className="h-12 w-full rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
   // ── No session? Show session opener ──────────────────
   if (!session) {
     return (
@@ -325,12 +438,25 @@ export default function AdminPOS() {
               value={openingCash}
               onChange={(e) => setOpeningCash(e.target.value)}
               placeholder="0"
-              className="bg-background border-[#E5E5E0] dark:border-border"
+              className="bg-background border-[#E5E5E0] dark:border-border rounded-full"
             />
           </div>
           <Button
-            className="w-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white"
-            onClick={handleOpenSession}
+            className="w-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white rounded-full"
+            onClick={async () => {
+              setOpeningLoading(true);
+              try {
+                const s = await openPosSession(Number(openingCash) || 0);
+                setSession(s);
+                setOpeningCash("");
+                queryClient.invalidateQueries({ queryKey: ["pos", "session"] });
+                toast({ title: "POS session opened" });
+              } catch {
+                toast({ title: "Failed to open session", variant: "destructive" });
+              } finally {
+                setOpeningLoading(false);
+              }
+            }}
             loading={openingLoading}
           >
             <DollarSign className="mr-2 h-4 w-4" />
@@ -385,10 +511,10 @@ export default function AdminPOS() {
             {parkedSales.length > 0 && (
               <Badge
                 variant="outline"
-                className="bg-yellow-50 text-yellow-700 border-none"
+                className="bg-yellow-50 text-yellow-700 border-none rounded-full"
               >
-                <ParkingCircle className="h-3 w-3 mr-1" />
-                {parkedSales.length} parked
+                <History className="h-3 w-3 mr-1" />
+                {parkedSales.length} Active Workspaces
               </Badge>
             )}
           </div>
@@ -402,38 +528,79 @@ export default function AdminPOS() {
         </Button>
       </div>
 
-      {/* 65/35 split */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
+      {/* Main Grid: Products | Customers | Cart */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px_350px] gap-6">
         {/* LEFT: Products */}
         <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search products..."
-              className="pl-9 bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-11"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              autoFocus
-            />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              <ViewToggle view={viewMode} onViewChange={setViewMode} />
+          {/* Professional search bar */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0 relative">
+              <div className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full h-11 px-4 transition-all duration-300 focus-within:border-primary/50 shadow-inner">
+                <Search className={`h-4 w-4 shrink-0 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+                <Input
+                  placeholder="Search products..."
+                  className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50 px-3 w-full"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  autoFocus
+                />
+                {search && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 rounded-full hover:bg-muted"
+                    onClick={() => setSearch("")}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
+            <ViewToggle view={viewMode} onViewChange={setViewMode} />
           </div>
 
-          {/* Parked sales */}
+          {/* Category pills */}
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                className={cn(
+                  "px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all border",
+                  selectedCategory === cat
+                    ? "bg-[#2C3E2D] text-white border-[#2C3E2D]"
+                    : "bg-white dark:bg-card text-muted-foreground border-[#E5E5E0] dark:border-border hover:bg-muted"
+                )}
+                onClick={() => setSelectedCategory(cat)}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Workspaces (Parked Sales) */}
           {parkedSales.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-3 flex-wrap">
               {parkedSales.map((sale, i) => (
-                <Button
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
                   key={i}
-                  variant="outline"
-                  size="sm"
-                  className="bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100"
+                  className="bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer min-w-[180px] group"
                   onClick={() => restoreParkedSale(i)}
                 >
-                  <ParkingCircle className="h-3 w-3 mr-1" />
-                  {sale.name} ({sale.cart.length} items)
-                </Button>
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="bg-[#2C3E2D]/10 text-[#2C3E2D] dark:bg-green-900/30 dark:text-green-400 p-1.5 rounded-full group-hover:scale-110 transition-transform">
+                      <History className="h-4 w-4" />
+                    </div>
+                    <Badge variant="secondary" className="text-[10px] font-bold rounded-full bg-secondary/50">
+                      {sale.cart.length} items
+                    </Badge>
+                  </div>
+                  <div className="text-sm font-semibold truncate text-[#2C3E2D] dark:text-foreground">{sale.name}</div>
+                  <div className="text-[10px] text-muted-foreground mt-1 tracking-wide uppercase">
+                    Resume Workspace &rarr;
+                  </div>
+                </motion.div>
               ))}
             </div>
           )}
@@ -449,46 +616,78 @@ export default function AdminPOS() {
                 transition={{ duration: 0.2 }}
                 className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"
               >
-                {filteredProducts.map((product) => {
-                  const inCart = cart.find((i) => i.productId === product.id);
-                  return (
-                    <button
-                      key={product.id}
-                      className={cn(
-                        "relative bg-white dark:bg-card rounded-xl border p-3 text-left transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98]",
-                        inCart
-                          ? "border-[#2C3E2D] dark:border-green-600 ring-1 ring-[#2C3E2D]/20"
-                          : "border-[#E5E5E0] dark:border-border",
-                        product.stock <= 0 && "opacity-40 pointer-events-none"
-                      )}
-                      onClick={() => addToCart(product)}
-                    >
-                      {product.imageUrl && (
-                        <img
-                          src={product.imageUrl}
-                          alt={product.name}
-                          className="w-full h-20 object-cover rounded-lg mb-2"
-                        />
-                      )}
-                      <div className="text-xs font-medium line-clamp-2 mb-1">
-                        {product.name}
-                      </div>
-                      <div className="text-sm font-bold text-[#2C3E2D] dark:text-foreground">
-                        {formatPrice(product.price)}
-                      </div>
-                      {product.stock <= 5 && product.stock > 0 && (
-                        <div className="text-[10px] text-red-500 mt-1">
-                          Only {product.stock} left
+                {!products ? (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="bg-white dark:bg-card rounded-xl border border-border p-3 space-y-2">
+                      <Skeleton className="w-full h-20 rounded-lg" />
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-5 w-1/2" />
+                    </div>
+                  ))
+                ) : (
+                  filteredProducts.map((product) => {
+                    const inCart = cart.find((i) => i.productId === product.id);
+                    return (
+                      <motion.div
+                        layout
+                        key={product.id}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={cn(
+                          "relative bg-white dark:bg-card rounded-xl border p-3 text-left transition-all hover:shadow-md",
+                          inCart
+                            ? "border-[#2C3E2D] dark:border-green-600 ring-1 ring-[#2C3E2D]/20"
+                            : "border-[#E5E5E0] dark:border-border",
+                          product.stock <= 0 && "opacity-40 pointer-events-none"
+                        )}
+                      >
+                        <div onClick={() => toggleCartItem(product)} className="cursor-pointer">
+                          {product.imageUrl && (
+                            <img
+                              src={product.imageUrl}
+                              alt={product.name}
+                              className="w-full h-20 object-cover rounded-lg mb-2"
+                            />
+                          )}
+                          <div className="text-xs font-medium line-clamp-2 mb-1">
+                            {product.name}
+                          </div>
+                          <div className="text-sm font-bold text-[#2C3E2D] dark:text-foreground">
+                            {formatPrice(product.price)}
+                          </div>
+                          {product.stock <= 5 && product.stock > 0 && (
+                            <div className="text-[10px] text-red-500 mt-1">
+                              Only {product.stock} left
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {inCart && (
-                        <div className="absolute top-2 right-2 bg-[#2C3E2D] text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold">
-                          {inCart.quantity}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
+                        {inCart ? (
+                          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+                            <button
+                              className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
+                              onClick={(e) => { e.stopPropagation(); updateQuantity(product.id, -1); }}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="text-sm font-bold">{inCart.quantity}</span>
+                            <button
+                              className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
+                              onClick={(e) => { e.stopPropagation(); updateQuantity(product.id, 1); }}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="absolute top-2 right-2">
+                            <div className="w-6 h-6 rounded-full bg-muted/60 flex items-center justify-center">
+                              <Plus className="h-3 w-3 text-muted-foreground" />
+                            </div>
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })
+                )}
               </motion.div>
             ) : (
               <motion.div
@@ -500,73 +699,214 @@ export default function AdminPOS() {
                 className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden"
               >
                 <div className="divide-y divide-border">
-                  {filteredProducts.map((product) => {
-                    const inCart = cart.find((i) => i.productId === product.id);
-                    return (
-                      <button
-                        key={product.id}
-                        className={cn(
-                          "w-full flex items-center gap-4 p-3 text-left transition-all hover:bg-muted/50",
-                          inCart && "bg-primary/5",
-                          product.stock <= 0 && "opacity-40 pointer-events-none"
-                        )}
-                        onClick={() => addToCart(product)}
-                      >
-                        <div className="relative w-12 h-12 flex-shrink-0">
-                          {product.imageUrl ? (
-                            <img
-                              src={product.imageUrl}
-                              alt={product.name}
-                              className="w-full h-full object-cover rounded-lg"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-muted rounded-lg" />
+                  {!products ? (
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-4 p-3 border-b border-border last:border-none">
+                        <Skeleton className="w-12 h-12 rounded-lg" />
+                        <div className="flex-1 space-y-2">
+                           <Skeleton className="h-4 w-1/3" />
+                           <Skeleton className="h-3 w-1/4" />
+                        </div>
+                        <div className="text-right space-y-2">
+                           <Skeleton className="h-4 w-16 ml-auto" />
+                           <Skeleton className="h-3 w-12 ml-auto" />
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    filteredProducts.map((product) => {
+                      const inCart = cart.find((i) => i.productId === product.id);
+                      return (
+                        <motion.div
+                          layout
+                          key={product.id}
+                          whileHover={{ backgroundColor: "rgba(0,0,0,0.02)" }}
+                          className={cn(
+                            "w-full flex items-center gap-4 p-3 text-left transition-all border-b border-border last:border-none",
+                            inCart && "bg-primary/5",
+                            product.stock <= 0 && "opacity-40 pointer-events-none"
                           )}
+                        >
+                          <div className="relative w-12 h-12 flex-shrink-0 cursor-pointer" onClick={() => toggleCartItem(product)}>
+                            {product.imageUrl ? (
+                              <img
+                                src={product.imageUrl}
+                                alt={product.name}
+                                className="w-full h-full object-cover rounded-lg"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-muted rounded-lg" />
+                            )}
+                            {inCart && (
+                              <div className="absolute -top-1 -right-1 bg-[#2C3E2D] text-white w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold">
+                                {inCart.quantity}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => toggleCartItem(product)}>
+                            <div className="text-sm font-medium truncate">{product.name}</div>
+                            <div className="text-xs text-muted-foreground uppercase">{product.category || "General"}</div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-bold">{formatPrice(product.price)}</div>
+                            <div className={cn(
+                              "text-[10px] font-medium",
+                              product.stock <= 5 ? "text-red-500" : "text-muted-foreground"
+                            )}>
+                              {product.stock} in stock
+                            </div>
+                          </div>
                           {inCart && (
-                            <div className="absolute -top-1 -right-1 bg-[#2C3E2D] text-white w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold">
-                              {inCart.quantity}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
+                                onClick={() => updateQuantity(product.id, -1)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span className="w-6 text-center text-sm font-bold">{inCart.quantity}</span>
+                              <button
+                                className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
+                                onClick={() => updateQuantity(product.id, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
                             </div>
                           )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">{product.name}</div>
-                          <div className="text-xs text-muted-foreground uppercase">{product.category || "General"}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-bold">{formatPrice(product.price)}</div>
-                          <div className={cn(
-                            "text-[10px] font-medium",
-                            product.stock <= 5 ? "text-red-500" : "text-muted-foreground"
-                          )}>
-                            {product.stock} in stock
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                        </motion.div>
+
+                      );
+                    })
+                  )}
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
+        {/* CENTER: Customers */}
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border p-4 h-[calc(100vh-140px)] flex flex-col">
+            <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground mb-4">
+              Customers
+            </h2>
+            <div className="relative mb-4 shrink-0">
+              <div className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full h-10 px-3 transition-all duration-300 focus-within:border-primary/50 shadow-inner">
+                <Search className={`h-4 w-4 shrink-0 transition-colors ${customerSearch.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+                <Input
+                  placeholder="Search name or phone..."
+                  className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50 px-2 w-full"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                />
+                {customerSearch && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 rounded-full hover:bg-muted"
+                    onClick={() => setCustomerSearch("")}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-hide">
+              {customers?.slice(0, 10).map((customer) => {
+                const isSelected = selectedCustomer?.id === customer.id;
+                return (
+                  <motion.button
+                    layout
+                    key={customer.id}
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedCustomer(null);
+                        setCustomerName("Walk-in Customer");
+                      } else {
+                        setSelectedCustomer(customer);
+                        setCustomerName(`${customer.firstName} ${customer.lastName}`);
+                      }
+                      setCustomerPhone("");
+                    }}
+                    className={cn(
+                      "w-full text-left p-3 rounded-xl border transition-all hover:shadow-sm",
+                      isSelected 
+                        ? "bg-[#2C3E2D] border-[#2C3E2D] text-white ring-2 ring-[#2C3E2D]/20" 
+                        : "bg-background border-[#E5E5E0] dark:border-border hover:border-primary/40"
+                    )}
+                  >
+                    <div className="font-semibold text-sm truncate">
+                      {customer.firstName} {customer.lastName}
+                    </div>
+                    <div className={cn("text-xs truncate", isSelected ? "text-white/80" : "text-muted-foreground")}>
+                      {customer.email}
+                    </div>
+                    {customer.phoneNumber && (
+                      <div className={cn("text-xs truncate mt-0.5", isSelected ? "text-white/80" : "text-muted-foreground")}>
+                        {customer.phoneNumber}
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-current/10">
+                      <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">
+                        {customer.orderCount} Orders
+                      </span>
+                      <span className="text-xs font-bold">
+                        {formatPrice(customer.totalSpent)}
+                      </span>
+                    </div>
+                  </motion.button>
+                );
+              })}
+              {customers?.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  No customers found.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* RIGHT: Cart and checkout */}
         <div className="space-y-4">
-          {/* Customer */}
-          <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border p-4">
-            <Input
-              placeholder="Customer name"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="mb-2 bg-background border-[#E5E5E0] dark:border-border text-sm"
-            />
-            <Input
-              placeholder="Phone (optional)"
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-              className="bg-background border-[#E5E5E0] dark:border-border text-sm"
-            />
-          </div>
+          {/* Selected Customer Header */}
+          {selectedCustomer ? (
+            <div className="bg-[#E8F3EB] dark:bg-green-950/30 rounded-xl p-4 border border-[#2C5234]/20 relative">
+              <button
+                className="absolute top-2 right-2 text-[#2C5234]/60 hover:text-[#2C5234] dark:text-green-400/60 dark:hover:text-green-400"
+                onClick={() => {
+                  setSelectedCustomer(null);
+                  setCustomerName("Walk-in Customer");
+                  setCustomerPhone("");
+                  setCustomerSearch(""); // Clear search so they can find someone else easily
+                }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="bg-[#2C5234] text-white text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-sm">
+                  Selected
+                </div>
+              </div>
+              <div className="font-bold text-[#2C5234] dark:text-green-400 text-lg">
+                {selectedCustomer.firstName} {selectedCustomer.lastName}
+              </div>
+              <div className="text-xs text-[#2C5234]/80 dark:text-green-400/80 mb-3">
+                {selectedCustomer.email}
+              </div>
+              <div className="flex gap-4 pt-3 border-t border-[#2C5234]/10">
+                <div>
+                  <div className="text-[10px] uppercase text-[#2C5234]/70 dark:text-green-400/70 font-bold">Lifetime Value</div>
+                  <div className="text-sm font-bold text-[#2C5234] dark:text-green-400">{formatPrice(selectedCustomer.totalSpent)}</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-muted/30 rounded-xl p-4 border border-dashed border-border text-center">
+              <div className="text-sm font-medium text-muted-foreground mb-1">Walk-in Customer</div>
+              <div className="text-xs text-muted-foreground/60">Select from the middle column to link to a profile</div>
+            </div>
+          )}
 
           {/* Cart items */}
           <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden">
@@ -589,54 +929,70 @@ export default function AdminPOS() {
                 </Button>
               )}
             </div>
-            <div className="max-h-[300px] overflow-y-auto">
-              {cart.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground text-sm">
-                  Add products to cart
-                </div>
-              ) : (
-                cart.map((item) => (
-                  <div
-                    key={item.productId}
-                    className="flex items-center gap-3 p-3 border-b border-[#f5f5f5] dark:border-border last:border-none"
+            <div className="max-h-[400px] overflow-y-auto">
+              <AnimatePresence initial={false}>
+                {cart.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="p-8 text-center text-muted-foreground text-sm"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">
-                        {item.productName}
+                    Add products to cart
+                  </motion.div>
+                ) : (
+                  cart.map((item) => (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      key={item.productId}
+                      className="flex items-center gap-3 p-3 border-b border-[#f5f5f5] dark:border-border last:border-none"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {item.productName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatPrice(item.unitPrice)} × {item.quantity}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatPrice(item.unitPrice)} × {item.quantity}
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border"
+                          onClick={() => updateQuantity(item.productId, -1)}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="w-6 text-center text-sm font-medium">
+                          {item.quantity}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border"
+                          onClick={() => updateQuantity(item.productId, 1)}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="w-7 h-7 rounded-full text-red-400 hover:bg-red-50"
+                          onClick={() => removeFromCart(item.productId)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
-                        onClick={() => updateQuantity(item.productId, -1)}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </button>
-                      <span className="w-6 text-center text-sm font-medium">
-                        {item.quantity}
-                      </span>
-                      <button
-                        className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
-                        onClick={() => updateQuantity(item.productId, 1)}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </button>
-                      <button
-                        className="w-7 h-7 rounded-full flex items-center justify-center text-red-400 hover:bg-red-50 transition ml-1"
-                        onClick={() => removeFromCart(item.productId)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <div className="w-20 text-right text-sm font-medium">
-                      {formatPrice(item.lineTotal)}
-                    </div>
-                  </div>
-                ))
-              )}
+                      <div className="w-20 text-right text-sm font-medium">
+                        {formatPrice(item.lineTotal)}
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
@@ -653,12 +1009,8 @@ export default function AdminPOS() {
                   type="number"
                   value={discount}
                   onChange={(e) => setDiscount(e.target.value)}
-                  className="w-24 h-7 text-right text-sm bg-background border-[#E5E5E0]"
+                  className="w-24 h-7 text-right text-sm bg-background border-[#E5E5E0] rounded-full"
                 />
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">VAT (13%)</span>
-                <span>{formatPrice(taxAmount)}</span>
               </div>
               <div className="border-t border-[#E5E5E0] pt-2 flex justify-between font-bold text-lg">
                 <span>Total</span>
@@ -677,11 +1029,12 @@ export default function AdminPOS() {
                   return (
                     <button
                       key={pm.key}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all ${
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2 rounded-full border text-sm transition-all",
                         paymentMethod === pm.key
                           ? "bg-[#2C3E2D] text-white border-[#2C3E2D]"
                           : "bg-background border-[#E5E5E0] dark:border-border hover:bg-muted"
-                      }`}
+                      )}
                       onClick={() => setPaymentMethod(pm.key)}
                     >
                       <Icon className="h-4 w-4" />
@@ -703,7 +1056,7 @@ export default function AdminPOS() {
                       value={cashReceived}
                       onChange={(e) => setCashReceived(e.target.value)}
                       placeholder={String(total)}
-                      className="bg-background border-[#E5E5E0] text-sm"
+                      className="bg-background border-[#E5E5E0] text-sm rounded-full"
                     />
                   </div>
                   {cashReceivedNum > 0 && (
@@ -719,7 +1072,7 @@ export default function AdminPOS() {
                         key={amt}
                         variant="outline"
                         size="sm"
-                        className="text-xs h-7"
+                        className="text-xs h-7 rounded-full"
                         onClick={() => setCashReceived(String(amt))}
                       >
                         Rs. {amt}
@@ -728,7 +1081,7 @@ export default function AdminPOS() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs h-7"
+                      className="text-xs h-7 rounded-full"
                       onClick={() => setCashReceived(String(total))}
                     >
                       Exact
@@ -741,7 +1094,7 @@ export default function AdminPOS() {
                 placeholder="Notes (optional)"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="bg-background border-[#E5E5E0] text-sm"
+                className="bg-background border-[#E5E5E0] text-sm rounded-full"
               />
 
               <Button
@@ -772,61 +1125,46 @@ export default function AdminPOS() {
         </div>
       </div>
 
-      {/* QR Code Modal for eSewa/Khalti */}
-      {showQR && (
-        <div
-          className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
-          onClick={() => setShowQR(false)}
-        >
-          <div
-            className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border p-6 max-w-sm w-full space-y-4 relative text-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setShowQR(false)}
-              className="absolute top-4 right-4"
-            >
-              <X className="h-6 w-6 text-muted-foreground" />
-            </button>
-            <h2 className="text-xl font-serif font-medium mb-4">Scan to Pay</h2>
-            <div className="bg-white border-2 border-[#2C3E2D] rounded-xl p-4 inline-block shadow-sm">
+      <Dialog open={showQR} onOpenChange={setShowQR}>
+        <DialogContent className="sm:max-w-sm text-center">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-serif">Scan to Pay</DialogTitle>
+            <DialogDescription>
+              Scan the QR code with your mobile banking app.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-4">
+            <div className="bg-white border-2 border-[#2C3E2D] rounded-xl p-4 shadow-sm">
               <OptimizedImage
                 src="/images/esewa-qr.webp"
                 alt="Payment QR"
-                className="w-full max-w-[250px] mx-auto rounded-lg object-contain"
+                className="w-full max-w-[200px] rounded-lg"
               />
             </div>
-            <p className="text-sm text-muted-foreground mt-4">
-              Please scan this QR code with your eSewa or Khalti app to complete
-              the payment of <strong>{formatPrice(total)}</strong>.
+            <p className="text-sm text-muted-foreground">
+              Total Amount: <span className="font-bold text-foreground">{formatPrice(total)}</span>
             </p>
+          </div>
+          <DialogFooter>
             <Button
-              className="w-full mt-4 bg-[#2C3E2D] hover:bg-[#1A251B] text-white"
+              className="w-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white rounded-full"
               onClick={() => setShowQR(false)}
             >
-              Done
+              I have paid
             </Button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* End of day modal */}
-      {showEndOfDay && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border p-6 max-w-sm w-full space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-serif font-medium">Close Session</h2>
-              <button onClick={() => setShowEndOfDay(false)}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="text-sm text-muted-foreground">
-              Session opened at{" "}
-              {new Date(session.openedAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </div>
+      <Dialog open={showEndOfDay} onOpenChange={setShowEndOfDay}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Close Session</DialogTitle>
+            <DialogDescription>
+              Opened at {new Date(session.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
             <div>
               <label className="text-sm font-medium text-muted-foreground mb-1 block">
                 Closing Cash (NPR)
@@ -835,19 +1173,77 @@ export default function AdminPOS() {
                 type="number"
                 value={closingCash}
                 onChange={(e) => setClosingCash(e.target.value)}
-                placeholder="Count the cash in the drawer"
-                className="bg-background border-[#E5E5E0]"
+                placeholder="0"
+                className="bg-background border-[#E5E5E0] rounded-full"
               />
             </div>
+          </div>
+          <DialogFooter>
             <Button
-              className="w-full bg-red-600 hover:bg-red-700 text-white"
+              variant="destructive"
+              className="w-full rounded-full"
               onClick={handleCloseSession}
             >
-              Close Session & Generate Report
+              End Session & Close Terminal
             </Button>
-          </div>
-        </div>
-      )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mx-auto bg-green-100 p-3 rounded-full mb-4">
+              <CheckCircle2 className="h-6 w-6 text-green-600" />
+            </div>
+            <DialogTitle className="text-center text-xl font-serif">Session Summary</DialogTitle>
+            <DialogDescription className="text-center">
+              Detailed breakdown of the closed session.
+            </DialogDescription>
+          </DialogHeader>
+          {lastClosedSession && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-muted/50 p-3 rounded-xl border border-border/50 text-center">
+                  <div className="text-[10px] uppercase text-muted-foreground font-bold">Total Sales</div>
+                  <div className="text-lg font-bold">{formatPrice(lastClosedSession.totalSales)}</div>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-xl border border-border/50 text-center">
+                  <div className="text-[10px] uppercase text-muted-foreground font-bold">Orders</div>
+                  <div className="text-lg font-bold">{lastClosedSession.totalOrders}</div>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-xl border border-border/50 text-center">
+                  <div className="text-[10px] uppercase text-muted-foreground font-bold">Cash Sales</div>
+                  <div className="text-sm font-semibold">{formatPrice(lastClosedSession.totalCashSales)}</div>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-xl border border-border/50 text-center">
+                  <div className="text-[10px] uppercase text-muted-foreground font-bold">Digital Sales</div>
+                  <div className="text-sm font-semibold">{formatPrice(lastClosedSession.totalDigitalSales)}</div>
+                </div>
+              </div>
+              <div className="space-y-2 pt-2 border-t border-border/50">
+                 <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Opening Cash</span>
+                    <span className="font-medium">{formatPrice(lastClosedSession.openingCash)}</span>
+                 </div>
+                 <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Closing Cash</span>
+                    <span className="font-medium">{formatPrice(lastClosedSession.closingCash || 0)}</span>
+                 </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="sm:justify-center">
+            <Button
+              type="button"
+              className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white rounded-full px-8"
+              onClick={() => setShowSummaryDialog(false)}
+            >
+              Close Summary
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

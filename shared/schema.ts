@@ -47,6 +47,7 @@ export const customers = pgTable("customers", {
     .notNull()
     .default("0"),
   orderCount: integer("order_count").notNull().default(0),
+  phoneNumber: text("phone_number"),
   avatarColor: text("avatar_color"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -57,6 +58,7 @@ export const insertCustomerSchema = createInsertSchema(customers).pick({
   firstName: true,
   lastName: true,
   email: true,
+  phoneNumber: true,
 });
 
 export const products = pgTable("products", {

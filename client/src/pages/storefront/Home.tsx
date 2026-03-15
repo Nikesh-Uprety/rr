@@ -50,7 +50,7 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
     if (galleryImages.length <= 1) return;
     const timer = setInterval(() => {
       setMobileImageIndex((prev) => (prev + 1) % galleryImages.length);
-    }, 3000);
+    }, 2000);
     return () => clearInterval(timer);
   }, [galleryImages.length]);
 
@@ -73,10 +73,10 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
               <OptimizedImage
                 src={staticImage}
                 alt={`${product.name} lifestyle`}
-                className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-0"
+                className="w-full h-full object-cover transition-opacity duration-1000 ease-in-out group-hover:opacity-0"
                 priority={index < 2}
               />
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 ease-in-out">
                 <OptimizedImage
                   src={product.imageUrl ?? ""}
                   alt={product.name}
@@ -126,10 +126,8 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
         <div className="md:hidden absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none z-10" />
 
         {/* Desktop: Glassmorphism Detail Reveal on Hover */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          whileHover={{ opacity: 1, y: 0 }}
-          className="hidden md:flex absolute inset-x-4 bottom-4 z-20 p-6 backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl shadow-xl justify-between items-center"
+        <div 
+          className="hidden md:flex absolute inset-x-4 bottom-4 z-20 p-6 backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl shadow-xl justify-between items-center opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-700 ease-out"
         >
           <div>
             <h3 className="text-white text-xl font-black uppercase tracking-tighter mb-1">
@@ -156,7 +154,7 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
           <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-white">
             <ArrowRight className="w-5 h-5" />
           </div>
-        </motion.div>
+        </div>
 
         {/* Mobile: Always-visible product info */}
         <div className="md:hidden absolute inset-x-3 bottom-3 z-20 p-4 backdrop-blur-xl bg-black/40 border border-white/10 rounded-xl shadow-xl">

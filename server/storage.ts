@@ -823,7 +823,11 @@ export class PgStorage implements IStorage {
     if (search) {
       const q = `%${search}%`;
       conditions.push(
-        ilike(customers.firstName, q),
+        or(
+          ilike(customers.firstName, q),
+          ilike(customers.lastName, q),
+          ilike(customers.phoneNumber, q)
+        )
       );
     }
 
@@ -836,6 +840,7 @@ export class PgStorage implements IStorage {
         firstName: customers.firstName,
         lastName: customers.lastName,
         email: customers.email,
+        phoneNumber: customers.phoneNumber,
         totalSpent: customers.totalSpent,
         orderCount: customers.orderCount,
         avatarColor: customers.avatarColor,
@@ -907,6 +912,7 @@ export class PgStorage implements IStorage {
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
+        phoneNumber: data.phoneNumber,
         totalSpent: data.totalSpent,
         orderCount: data.orderCount,
         avatarColor: data.avatarColor,
@@ -916,6 +922,7 @@ export class PgStorage implements IStorage {
         firstName: customers.firstName,
         lastName: customers.lastName,
         email: customers.email,
+        phoneNumber: customers.phoneNumber,
         totalSpent: customers.totalSpent,
         orderCount: customers.orderCount,
         avatarColor: customers.avatarColor,
@@ -937,6 +944,7 @@ export class PgStorage implements IStorage {
         firstName: customers.firstName,
         lastName: customers.lastName,
         email: customers.email,
+        phoneNumber: customers.phoneNumber,
         totalSpent: customers.totalSpent,
         orderCount: customers.orderCount,
         avatarColor: customers.avatarColor,
@@ -958,6 +966,7 @@ export class PgStorage implements IStorage {
         firstName,
         lastName,
         email: emailLower,
+        phoneNumber: null,
         totalSpent: "0",
         orderCount: 0,
         avatarColor: "#2D4A35",
@@ -967,6 +976,7 @@ export class PgStorage implements IStorage {
         firstName: customers.firstName,
         lastName: customers.lastName,
         email: customers.email,
+        phoneNumber: customers.phoneNumber,
         totalSpent: customers.totalSpent,
         orderCount: customers.orderCount,
         avatarColor: customers.avatarColor,
@@ -1957,6 +1967,7 @@ export class MemStorage implements IStorage {
       firstName: data.firstName,
       lastName: data.lastName,
       email: data.email,
+      phoneNumber: data.phoneNumber || null,
       totalSpent: data.totalSpent.toString(),
       orderCount: data.orderCount,
       avatarColor: data.avatarColor,
@@ -1979,6 +1990,7 @@ export class MemStorage implements IStorage {
       firstName,
       lastName,
       email,
+      phoneNumber: null,
       totalSpent: "0",
       orderCount: 0,
       avatarColor: "#2D4A35",

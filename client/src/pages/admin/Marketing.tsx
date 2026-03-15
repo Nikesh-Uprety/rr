@@ -282,7 +282,7 @@ export default function AdminMarketingPage() {
                   setMarketingSubject(tpl.subject);
                   setMarketingBody(tpl.html);
                 }}
-                className="text-xs border rounded p-1 bg-white dark:bg-card"
+                className="text-xs border rounded-lg px-3 py-2 bg-white dark:bg-card cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/20"
               >
                 {Object.entries(emailTemplates).map(([key, t]) => (
                   <option key={key} value={key}>{t.name}</option>

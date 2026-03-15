@@ -365,7 +365,7 @@ export default function AdminOrders() {
                               })
                             }
                             className={cn(
-                              "text-xs font-bold uppercase tracking-wider border rounded-md px-2 py-1 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors text-center",
+                              "text-xs font-bold uppercase tracking-wider border rounded-md px-2 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors text-center",
                               status === "Completed" ? "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20 dark:bg-green-950 dark:text-green-300 dark:border-green-900" :
                               status === "Pending" ? "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-900" :
                               status === "Processing" ? "bg-blue-100 text-blue-700 border-blue-700/20 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900" :
@@ -465,7 +465,7 @@ export default function AdminOrders() {
                         })
                       }
                       className={cn(
-                        "text-xs font-bold uppercase tracking-wider border rounded-md px-3 py-2 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors text-center w-full",
+                        "text-xs font-bold uppercase tracking-wider border rounded-md px-3 py-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors text-center w-full",
                         order.status === "completed" ? "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20 dark:bg-green-950 dark:text-green-300 dark:border-green-900" :
                         order.status === "pending" ? "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-900" :
                         order.status === "processing" ? "bg-blue-100 text-blue-700 border-blue-700/20 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900" :

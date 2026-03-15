@@ -1181,6 +1181,36 @@ export async function registerRoutes(
     },
   );
 
+  app.post(
+    "/api/admin/customers",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { firstName, lastName, email, phoneNumber } = req.body;
+        if (!firstName || !lastName) {
+          return res.status(400).json({ success: false, error: "First and last name are required" });
+        }
+        
+        const customer = await storage.createCustomer({
+          firstName,
+          lastName,
+          email: email || `${Date.now()}@walkin.local`,
+          phoneNumber: phoneNumber || null,
+          totalSpent: "0",
+          orderCount: 0,
+          avatarColor: "#2D4A35",
+        });
+        
+        return res.json({ success: true, data: customer });
+      } catch (err: any) {
+        console.error("Error in POST /api/admin/customers", err);
+        return res
+          .status(500)
+          .json({ success: false, error: err.message || "Failed to create customer" });
+      }
+    },
+  );
+
   // Admin users & profile
   app.get(
     "/api/admin/users",

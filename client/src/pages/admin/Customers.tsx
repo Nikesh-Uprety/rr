@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, Mail, Phone, MapPin, ShoppingBag, Calendar, User as UserIcon, MoreVertical, ExternalLink } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import {
   fetchAdminCustomers,
   fetchCustomerById,
+  createAdminCustomer,
   type AdminCustomer,
   type AdminCustomerDetail,
 } from "@/lib/adminApi";
@@ -19,6 +21,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -36,6 +45,9 @@ export default function AdminCustomers() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const {
     data: customers,
@@ -64,7 +76,35 @@ export default function AdminCustomers() {
   };
 
   const getInitials = (first: string, last: string) => {
-    return `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase();
+    return `${first?.[0] ?? ""}${last?.[0] ?? ""}`.toUpperCase();
+  };
+
+  const addMutation = useMutation({
+    mutationFn: createAdminCustomer,
+    onSuccess: () => {
+      toast({ title: "Customer created successfully" });
+      setIsAddOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["admin", "customers"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to create customer", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const firstName = fd.get("firstName") as string;
+    const lastName = fd.get("lastName") as string;
+    const email = fd.get("email") as string;
+    const phoneNumber = fd.get("phoneNumber") as string;
+
+    if (!firstName || !lastName) {
+      toast({ title: "First and last name are required", variant: "destructive" });
+      return;
+    }
+
+    addMutation.mutate({ firstName, lastName, email, phoneNumber });
   };
 
   const bgColors = [
@@ -94,7 +134,7 @@ export default function AdminCustomers() {
           >
             Export CSV
           </Button>
-          <Button className="flex-1 sm:flex-none bg-[#2C3E2D] hover:bg-[#1A251B] text-white">
+          <Button className="flex-1 sm:flex-none bg-[#2C3E2D] hover:bg-[#1A251B] text-white" onClick={() => setIsAddOpen(true)}>
             <Plus className="w-4 h-4 mr-2" /> Add Customer
           </Button>
         </div>
@@ -179,6 +219,11 @@ export default function AdminCustomers() {
                         <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                           <Mail className="w-3 h-3" /> {customer.email}
                         </div>
+                        {customer.phoneNumber && (
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Phone className="w-3 h-3" /> {customer.phoneNumber}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="font-medium">
@@ -240,9 +285,14 @@ export default function AdminCustomers() {
                     <h3 className="font-bold text-[#2C3E2D] dark:text-foreground text-lg truncate w-full">
                       {customer.firstName} {customer.lastName}
                     </h3>
-                    <p className="text-xs text-muted-foreground truncate w-full mb-4">
+                    <p className="text-xs text-muted-foreground truncate w-full mb-1">
                       {customer.email}
                     </p>
+                    {customer.phoneNumber && (
+                      <p className="text-[10px] text-muted-foreground truncate w-full mb-2 flex items-center justify-center gap-1">
+                        <Phone className="w-3 h-3" /> {customer.phoneNumber}
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 w-full gap-2 pt-4 border-t border-border mt-auto">
                       <div className="text-left">
                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Orders</div>
@@ -303,6 +353,17 @@ export default function AdminCustomers() {
                         <div className="text-sm font-semibold truncate">{detail.email}</div>
                       </div>
                     </div>
+                    {detail.phoneNumber && (
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/10 border border-border">
+                        <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center shadow-sm">
+                          <Phone className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-muted-foreground font-medium">Phone Number</div>
+                          <div className="text-sm font-semibold truncate">{detail.phoneNumber}</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </section>
 
@@ -379,6 +440,41 @@ export default function AdminCustomers() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Add Customer Dialog */}
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl">Add New Customer</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddSubmit} className="space-y-4 mt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First Name *</Label>
+                <Input id="firstName" name="firstName" required className="rounded-lg" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last Name *</Label>
+                <Input id="lastName" name="lastName" required className="rounded-lg" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <Input id="email" name="email" type="email" placeholder="customer@example.com" className="rounded-lg" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Phone Number</Label>
+              <Input id="phoneNumber" name="phoneNumber" placeholder="e.g. 9812345678" className="rounded-lg" />
+            </div>
+            <div className="pt-4 flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)} className="rounded-full">Cancel</Button>
+              <Button type="submit" disabled={addMutation.isPending} className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white">
+                {addMutation.isPending ? "Saving..." : "Create Customer"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

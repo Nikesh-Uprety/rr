@@ -38,6 +38,7 @@ export interface AdminCustomer {
   orderCount: number;
   avatarColor: string | null;
   createdAt: string;
+  phoneNumber?: string | null;
 }
 
 export interface AdminCustomerDetail extends AdminCustomer {
@@ -229,6 +230,17 @@ export async function fetchAdminCustomers(
     success: boolean;
     data: AdminCustomer[];
   };
+  return json.data;
+}
+
+export async function createAdminCustomer(data: {
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phoneNumber?: string;
+}): Promise<AdminCustomer> {
+  const res = await apiRequest("POST", "/api/admin/customers", data);
+  const json = (await res.json()) as { success: boolean; data: AdminCustomer };
   return json.data;
 }
 

@@ -19,6 +19,7 @@ import {
   fetchTodaySession,
   openPosSession,
   fetchAdminCustomers,
+  createAdminCustomer,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Label } from "@/components/ui/label";
 import { useEffect, useMemo, useState } from "react";
 
 interface CartItem {
@@ -88,6 +90,7 @@ export default function AdminPOS() {
   const [openingLoading, setOpeningLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<AdminCustomer | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
   const [parkedSales, setParkedSales] = useState<
     { name: string; cart: CartItem[] }[]
   >(() => {
@@ -323,6 +326,41 @@ export default function AdminPOS() {
 
   const removeFromCart = (productId: string) => {
     setCart((prev) => prev.filter((i) => i.productId !== productId));
+  };
+
+  const addCustomerMutation = useMutation({
+    mutationFn: createAdminCustomer,
+    onSuccess: (newCustomer) => {
+      toast({ title: "Customer created successfully" });
+      setIsAddCustomerOpen(false);
+      
+      // Auto-select the newly created customer
+      setSelectedCustomer(newCustomer);
+      setCustomerName(`${newCustomer.firstName} ${newCustomer.lastName}`);
+      setCustomerPhone("");
+      setCustomerSearch("");
+
+      queryClient.invalidateQueries({ queryKey: ["admin", "customers"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to create customer", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const firstName = fd.get("firstName") as string;
+    const lastName = fd.get("lastName") as string;
+    const email = fd.get("email") as string;
+    const phoneNumber = fd.get("phoneNumber") as string;
+
+    if (!firstName || !lastName) {
+      toast({ title: "First and last name are required", variant: "destructive" });
+      return;
+    }
+
+    addCustomerMutation.mutate({ firstName, lastName, email, phoneNumber });
   };
 
   // Checkout
@@ -859,8 +897,16 @@ export default function AdminPOS() {
                 );
               })}
               {customers?.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  No customers found.
+                <div className="text-center py-8 text-muted-foreground text-sm flex flex-col items-center gap-3">
+                  <p>No customers found for "{customerSearch}"</p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="border-primary/20 hover:border-primary/50 text-primary bg-primary/5 rounded-full"
+                    onClick={() => setIsAddCustomerOpen(true)}
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" /> Add this Customer
+                  </Button>
                 </div>
               )}
             </div>
@@ -1242,6 +1288,47 @@ export default function AdminPOS() {
               Close Summary
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inline Quick Add Customer Dialog */}
+      <Dialog open={isAddCustomerOpen} onOpenChange={setIsAddCustomerOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl">Create Customer</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAddSubmit} className="space-y-4 mt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First Name *</Label>
+                <Input id="firstName" name="firstName" required className="rounded-lg" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last Name *</Label>
+                <Input id="lastName" name="lastName" required className="rounded-lg" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <Input id="email" name="email" type="email" placeholder="customer@example.com" className="rounded-lg" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Phone Number</Label>
+              <Input 
+                id="phoneNumber" 
+                name="phoneNumber" 
+                placeholder="e.g. 9812345678" 
+                defaultValue={customerSearch.replace(/\D/g, '')} 
+                className="rounded-lg" 
+              />
+            </div>
+            <div className="pt-4 flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(false)} className="rounded-full">Cancel</Button>
+              <Button type="submit" disabled={addCustomerMutation.isPending} className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white">
+                {addCustomerMutation.isPending ? "Creating..." : "Save & Assign"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

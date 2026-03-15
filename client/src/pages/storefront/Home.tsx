@@ -537,72 +537,78 @@ export default function Home() {
       </section>
 
       {/* Quote Section */}
-      <section className="py-16 md:py-20 bg-neutral-950 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-950" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-white/5 blur-3xl" />
-        
-        {/* Floating/revolving animated icons */}
-        <div className="absolute inset-0 pointer-events-none">
-          <Sparkles className="absolute top-[15%] left-[10%] w-5 h-5 text-white/20 animate-float" />
-          <Star className="absolute top-[20%] right-[12%] w-4 h-4 text-white/15 animate-float-delayed" />
-          <Gem className="absolute bottom-[20%] left-[8%] w-4 h-4 text-white/15 animate-float-delayed" style={{ animationDelay: '1s' }} />
-          <Diamond className="absolute bottom-[25%] right-[15%] w-5 h-5 text-white/20 animate-float" style={{ animationDelay: '2s' }} />
-          <Sparkles className="absolute top-[50%] left-[5%] w-3 h-3 text-white/10 animate-sparkle" style={{ animationDelay: '0.5s' }} />
-          <Star className="absolute top-[40%] right-[6%] w-3 h-3 text-white/10 animate-sparkle" style={{ animationDelay: '1.5s' }} />
-          {/* Revolving icon around quote center */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <Diamond className="w-3 h-3 text-white/15 animate-revolve" />
-          </div>
+      {/* Quote Section - Glassmorphism & Aurora Effect */}
+      <section className="py-16 md:py-24 bg-white dark:bg-neutral-950 relative overflow-hidden transition-colors duration-500">
+        {/* Subtle Aurora Background */}
+        <div className="absolute inset-0 pointer-events-none opacity-40 dark:opacity-30">
+          <motion.div 
+            animate={{ 
+              x: [0, 50, -50, 0],
+              y: [0, -30, 30, 0],
+              scale: [1, 1.2, 0.9, 1]
+            }}
+            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+            className="absolute top-[-10%] left-[10%] w-[500px] h-[500px] bg-primary/20 blur-[120px] rounded-full"
+          />
+          <motion.div 
+            animate={{ 
+              x: [0, -60, 40, 0],
+              y: [0, 40, -40, 0],
+              scale: [1, 0.8, 1.1, 1]
+            }}
+            transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+            className="absolute bottom-[-10%] right-[10%] w-[450px] h-[450px] bg-primary/10 blur-[120px] rounded-full"
+          />
         </div>
+        
+        <div className="relative max-w-5xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+            className="relative p-8 md:p-16 rounded-[2rem] border border-white/20 dark:border-white/10 bg-white/40 dark:bg-white/5 backdrop-blur-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] overflow-hidden group"
+          >
+            {/* Iridescent border glow */}
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+            
+            <div className="relative flex flex-col items-center text-center">
+              <div className="h-px w-10 bg-primary/40 mb-8" />
+              
+              <h2 className="text-2xl md:text-5xl lg:text-5xl font-serif italic leading-tight tracking-tight max-w-3xl text-neutral-900 dark:text-neutral-50 mb-10">
+                {"The best way to predict the future is to create it.".split(" ").map((word, i) => (
+                  <motion.span
+                    key={i}
+                    initial={{ opacity: 0, y: 15 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ 
+                      duration: 0.6, 
+                      delay: i * 0.08,
+                      ease: [0.22, 1, 0.36, 1]
+                    }}
+                    className="inline-block mr-[0.3em] last:mr-0"
+                  >
+                    {word}
+                  </motion.span>
+                ))}
+              </h2>
 
-        <div className="relative max-w-4xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
-            <div className="flex items-center gap-4 shrink-0 relative">
-              {/* Fading image with organic shape */}
-              <div className="relative w-20 h-20 md:w-24 md:h-24">
-                <div 
-                  className="w-full h-full animate-in fade-in zoom-in duration-700"
-                  style={{
-                    clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)',
-                  }}
-                >
-                  <OptimizedImage
-                    src="/images/walter-landor.webp"
-                    alt="Walter Landor"
-                    className="w-full h-full object-cover"
-                    fallbackExt="png"
-                  />
-
-                </div>
-                {/* Fading glow around the shape */}
-                <div 
-                  className="absolute inset-[-4px] bg-gradient-to-br from-white/20 via-transparent to-white/10 blur-sm -z-10"
-                  style={{
-                    clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)',
-                  }}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <div className="flex gap-2 items-center">
-                  <Sparkles className="w-3 h-3 text-white/50 animate-sparkle" />
-                  <Gem className="w-3 h-3 text-white/30 animate-sparkle" style={{ animationDelay: '1s' }} />
-                  <Star className="w-3 h-3 text-white/20 animate-sparkle" style={{ animationDelay: '2s' }} />
-                </div>
-              </div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 0.7 }}
+                viewport={{ once: true }}
+                transition={{ duration: 1, delay: 1 }}
+                className="flex items-center gap-4"
+              >
+                <div className="h-px w-6 bg-primary/30" />
+                <span className="text-[10px] md:text-xs tracking-[0.4em] uppercase font-black text-primary/80 dark:text-primary/90">
+                  Alan Kay
+                </span>
+                <div className="h-px w-6 bg-primary/30" />
+              </motion.div>
             </div>
-            <div className="text-center md:text-left">
-              <p className="text-2xl md:text-4xl italic font-serif text-white/95 leading-snug animate-in fade-in slide-in-from-bottom-4 duration-700">
-                &ldquo;Products are made in a factory but brands are created in the mind.&rdquo;
-              </p>
-              <div className="mt-6 flex items-center justify-center md:justify-start gap-4">
-                <div className="h-px flex-1 max-w-12 bg-white/30" />
-                <p className="text-xs tracking-[0.3em] uppercase text-neutral-400 font-bold">
-                  Walter Landor
-                </p>
-                <div className="h-px flex-1 max-w-12 bg-white/30" />
-              </div>
-            </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 

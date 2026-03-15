@@ -438,7 +438,12 @@ export default function AdminProducts() {
     });
   }, [products, categoryFilter]);
 
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 640 ? "list" : "grid";
+    }
+    return "grid";
+  });
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -933,8 +938,9 @@ export default function AdminProducts() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-4 items-center justify-between px-2 pt-4 pb-2 border-b border-border/50">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-6 px-2 pt-4 pb-2 border-b border-border/50">
+        {/* Mobile-first: Attributes and Add Product at the top */}
+        <div className="flex flex-row justify-between items-center w-full order-1 sm:order-none">
           <Sheet open={attrSheetOpen} onOpenChange={setAttrSheetOpen}>
             <SheetTrigger asChild>
               <Button
@@ -948,15 +954,29 @@ export default function AdminProducts() {
               <AttributesManager onClose={() => setAttrSheetOpen(false)} />
             </SheetContent>
           </Sheet>
+
+          <Button
+            className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground font-bold text-xs px-6 h-10 shadow-md"
+            onClick={() => {
+              if (categoryFilter !== "all") {
+                addForm.setValue("category", categoryFilter);
+              } else {
+                addForm.setValue("category", "");
+              }
+              setAddOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" /> Add Product
+          </Button>
         </div>
 
-        {/* Center: Category filter pills */}
-        <div className="flex gap-2 flex-wrap justify-center flex-1 min-w-[300px]">
+        {/* Categories: Second on mobile, centered/padded */}
+        <div className="flex gap-2 min-w-0 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-none order-2 sm:order-none justify-start sm:justify-center no-scrollbar">
           <Button
             variant={categoryFilter === "all" ? "default" : "outline"}
             onClick={() => setCategoryFilter("all")}
             className={cn(
-              "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto",
+              "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0",
               categoryFilter !== "all" && "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
             )}
           >
@@ -968,7 +988,7 @@ export default function AdminProducts() {
               variant={categoryFilter === cat.slug ? "default" : "outline"}
               onClick={() => setCategoryFilter(cat.slug)}
               className={cn(
-                "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto",
+                "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0",
                 categoryFilter !== cat.slug && "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
               )}
             >
@@ -976,21 +996,6 @@ export default function AdminProducts() {
             </Button>
           ))}
         </div>
-
-        {/* Right: Add Product */}
-        <Button
-          className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground font-bold text-xs px-6 h-10 shadow-md"
-          onClick={() => {
-            if (categoryFilter !== "all") {
-              addForm.setValue("category", categoryFilter);
-            } else {
-              addForm.setValue("category", "");
-            }
-            setAddOpen(true);
-          }}
-        >
-          <Plus className="w-4 h-4 mr-2" /> Add Product
-        </Button>
       </div>
 
       {/* Move Panel */}
@@ -1090,9 +1095,8 @@ export default function AdminProducts() {
           </div>
         </div>
       )}
-
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#F9FBF9] dark:bg-muted/10 p-4 rounded-xl border border-[#E9EFE9] dark:border-muted/20 shadow-sm">
-        <div className="flex items-center gap-4 flex-1">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#F9FBF9] dark:bg-muted/10 p-4 rounded-xl border border-[#E9EFE9] dark:border-muted/20 shadow-sm overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1 w-full">
           <div className="flex items-center gap-3 shrink-0">
             <Checkbox 
               id="select-all"
@@ -1201,13 +1205,13 @@ export default function AdminProducts() {
             </AnimatePresence>
           </div>
 
-          {/* Search bar inside the section in the middle */}
-          <div className="flex-1 max-w-sm mx-auto relative group">
+          {/* Search bar inside the section - flexible width */}
+          <div className="flex-1 min-w-0 relative group">
             <div className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full h-10 px-4 transition-all duration-300 focus-within:border-primary/50 shadow-inner">
-              <Search className={`h-4 w-4 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+              <Search className={`h-4 w-4 shrink-0 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
               <Input 
                 placeholder="Search products..." 
-                className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50 px-3"
+                className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50 px-3 w-full"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -1215,7 +1219,7 @@ export default function AdminProducts() {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-7 w-7 rounded-full hover:bg-muted"
+                  className="h-7 w-7 shrink-0 rounded-full hover:bg-muted"
                   onClick={() => setSearch("")}
                 >
                   <X className="h-4 w-4" />
@@ -1248,7 +1252,7 @@ export default function AdminProducts() {
                         <p className="text-xs font-bold truncate">{p.name}</p>
                         <p className="text-[9px] text-muted-foreground uppercase">{p.category}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                          <p className="text-[10px] font-bold">{formatPrice(p.price)}</p>
                       </div>
                      </div>
@@ -1259,13 +1263,14 @@ export default function AdminProducts() {
           </div>
         </div>
         
-        <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-          <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">
+        <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end shrink-0">
+          <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest whitespace-nowrap">
             {filteredProducts.length} Items
           </p>
           <ViewToggle view={viewMode} onViewChange={setViewMode} />
         </div>
       </div>
+
 
       <AnimatePresence mode="wait">
         {viewMode === "grid" ? (
@@ -1275,7 +1280,7 @@ export default function AdminProducts() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+            className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6"
           >
             {isLoading || isError
           ? Array.from({ length: 8 }).map((_, i) => (
@@ -1294,7 +1299,13 @@ export default function AdminProducts() {
           : filteredProducts.map((product) => (
               <div
                 key={product.id}
-                className={`bg-white dark:bg-card rounded-xl border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative ${
+                onClick={() => {
+                  const next = new Set(selectedProductIds);
+                  if (next.has(product.id)) next.delete(product.id);
+                  else next.add(product.id);
+                  setSelectedProductIds(next);
+                }}
+                className={`bg-white dark:bg-card rounded-xl border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative cursor-pointer ${
                   selectedProductIds.has(product.id) ? "border-primary ring-2 ring-primary dark:bg-primary/10" : "border-[#E5E5E0] dark:border-border"
                 }`}
               >
@@ -1308,6 +1319,7 @@ export default function AdminProducts() {
                       else next.delete(product.id);
                       setSelectedProductIds(next);
                     }}
+                    onClick={(e) => e.stopPropagation()}
                     className="data-[state=unchecked]:bg-white/90 dark:data-[state=unchecked]:bg-background/90 shadow-sm"
                   />
                 </div>
@@ -1381,7 +1393,8 @@ export default function AdminProducts() {
                       variant="outline" 
                       size="sm" 
                       className="flex-1 text-xs font-bold uppercase tracking-wider h-9"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setEditProduct(product);
                         setEditOpen(true);
                       }}
@@ -1392,7 +1405,8 @@ export default function AdminProducts() {
                       variant="outline" 
                       size="sm" 
                       className="flex-none w-9 h-9 border-destructive/30 text-destructive hover:bg-destructive/10"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (confirm("Are you sure?")) deleteMutation.mutate(product.id);
                       }}
                     >
@@ -1435,10 +1449,19 @@ export default function AdminProducts() {
                 </thead>
                 <tbody>
                   {filteredProducts.map((product) => (
-                    <tr key={product.id} className={cn(
-                      "border-b border-border hover:bg-muted/10 transition-colors group",
-                      selectedProductIds.has(product.id) && "bg-primary/5"
-                    )}>
+                    <tr 
+                      key={product.id} 
+                      onClick={() => {
+                        const next = new Set(selectedProductIds);
+                        if (next.has(product.id)) next.delete(product.id);
+                        else next.add(product.id);
+                        setSelectedProductIds(next);
+                      }}
+                      className={cn(
+                        "border-b border-border hover:bg-muted/10 transition-colors group cursor-pointer",
+                        selectedProductIds.has(product.id) && "bg-primary/5"
+                      )}
+                    >
                       <td className="p-4 text-center">
                         <Checkbox 
                           checked={selectedProductIds.has(product.id)}
@@ -1448,6 +1471,7 @@ export default function AdminProducts() {
                             else next.delete(product.id);
                             setSelectedProductIds(next);
                           }}
+                          onClick={(e) => e.stopPropagation()}
                         />
                       </td>
                       <td className="p-4">
@@ -1501,7 +1525,8 @@ export default function AdminProducts() {
                             variant="outline" 
                             size="icon" 
                             className="h-8 w-8"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setEditProduct(product);
                               setEditOpen(true);
                             }}
@@ -1512,7 +1537,8 @@ export default function AdminProducts() {
                             variant="outline" 
                             size="icon" 
                             className="h-8 w-8 border-destructive/30 text-destructive hover:bg-destructive/10 dark:text-red-500 dark:border-red-500/30 dark:hover:bg-red-500/10"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               if (confirm("Are you sure?")) deleteMutation.mutate(product.id);
                             }}
                             loading={deleteMutation.isPending}

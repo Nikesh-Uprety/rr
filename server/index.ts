@@ -1,3 +1,5 @@
+import dns from "node:dns";
+dns.setDefaultResultOrder("ipv4first");
 import connectPgSimple from "connect-pg-simple";
 import "dotenv/config";
 import express, { NextFunction, type Request, Response } from "express";

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Delivery & Authentication Report - RARE Nepal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #111111;
+            --secondary: #666666;
+            --accent: #2D4A35;
+            --border: #E8E4DE;
+            --bg: #FAFAF8;
+        }
+
+        @media print {
+            body { background: white !important; padding: 0 !important; }
+            .no-print { display: none; }
+            .page-break { page-break-before: always; }
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--primary);
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 60px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.02);
+        }
+
+        header {
+            border-bottom: 2px solid var(--primary);
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .title-group h1 {
+            margin: 0;
+            font-size: 28px;
+            letter-spacing: -0.02em;
+        }
+
+        .title-group p {
+            margin: 5px 0 0;
+            color: var(--secondary);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .date {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--secondary);
+        }
+
+        h2 {
+            font-size: 20px;
+            margin-top: 40px;
+            border-left: 4px solid var(--accent);
+            padding-left: 15px;
+            color: var(--accent);
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: #F9F9F7;
+            border: 1px solid var(--border);
+            padding: 20px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .status-success { background: #E8F5E9; color: #2E7D32; }
+        .status-warning { background: #FFF3E0; color: #EF6C00; }
+
+        pre {
+            background: #1E1E1E;
+            color: #D4D4D4;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+        }
+
+        .highlight { color: #4CAF50; font-weight: bold; }
+
+        .btn-print {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--primary);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            border: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .btn-print:hover { transform: translateY(-2px); }
+
+        footer {
+            margin-top: 60px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--secondary);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <button class="btn-print no-print" onclick="window.print()">Export to PDF</button>
+
+    <div class="container">
+        <header>
+            <div class="title-group">
+                <p>System Maintenance Report</p>
+                <h1>Email & Authentication Resolution</h1>
+            </div>
+            <div class="date">DATE: 2026-03-15</div>
+        </header>
+
+        <div class="section">
+            <h2>Summary</h2>
+            <p>This report documents the resolution of critical delivery issues affecting user subscriptions and administrative marketing broadcasts, alongside a fix for administrative portal authentication.</p>
+        </div>
+
+        <div class="section">
+            <h2>1. Admin Authentication Resolution</h2>
+            <div class="card">
+                <span class="status-badge status-success">FIXED</span>
+                <p><strong>Issue:</strong> Continuous '401 Unauthorized' errors during admin login attempts on the <code>/admin/login</code> route.</p>
+                <p><strong>Resolution:</strong> The password for <code>admin@rare.np</code> was securely reset to a verified value. Internal hash comparison confirmed valid matching.</p>
+                <pre>
+[AUTH] Login attempt: admin@rare.np
+[AUTH] Password match: <span class="highlight">true</span>
+[HTTP] POST /api/auth/login <span class="highlight">200 OK</span></pre>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>2. Email Pipeline Verification</h2>
+            <div class="card">
+                <span class="status-badge status-success">VERIFIED</span>
+                <p><strong>Status:</strong> The SMTP integration with <strong>Mailjet</strong> is fully operational. The server is successfully handshaking and queueing emails for delivery.</p>
+                <pre>
+[SMTP] Connecting to in-v3.mailjet.com:587...
+[SMTP] Authentication successful.
+[SMTP] Message queued as <span class="highlight">4a0dcdb5-31fb-4164...</span></pre>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>3. Critical Delivery Warning</h2>
+            <div class="card">
+                <span class="status-badge status-warning">ACTION REQUIRED</span>
+                <p>While the server is transmitting data correctly, external delivery to Gmail/Inboxes requires <strong>Sender Verification</strong> in the Mailjet dashboard.</p>
+                <ul>
+                    <li><strong>Sender:</strong> <code>upretynikesh021@gmail.com</code></li>
+                    <li><strong>Provider:</strong> Mailjet</li>
+                </ul>
+                <p><em>Note: Using a Gmail address as a sender via third-party SMTP often triggers anti-spoofing filters unless verified.</em></p>
+            </div>
+        </div>
+
+        <footer>
+            RARE Nepal · Engineering Division · khusibu, Kathmandu
+        </footer>
+    </div>
+</body>
+</html>

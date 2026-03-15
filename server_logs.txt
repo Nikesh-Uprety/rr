@@ -109,3 +109,21 @@
 12:45:04 AM [express] GET /api/admin/notifications 304 in 244ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]
 [2026-03-14T19:00:35.804Z] [INFO] [APP] [User: 96f421ee-b67d-4d5f-a337-e892b1b4453f] GET /api/admin/notifications 304
 12:45:35 AM [express] GET /api/admin/notifications 304 in 227ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]
+[2026-03-14T19:01:06.651Z] [INFO] [APP] [User: 96f421ee-b67d-4d5f-a337-e892b1b4453f] GET /api/admin/notifications 304
+12:46:06 AM [express] GET /api/admin/notifications 304 in 233ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]
+[2026-03-14T19:01:37.484Z] [INFO] [APP] [User: 96f421ee-b67d-4d5f-a337-e892b1b4453f] GET /api/admin/notifications 304
+12:46:37 AM [express] GET /api/admin/notifications 304 in 228ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]
+[2026-03-14T19:02:08.396Z] [INFO] [APP] [User: 96f421ee-b67d-4d5f-a337-e892b1b4453f] GET /api/admin/notifications 304
+12:47:08 AM [express] GET /api/admin/notifications 304 in 236ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]
+[2026-03-14T19:02:39.373Z] [INFO] [APP] [User: 96f421ee-b67d-4d5f-a337-e892b1b4453f] GET /api/admin/notifications 304
+12:47:39 AM [express] GET /api/admin/notifications 304 in 223ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]
+[2026-03-14T19:03:10.215Z] [INFO] [APP] [User: 96f421ee-b67d-4d5f-a337-e892b1b4453f] GET /api/admin/notifications 304
+12:48:10 AM [express] GET /api/admin/notifications 304 in 221ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]
+[2026-03-14T19:03:41.110Z] [INFO] [APP] [User: 96f421ee-b67d-4d5f-a337-e892b1b4453f] GET /api/admin/notifications 304
+12:48:41 AM [express] GET /api/admin/notifications 304 in 234ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]
+[2026-03-14T19:04:11.980Z] [INFO] [APP] [User: 96f421ee-b67d-4d5f-a337-e892b1b4453f] GET /api/admin/notifications 304
+12:49:11 AM [express] GET /api/admin/notifications 304 in 237ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]
+[2026-03-14T19:04:42.855Z] [INFO] [APP] [User: 96f421ee-b67d-4d5f-a337-e892b1b4453f] GET /api/admin/notifications 304
+12:49:42 AM [express] GET /api/admin/notifications 304 in 235ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]
+[2026-03-14T19:05:13.790Z] [INFO] [APP] [User: 96f421ee-b67d-4d5f-a337-e892b1b4453f] GET /api/admin/notifications 304
+12:50:13 AM [express] GET /api/admin/notifications 304 in 244ms [96f421ee-b67d-4d5f-a337-e892b1b4453f]

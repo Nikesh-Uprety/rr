@@ -22,10 +22,14 @@ if (isSMTPConfigured) {
       user: SMTP_USER,
       pass: SMTP_PASS,
     },
+    // Required for some cloud providers and Mailjet fallback ports
+    tls: {
+      rejectUnauthorized: false
+    },
     debug: true,
     logger: true,
   });
-  console.log("[EMAIL] SMTP transporter configured:", SMTP_HOST);
+  console.log(`[EMAIL] SMTP transporter configured: ${SMTP_HOST}:${SMTP_PORT} (secure: ${SMTP_PORT === 465})`);
 }
 
 // Sender configuration - can be set via environment or use default
@@ -61,9 +65,15 @@ export async function sendOTPEmail(to: string, code: string, name: string) {
         </div>
       `,
     });
-    console.log("[SMTP] OTP email sent to:", to);
-  } catch (err) {
-    console.warn("[SMTP] OTP delivery failed for", to, "Error:", err);
+    console.log(`[SMTP] OTP email sent to: ${to}`);
+  } catch (err: any) {
+    console.warn("[SMTP] OTP delivery failed for", to, "Error:", {
+      message: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+      stack: err.stack
+    });
   }
 }
 
@@ -100,9 +110,15 @@ export async function sendInviteEmail(
         </div>
       `,
     });
-    console.log("[SMTP] Invite email sent to:", to);
-  } catch (err) {
-    console.warn("[SMTP] Invite delivery failed for", to, "Error:", err);
+    console.log(`[SMTP] Invite email sent to: ${to}`);
+  } catch (err: any) {
+    console.warn("[SMTP] Invite delivery failed for", to, "Error:", {
+      message: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+      stack: err.stack
+    });
   }
 }
 
@@ -118,9 +134,15 @@ export async function sendContactReplyEmail(to: string, subject: string, html: s
       subject,
       html,
     });
-    console.log("[SMTP] Contact reply email sent to:", to);
-  } catch (err) {
-    console.warn("[SMTP] Contact reply delivery failed for", to, "Error:", err);
+    console.log(`[SMTP] Contact reply email sent to: ${to}`);
+  } catch (err: any) {
+    console.warn("[SMTP] Contact reply delivery failed for", to, "Error:", {
+      message: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+      stack: err.stack
+    });
   }
 }
 
@@ -136,9 +158,15 @@ export async function sendMarketingBroadcastEmail(bccList: string[], subject: st
       subject,
       html,
     });
-    console.log("[SMTP] Marketing broadcast email sent to:", bccList.length, "recipients");
-  } catch (err) {
-    console.warn("[SMTP] Marketing broadcast failed. Error:", err);
+    console.log(`[SMTP] Marketing broadcast email sent to: ${bccList.length} recipients`);
+  } catch (err: any) {
+    console.warn("[SMTP] Marketing broadcast failed. Error:", {
+      message: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+      stack: err.stack
+    });
   }
 }
 
@@ -170,8 +198,14 @@ export async function sendNewsletterWelcomeEmail(to: string) {
         </div>
       `,
     });
-    console.log("[SMTP] Newsletter welcome email sent to:", to);
-  } catch (err) {
-    console.warn("[SMTP] Newsletter welcome failed for", to, "Error:", err);
+    console.log(`[SMTP] Newsletter welcome email sent to: ${to}`);
+  } catch (err: any) {
+    console.warn("[SMTP] Newsletter welcome failed for", to, "Error:", {
+      message: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+      stack: err.stack
+    });
   }
 }

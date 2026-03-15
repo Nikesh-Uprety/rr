@@ -39,6 +39,7 @@ const AdminNotifications = lazy(() => import("@/pages/admin/Notifications"));
 
 const LoginPage = lazy(() => import("@/pages/auth/Login"));
 const NotFound = lazy(() => import("@/pages/not-found"));
+const LegalPlaceholder = lazy(() => import("@/pages/storefront/LegalPlaceholder"));
 
 function StorefrontLayout({ children }: { children: React.ReactNode }) {
   // Finish the pre-loader when the main app layout has mounted
@@ -223,6 +224,28 @@ function Router() {
       </Route>
       <Route path="/admin/login">
         <LoginRoute />
+      </Route>
+
+      {/* Legal Placeholders */}
+      <Route path="/shipping">
+        <StorefrontLayout>
+          <LegalPlaceholder />
+        </StorefrontLayout>
+      </Route>
+      <Route path="/refund">
+        <StorefrontLayout>
+          <LegalPlaceholder />
+        </StorefrontLayout>
+      </Route>
+      <Route path="/privacy">
+        <StorefrontLayout>
+          <LegalPlaceholder />
+        </StorefrontLayout>
+      </Route>
+      <Route path="/terms">
+        <StorefrontLayout>
+          <LegalPlaceholder />
+        </StorefrontLayout>
       </Route>
       
       <Route component={NotFound} />

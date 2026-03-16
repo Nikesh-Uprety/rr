@@ -13,6 +13,26 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 
 const app = express();
+
+// RENDER DEPLOYMENT NOTE:
+// This app requires Render Persistent Disk to preserve uploads
+// across deploys. Mount path: /uploads, recommended size: 1GB.
+// Without Persistent Disk, all uploaded images are lost on redeploy.
+// Enable at: Render Dashboard → Your Service → Disks → Add Disk
+import fs from "fs";
+import path from "path";
+
+const UPLOAD_DIRS = [
+  "uploads/products",
+  "uploads/site-assets/hero",
+  "uploads/site-assets/featured_collection",
+  "uploads/site-assets/new_collection",
+];
+
+UPLOAD_DIRS.forEach(dir => {
+  fs.mkdirSync(path.join(process.cwd(), dir), { recursive: true });
+});
+
 // Behind Render's proxy, trust X-Forwarded-* so secure cookies work
 app.set("trust proxy", 1);
 const httpServer = createServer(app);

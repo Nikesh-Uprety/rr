@@ -17,6 +17,7 @@ import {
   Terminal,
   Menu,
   X,
+  Images,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -177,6 +178,23 @@ export default function AdminLayout({
               </Link>
             );
           })}
+          <div className="mt-6">
+            <p className="px-4 pb-2 text-[10px] font-semibold tracking-[0.3em] uppercase text-white/40 dark:text-black/40">
+              Storefront
+            </p>
+            <Link
+              href="/admin/landing-page"
+              className={cn(
+                "flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300 group/nav",
+                location === "/admin/landing-page"
+                  ? "bg-white dark:bg-black text-black dark:text-white shadow-xl shadow-black/40 dark:shadow-white/20 scale-[1.02]"
+                  : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
+              )}
+            >
+              <Images className="h-6 w-6" />
+              <span className="text-[12px] tracking-wider">Landing Page</span>
+            </Link>
+          </div>
         </nav>
 
         <div className="p-6 border-t border-white/5 dark:border-black/5 bg-neutral-900/40 dark:bg-neutral-50/40">
@@ -262,6 +280,26 @@ export default function AdminLayout({
                     </Link>
                   );
                 })}
+                <div className="mt-6">
+                  <p className="px-4 pb-2 text-[10px] font-semibold tracking-[0.3em] uppercase text-white/40 dark:text-black/40">
+                    Storefront
+                  </p>
+                  <Link
+                    href="/admin/landing-page"
+                    onClick={() => {
+                      setSidebarOpen(false);
+                    }}
+                    className={cn(
+                      "flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300",
+                      location === "/admin/landing-page"
+                        ? "bg-white dark:bg-black text-black dark:text-white shadow-xl"
+                        : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
+                    )}
+                  >
+                    <Images className="h-6 w-6" />
+                    <span className="text-[12px] tracking-wider">Landing Page</span>
+                  </Link>
+                </div>
               </nav>
 
               <div className="p-6 border-t border-white/5 dark:border-black/5">

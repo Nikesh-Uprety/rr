@@ -16,14 +16,15 @@ export const OptimizedImage = ({
   priority = false,
   ...props 
 }: OptimizedImageProps) => {
-  // Extract the base path and filename without extension
-  const basePath = src.split('.').slice(0, -1).join('.');
-  const webpPath = `${basePath}.webp`;
+  // Only attempt WebP substitution for local images
+  const isLocal = src.startsWith("/");
+  const basePath = src.includes(".") ? src.split(".").slice(0, -1).join(".") : src;
+  const webpPath = isLocal ? `${basePath}.webp` : src;
 
   return (
     <picture>
-      <source srcSet={webpPath} type="image/webp" />
-      <source srcSet={src} type={`image/${fallbackExt === 'jpg' ? 'jpeg' : fallbackExt}`} />
+      {isLocal && <source srcSet={webpPath} type="image/webp" />}
+      <source srcSet={src} type={src.endsWith(".jpg") || src.endsWith(".jpeg") ? "image/jpeg" : `image/png`} />
       <img 
         src={src} 
         alt={alt} 

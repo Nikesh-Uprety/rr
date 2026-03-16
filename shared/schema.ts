@@ -367,3 +367,33 @@ export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({
 
 export type PromoCode = typeof promoCodes.$inferSelect;
 export type InsertPromoCode = z.infer<typeof insertPromoCodeSchema>;
+
+// ── Site Assets (Landing Page Images) ──────────────────
+export const siteAssets = pgTable("site_assets", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  section: text("section").notNull(),
+  // hero | featured_collection | new_collection
+  imageUrl: text("image_url").notNull(),
+  // Cloudinary delivery URL (permanent, survives deploys)
+  cloudinaryPublicId: text("cloudinary_public_id").notNull(),
+  // needed for deletion via Cloudinary API
+  altText: text("alt_text").default(""),
+  deviceTarget: text("device_target").notNull().default("all"),
+  // all | desktop | mobile
+  assetType: text("asset_type").notNull().default("image"),
+  // image | video
+  videoUrl: text("video_url"),
+  // Cloudinary embed URL for videos
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  uploadedBy: varchar("uploaded_by")
+    .references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type SiteAsset = typeof siteAssets.$inferSelect;
+export type InsertSiteAsset = typeof siteAssets.$inferInsert;

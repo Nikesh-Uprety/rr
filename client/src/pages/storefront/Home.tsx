@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
 import { MOCK_PRODUCTS } from "@/lib/mockData";
@@ -14,15 +14,27 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
 
-const HERO_IMAGES = [
-  "/images/landingpage3.webp",
-  "/images/landingpage4.webp"
+type SiteAsset = {
+  id: string;
+  section: string;
+  imageUrl: string;
+  altText: string | null;
+  deviceTarget: string;
+  assetType: "image" | "video";
+  videoUrl: string | null;
+  sortOrder: number;
+  active: boolean;
+};
+
+const HERO_IMAGES_FALLBACK = [
+  "https://placehold.co/1920x800/0a0e1a/6366f1?text=RARE.NP",
 ];
 
-const LIFESTYLE_IMAGES = [
-  "/images/feature_premium_1.webp",
-  "/images/feature2.webp",
-  "/images/feature3.webp",
+const LIFESTYLE_IMAGES_FALLBACK = [
+  "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/631740212_17994330563913773_2587884432133361953_n.jpg?stp=dst-jpegr_e35_tt6&_nc_cat=100&ig_cache_key=MzgzMDk2Nzc4NDI1NjQ2MTc0OA%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTkyMC5oZHIuQzMifQ%3D%3D&_nc_ohc=WHAtzLrmUw0Q7kNvwGZrMhY&_nc_oc=AdkqVNju-2AEOO-fn-AAnUa0TPWgAGyG6Rki48MU9gwLm4w0V1IiaidBIpz8Zd0A4P0&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=291tdQM7tKQUnIlBz26x5g&_nc_ss=8&oh=00_AfxPGSDL-niDxVGt9ePHCQRPO21x9E_0NDNSrJUZGMF2LQ&oe=69BDA11A",
+  "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/601064673_17988135542913773_395755096348511217_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=103&ig_cache_key=Mzc4OTUwOTgwMzg0NTQ5NDg5MA%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTc5NS5zZHIuQzMifQ%3D%3D&_nc_ohc=MtEtHv7NcAgQ7kNvwHwy6sz&_nc_oc=Adk6Llzm6Ews4P_r2brHfIZkHXcWlljxFVulZ6urWQfATyMefNIIcH--KNV4K3wKeic&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=KLgY0WiWUz90hQ3-kU0wjQ&_nc_ss=8&oh=00_Afx0cuyYIHwRuTfg-fnqVA4Vb34Sq-t3VFdoTDT2eFosJQ&oe=69BD72BA",
+  "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/589049070_17986476560913773_350565688129391821_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=102&ig_cache_key=Mzc3ODU3ODg0MjAwNTY0NTU5Nw%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTc5NS5zZHIuQzMifQ%3D%3D&_nc_ohc=xHR20j7rQNoQ7kNvwFO9t2s&_nc_oc=AdkrxPNMtgOtY3GmtQghJriONkvXttDjhc9pUDC7HWn0AJ9XWcEIc9u-2t9GjH5P49Y&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=KLgY0WiWUz90hQ3-kU0wjQ&_nc_ss=8&oh=00_AfykWLe3XijJQFThpyjPobnr0u1kWg-W6_FOpPeJUKu8tw&oe=69BD7C79",
+  "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/575594259_17984209781913773_7313822284254687486_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=103&ig_cache_key=Mzc2MTk2MjA2MjM5NTM4MDg3NQ%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTgwMC5zZHIuQzMifQ%3D%3D&_nc_ohc=T1IjMD62vJ8Q7kNvwGnWT7G&_nc_oc=Adlo703DNg6YfjJOHEClflyLa1KUFDsIe6BF8UY8c_j-h5Gh5WWTKd6r1LJZOTQmMCs&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=WcwdBNgmsQH2FyyZK7KI_A&_nc_ss=8&oh=00_AfzGvCdkiyzlTeSs6sqFWTFyQBWQHdmxlrdGxpHsMEj5JA&oe=69BD8D26"
 ];
 
 const FEATURED_STATIC_IMAGES = [
@@ -208,7 +220,8 @@ export default function Home() {
   const { toast } = useToast();
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [carouselIndex, setCarouselIndex] = useState(0);
-  const [heroMode, setHeroMode] = useState<"video" | "image">("video");
+  const [heroMode, setHeroMode] = useState<"video" | "image">("image");
+  const [isMobile, setIsMobile] = useState(false);
   const [heroIndex, setHeroIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -231,6 +244,82 @@ export default function Home() {
     queryFn: () => fetchProducts({ limit: 4 }),
   });
 
+  const {
+    data: heroAssets = [],
+    isLoading: heroLoading,
+  } = useQuery<SiteAsset[]>({
+    queryKey: ["siteAssets", "hero"],
+    queryFn: () =>
+      fetch("/api/site-assets/hero")
+        .then((r) => r.json())
+        .then((r) => r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: featuredAssets = [] } = useQuery<SiteAsset[]>({
+    queryKey: ["siteAssets", "featured_collection"],
+    queryFn: () =>
+      fetch("/api/site-assets/featured_collection")
+        .then((r) => r.json())
+        .then((r) => r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: campaignAssets = [] } = useQuery<SiteAsset[]>({
+    queryKey: ["siteAssets", "new_collection"],
+    queryFn: () =>
+      fetch("/api/site-assets/new_collection")
+        .then((r) => r.json())
+        .then((r) => r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Device detection and initial hero mode
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      if (mobile) {
+        setHeroMode("video");
+      } else {
+        setHeroMode("image");
+      }
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const filteredHeroAssets = useMemo(() => {
+    if (isMobile) {
+      // On mobile: Show video first (if any), then up to 2 images targeted for mobile or all
+      const videos = heroAssets.filter(a => a.active && a.assetType === "video" && (a.deviceTarget === "all" || a.deviceTarget === "mobile"));
+      const images = heroAssets.filter(a => a.active && a.assetType === "image" && (a.deviceTarget === "all" || a.deviceTarget === "mobile")).slice(0, 2);
+      return [...videos, ...images];
+    } else {
+      // On desktop: Show only images targeted for desktop or all
+      return heroAssets.filter(a => a.active && a.assetType === "image" && (a.deviceTarget === "all" || a.deviceTarget === "desktop"));
+    }
+  }, [heroAssets, isMobile]);
+
+  const heroItems = filteredHeroAssets.length > 0
+    ? filteredHeroAssets
+    : HERO_IMAGES_FALLBACK.map(url => ({ imageUrl: url, assetType: "image" } as any));
+
+  // For backward compatibility with existing code using heroImages array
+  const heroImages = heroItems.filter(a => a.assetType === "image").map(a => a.imageUrl);
+  
+  // Find the first video asset for mobile hero
+  const heroVideo = filteredHeroAssets.find(a => a.assetType === "video");
+
+  const lifestyleImages = featuredAssets.length > 0
+    ? featuredAssets.map((a) => a.imageUrl)
+    : LIFESTYLE_IMAGES_FALLBACK;
+
+  const campaignBannerImage = campaignAssets.length > 0
+    ? campaignAssets[0].imageUrl
+    : "/images/landingpage3.webp";
+
   // Finish pre-loader only when data is ready (Hydration-First)
   useEffect(() => {
     if (isFeaturedSuccess && isNewArrivalsSuccess) {
@@ -246,17 +335,17 @@ export default function Home() {
 
   // Preload static campaign images
   useEffect(() => {
-    HERO_IMAGES.forEach((src) => {
+    heroImages.forEach((src: string) => {
       const img = new Image();
       img.src = src;
     });
-    LIFESTYLE_IMAGES.forEach((src) => {
+    lifestyleImages.forEach((src) => {
       if (!src.startsWith('http')) {
         const img = new Image();
         img.src = src;
       }
     });
-  }, []);
+  }, [heroImages, lifestyleImages]);
 
   const goToSlide = useCallback((index: number) => {
     if (isTransitioning) return;
@@ -266,12 +355,12 @@ export default function Home() {
   }, [isTransitioning]);
 
   const goNext = useCallback(() => {
-    goToSlide((carouselIndex + 1) % LIFESTYLE_IMAGES.length);
-  }, [carouselIndex, goToSlide]);
+    goToSlide((carouselIndex + 1) % lifestyleImages.length);
+  }, [carouselIndex, goToSlide, lifestyleImages.length]);
 
   const goPrev = useCallback(() => {
-    goToSlide((carouselIndex - 1 + LIFESTYLE_IMAGES.length) % LIFESTYLE_IMAGES.length);
-  }, [carouselIndex, goToSlide]);
+    goToSlide((carouselIndex - 1 + lifestyleImages.length) % lifestyleImages.length);
+  }, [carouselIndex, goToSlide, lifestyleImages.length]);
 
   // Pause auto-scroll on interaction, resume after 5s
   const pauseAutoScroll = useCallback(() => {
@@ -284,37 +373,50 @@ export default function Home() {
     }
     interactionTimeoutRef.current = setTimeout(() => {
       autoPlayRef.current = setInterval(() => {
-        setCarouselIndex((i) => (i + 1) % LIFESTYLE_IMAGES.length);
+        setCarouselIndex((i) => (i + 1) % lifestyleImages.length);
       }, 5000);
     }, 5000);
-  }, []);
+  }, [lifestyleImages.length]);
 
   // Auto-scroll effect
   useEffect(() => {
     autoPlayRef.current = setInterval(() => {
-      setCarouselIndex((i) => (i + 1) % LIFESTYLE_IMAGES.length);
+      setCarouselIndex((i) => (i + 1) % lifestyleImages.length);
     }, 5000);
     
     const heroInterval = setInterval(() => {
       setHeroIndex((prev) => {
-        // We only auto-advance if we are in image mode
+        if (!isMobile) {
+          // On desktop, just cycle images
+          return heroImages.length > 0 ? (prev + 1) % heroImages.length : 0;
+        }
+
+        // On mobile
         if (heroMode === "video") return prev;
 
-        const next = (prev + 1) % HERO_IMAGES.length;
-        if (next === 0) {
-          setHeroMode("video"); // Loop back to video after all images
+        const next = (prev + 1) % heroImages.length;
+        if (next === 0 && heroVideo) {
+          setHeroMode("video");
           return 0;
         }
         return next;
       });
     }, 6000);
 
+    const handleResize = () => {
+      if (window.innerWidth >= 1024 && heroMode === "video") {
+        setHeroMode("image");
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
     return () => {
       if (autoPlayRef.current) clearInterval(autoPlayRef.current);
       if (interactionTimeoutRef.current) clearTimeout(interactionTimeoutRef.current);
       clearInterval(heroInterval);
+      window.removeEventListener('resize', handleResize);
     };
-  }, [heroMode]);
+  }, [heroMode, lifestyleImages.length, heroImages.length]);
 
   const newsletterMutation = useMutation({
     mutationFn: async (email: string) => {
@@ -397,7 +499,7 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative h-[90vh] min-h-[650px] md:min-h-[750px] lg:min-h-[850px] w-full overflow-hidden bg-neutral-900">
         <AnimatePresence mode="popLayout">
-          {heroMode === "video" ? (
+          {heroMode === "video" && (heroVideo || isMobile) ? (
             <motion.div
               key="hero-video"
               initial={{ opacity: 0 }}
@@ -406,18 +508,49 @@ export default function Home() {
               transition={{ duration: 1.5, ease: "easeInOut" }}
               className="absolute inset-0 w-full h-full"
             >
-              <PerformanceVideo
-                sources={[
-                  { src: "/videos/hero-campaign.mp4", type: "video/mp4" }
-                ]}
-                poster={HERO_IMAGES[0]}
-                onEnded={() => {
-                  setHeroMode("image");
-                  setHeroIndex(0);
-                }}
-                className="w-full h-full"
-              />
+              {heroVideo?.videoUrl ? (
+                <div className="w-full h-full relative">
+                  <iframe
+                    src={heroVideo.videoUrl.includes("cloudinary.com") && !heroVideo.videoUrl.includes("embed") 
+                      ? heroVideo.videoUrl.replace("/video/upload/", "/video/upload/e_loop/") 
+                      : heroVideo.videoUrl}
+                    className="w-full h-full border-0"
+                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                    allowFullScreen
+                    style={{ height: "100%", width: "100%", objectFit: "cover" }}
+                  />
+                  {/* Overlay to handle transition and touch events if needed */}
+                  <div className="absolute inset-0 z-10 bg-transparent" onClick={() => {
+                    setHeroMode("image");
+                    setHeroIndex(0);
+                  }} />
+                  {/* Button to skip video manually */}
+                  <button 
+                    onClick={() => { setHeroMode("image"); setHeroIndex(0); }}
+                    className="absolute bottom-10 right-10 z-30 bg-white/20 hover:bg-white/40 backdrop-blur-md text-white text-[9px] uppercase tracking-widest px-4 py-2 rounded-full border border-white/20 transition-all"
+                  >
+                    Skip Video
+                  </button>
+                </div>
+              ) : (
+                <PerformanceVideo
+                  sources={[
+                    { src: "/videos/videorare.mp4", type: "video/mp4" }
+                  ]}
+                  poster={heroImages[0]}
+                  onEnded={() => {
+                    setHeroMode("image");
+                    setHeroIndex(0);
+                  }}
+                  className="w-full h-full"
+                />
+              )}
             </motion.div>
+          ) : heroLoading ? (
+            <div
+              className="absolute inset-0 w-full h-full animate-pulse bg-muted"
+              style={{ aspectRatio: "1920/800" }}
+            />
           ) : (
             <motion.div
               key={`hero-image-${heroIndex}`}
@@ -428,9 +561,9 @@ export default function Home() {
               className="absolute inset-0 w-full h-full"
             >
               <OptimizedImage
-                src={HERO_IMAGES[heroIndex]}
+                src={heroImages[heroIndex]}
                 alt="Luxury street style campaign"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover object-center"
                 priority
                 loading="eager"
               />
@@ -627,12 +760,12 @@ export default function Home() {
             className="flex h-full transition-transform duration-600 ease-in-out"
             style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
           >
-            {LIFESTYLE_IMAGES.map((src, i) => (
+            {lifestyleImages.map((src, i) => (
               <img
                 key={src}
                 src={src}
                 alt={`Featured collection image ${i + 1}`}
-                className="w-full h-full object-cover flex-shrink-0"
+                className="w-full h-full object-cover object-center flex-shrink-0"
                 draggable={false}
               />
             ))}
@@ -658,7 +791,7 @@ export default function Home() {
 
           {/* Dynamic dot indicators */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2.5 items-center bg-black/20 backdrop-blur-sm rounded-full px-3 py-2">
-            {LIFESTYLE_IMAGES.map((_, i) => (
+            {lifestyleImages.map((_, i) => (
               <button
                 key={i}
                 onClick={(e) => { e.stopPropagation(); pauseAutoScroll(); goToSlide(i); }}
@@ -687,9 +820,9 @@ export default function Home() {
           className="absolute inset-0 w-full h-[120%] -top-[10%]"
         >
           <img
-            alt="Campaign story"
+            alt={campaignAssets[0]?.altText || "Campaign story"}
             className="w-full h-full object-cover scale-110"
-            src="/images/landingpage3.webp"
+            src={campaignBannerImage}
           />
         </motion.div>
         

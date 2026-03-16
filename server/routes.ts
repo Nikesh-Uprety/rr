@@ -3,6 +3,7 @@ import fs from "fs";
 import { type Server } from "http";
 import path from "path";
 import sharp from "sharp";
+import multer from "multer";
 import { z } from "zod";
 import { passport } from "./auth";
 import { storage } from "./storage";
@@ -17,7 +18,8 @@ import {
     posSessions,
     Product,
     products,
-    promoCodes
+    promoCodes,
+    siteAssets
 } from "../shared/schema";
 import { db } from "./db";
 import {
@@ -32,10 +34,20 @@ import { requireAdmin } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
 import { rateLimit } from "./middleware/security";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
+import { uploadToCloudinary, deleteFromCloudinary } from "./lib/cloudinary";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
 const PRODUCTS_UPLOADS_DIR = path.join(process.cwd(), "uploads", "products");
+
+const memoryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 function ensureUploadsDir() {
   if (!fs.existsSync(UPLOADS_DIR)) {
@@ -784,6 +796,353 @@ export async function registerRoutes(
       } catch (err) {
         console.error("Error in POST /api/admin/upload-product-image", err);
         return res.status(500).json({ success: false, error: "Failed to upload image" });
+      }
+    },
+  );
+
+  // ── Site Assets (Landing Page Images) ──────────────────────────────
+  const validSiteAssetSections = [
+    "hero",
+    "featured_collection",
+    "new_collection",
+  ] as const;
+
+  type SiteAssetSection = (typeof validSiteAssetSections)[number];
+
+  // Upload site asset image (Cloudinary, admin only)
+  app.post(
+    "/api/admin/site-assets/upload",
+    requireAdmin,
+    memoryUpload.single("image"),
+    async (req: Request, res: Response) => {
+      try {
+        const { section, altText = "", deviceTarget = "all" } = req.body as {
+          section?: string;
+          altText?: string;
+          deviceTarget?: string;
+        };
+
+        if (!section || !validSiteAssetSections.includes(section as SiteAssetSection)) {
+          return res.status(400).json({
+            success: false,
+            error: "Invalid section",
+          });
+        }
+
+        if (!req.file || !req.file.buffer) {
+          return res.status(400).json({
+            success: false,
+            error: "Invalid or missing image file",
+          });
+        }
+
+        const { url, publicId } = await uploadToCloudinary(req.file.buffer, section);
+
+        const [{ max }] = await db
+          .select({ max: sql<number>`COALESCE(MAX(${siteAssets.sortOrder}), -1)` })
+          .from(siteAssets)
+          .where(eq(siteAssets.section, section));
+
+        const [created] = await db
+          .insert(siteAssets)
+          .values({
+            section,
+            imageUrl: url,
+            cloudinaryPublicId: publicId,
+            altText,
+            deviceTarget,
+            assetType: "image",
+            sortOrder: (max ?? -1) + 1,
+            active: true,
+            uploadedBy: req.user?.id ?? null,
+          })
+          .returning();
+
+        return res.json({ success: true, data: created });
+      } catch (err) {
+        console.error("Error in POST /api/admin/site-assets/upload", err);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to upload image",
+        });
+      }
+    },
+  );
+
+  // Add site asset video (Admin only)
+  app.post(
+    "/api/admin/site-assets/video",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { section, altText = "", deviceTarget = "mobile", videoUrl, imageUrl = "" } = req.body;
+
+        if (!section || !validSiteAssetSections.includes(section as SiteAssetSection)) {
+          return res.status(400).json({ success: false, error: "Invalid section" });
+        }
+
+        if (!videoUrl) {
+          return res.status(400).json({ success: false, error: "Missing video URL" });
+        }
+
+        const [{ max }] = await db
+          .select({ max: sql<number>`COALESCE(MAX(${siteAssets.sortOrder}), -1)` })
+          .from(siteAssets)
+          .where(eq(siteAssets.section, section));
+
+        const [created] = await db
+          .insert(siteAssets)
+          .values({
+            section,
+            imageUrl, // Poster image or thumbnail
+            cloudinaryPublicId: "video_asset", // Not needed for embedded videos
+            altText,
+            deviceTarget,
+            assetType: "video",
+            videoUrl,
+            sortOrder: (max ?? -1) + 1,
+            active: true,
+            uploadedBy: req.user?.id ?? null,
+          })
+          .returning();
+
+        return res.json({ success: true, data: created });
+      } catch (err) {
+        console.error("Error in POST /api/admin/site-assets/video", err);
+        return res.status(500).json({ success: false, error: "Failed to add video asset" });
+      }
+    },
+  );
+
+  // Public: get active assets for a section
+  app.get(
+    "/api/site-assets/:section",
+    async (req: Request, res: Response) => {
+      try {
+        const section = req.params.section as string;
+        if (!validSiteAssetSections.includes(section as SiteAssetSection)) {
+          return res.status(400).json({
+            success: false,
+            error: "Invalid section",
+          });
+        }
+
+        const assets = await db
+          .select()
+          .from(siteAssets)
+          .where(
+            and(
+              eq(siteAssets.section, section),
+              eq(siteAssets.active, true),
+            ),
+          )
+          .orderBy(siteAssets.sortOrder);
+
+        res.setHeader("Cache-Control", "public, max-age=300");
+        return res.json({ success: true, data: assets });
+      } catch (err) {
+        console.error("Error in GET /api/site-assets/:section", err);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to load site assets",
+        });
+      }
+    },
+  );
+
+  // Admin: get all assets (optionally filtered by section)
+  app.get(
+    "/api/admin/site-assets",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const section = getQueryParam(req.query.section);
+
+        let query = db.select().from(siteAssets);
+
+        if (section) {
+          query = query.where(eq(siteAssets.section, section));
+        }
+
+        const assets = await query.orderBy(siteAssets.sortOrder);
+
+        return res.json({ success: true, data: assets });
+      } catch (err) {
+        console.error("Error in GET /api/admin/site-assets", err);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to load site assets",
+        });
+      }
+    },
+  );
+
+  // Admin: reorder assets (must be before :id route)
+  app.patch(
+    "/api/admin/site-assets/reorder",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const schema = z.object({
+        section: z.string().min(1),
+        orderedIds: z.array(z.string().min(1)).min(1),
+      });
+
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid payload" });
+      }
+
+      const { section, orderedIds } = parsed.data;
+
+      if (!validSiteAssetSections.includes(section as SiteAssetSection)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid section",
+        });
+      }
+
+      try {
+        await db.transaction(async (tx) => {
+          await Promise.all(
+            orderedIds.map((id, index) =>
+              tx
+                .update(siteAssets)
+                .set({ sortOrder: index })
+                .where(
+                  and(
+                    eq(siteAssets.id, id),
+                    eq(siteAssets.section, section),
+                  ),
+                ),
+            ),
+          );
+        });
+
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/site-assets/reorder", err);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to reorder site assets",
+        });
+      }
+    },
+  );
+
+  // Admin: update a single asset (altText / active)
+  app.patch(
+    "/api/admin/site-assets/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const schema = z.object({
+        altText: z.string().optional(),
+        active: z.boolean().optional(),
+        deviceTarget: z.string().optional(),
+        assetType: z.string().optional(),
+        videoUrl: z.string().optional(),
+        imageUrl: z.string().optional(),
+      });
+
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid payload" });
+      }
+
+      const { id } = req.params;
+      if (typeof id !== "string") {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid ID" });
+      }
+
+      const update: any = {};
+      
+      if (parsed.data.altText !== undefined) update.altText = parsed.data.altText;
+      if (parsed.data.active !== undefined) update.active = parsed.data.active;
+      if (parsed.data.deviceTarget !== undefined) update.deviceTarget = parsed.data.deviceTarget;
+      if (parsed.data.assetType !== undefined) update.assetType = parsed.data.assetType;
+      if (parsed.data.videoUrl !== undefined) update.videoUrl = parsed.data.videoUrl;
+      if (parsed.data.imageUrl !== undefined) update.imageUrl = parsed.data.imageUrl;
+
+      try {
+        const [updated] = await db
+          .update(siteAssets)
+          .set(update)
+          .where(eq(siteAssets.id, id))
+          .returning();
+
+        if (!updated) {
+          return res
+            .status(404)
+            .json({ success: false, error: "Site asset not found" });
+        }
+
+        return res.json({ success: true, data: updated });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/site-assets/:id", err);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to update site asset",
+        });
+      }
+    },
+  );
+
+  // Admin: delete asset (DB + Cloudinary)
+  app.delete(
+    "/api/admin/site-assets/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid ID" });
+      }
+
+      try {
+        const [existing] = await db
+          .select()
+          .from(siteAssets)
+          .where(eq(siteAssets.id, id))
+          .limit(1);
+
+        if (!existing) {
+          return res
+            .status(404)
+            .json({ success: false, error: "Site asset not found" });
+        }
+
+        if (existing.cloudinaryPublicId) {
+          try {
+            await deleteFromCloudinary(existing.cloudinaryPublicId);
+          } catch (err) {
+            console.error(
+              "Failed to delete from Cloudinary for site asset",
+              err,
+            );
+            return res.status(500).json({
+              success: false,
+              error: "Failed to delete image from Cloudinary",
+            });
+          }
+        }
+
+        await db
+          .delete(siteAssets)
+          .where(eq(siteAssets.id, id));
+
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in DELETE /api/admin/site-assets/:id", err);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to delete site asset",
+        });
       }
     },
   );
@@ -2479,6 +2838,100 @@ export async function registerRoutes(
       handleApiError(res, err, "GET /api/promo-codes/validate");
     }
   });
+
+  // ── Media Discovery (Admin Only) ──────────────────────────────────
+  app.get("/api/admin/media", requireAdmin, async (_req, res) => {
+    try {
+      const allSiteAssets = await db.select({ imageUrl: siteAssets.imageUrl }).from(siteAssets);
+      const allProducts = await db.select({ 
+        imageUrl: products.imageUrl,
+        galleryUrls: products.galleryUrls 
+      }).from(products);
+
+      const urls = new Set<string>();
+
+      allSiteAssets.forEach(a => {
+        if (a.imageUrl) urls.add(a.imageUrl);
+      });
+
+      allProducts.forEach(p => {
+        if (p.imageUrl) urls.add(p.imageUrl);
+        if (p.galleryUrls) {
+          try {
+            const gallery = JSON.parse(p.galleryUrls);
+            if (Array.isArray(gallery)) {
+              gallery.forEach((u: any) => {
+                if (typeof u === "string") urls.add(u);
+              });
+            }
+          } catch (e) {
+            // Skip invalid JSON
+          }
+        }
+      });
+
+      // Also include some known static defaults if needed
+      const staticPresets = [
+        "/images/hero_premium_1.webp",
+        "/images/hero_premium_2.webp",
+        "/images/feature_premium_1.webp",
+        "/images/landingpage4.webp",
+        "/images/newcollection.jpeg",
+        "/images/landingpage3.webp",
+      ];
+      staticPresets.forEach(u => urls.add(u));
+
+      res.json({ success: true, data: Array.from(urls) });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/admin/media");
+    }
+  });
+
+  // ── Seed preset landing-page images (one-time) ─────────────────────
+  async function seedSiteAssetsIfEmpty() {
+    try {
+      const existing = await db
+        .select({ id: siteAssets.id })
+        .from(siteAssets)
+        .limit(1);
+
+      if (existing.length > 0) return; // Already seeded
+
+      const presets: {
+        section: string;
+        imageUrl: string;
+        altText: string;
+        sortOrder: number;
+      }[] = [
+        // Hero banners
+        { section: "hero", imageUrl: "/images/hero_premium_1.webp", altText: "Rare Atelier hero banner 1", sortOrder: 0 },
+        { section: "hero", imageUrl: "/images/hero_premium_2.webp", altText: "Rare Atelier hero banner 2", sortOrder: 1 },
+        // Featured collection
+        { section: "featured_collection", imageUrl: "/images/feature_premium_1.webp", altText: "Featured collection lifestyle", sortOrder: 0 },
+        { section: "featured_collection", imageUrl: "/images/landingpage4.webp", altText: "Featured collection campaign", sortOrder: 1 },
+        // New collection / campaign banner
+        { section: "new_collection", imageUrl: "/images/newcollection.jpeg", altText: "New collection showcase", sortOrder: 0 },
+        { section: "new_collection", imageUrl: "/images/landingpage3.webp", altText: "Campaign story banner", sortOrder: 1 },
+      ];
+
+      await db.insert(siteAssets).values(
+        presets.map((p) => ({
+          section: p.section,
+          imageUrl: p.imageUrl,
+          cloudinaryPublicId: "", // Local static file, no Cloudinary ID
+          altText: p.altText,
+          sortOrder: p.sortOrder,
+          active: true,
+        })),
+      );
+
+      console.log(`[Seed] Inserted ${presets.length} preset landing-page images`);
+    } catch (err) {
+      console.error("[Seed] Failed to seed site assets:", err);
+    }
+  }
+
+  await seedSiteAssetsIfEmpty();
 
   return httpServer;
 }

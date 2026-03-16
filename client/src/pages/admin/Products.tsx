@@ -41,6 +41,7 @@ import { compressImage } from "@/lib/imageUtils";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
 import { Checkbox } from "@/components/ui/checkbox";
+import { MediaLibrary } from "@/components/admin/MediaLibrary";
 import {
   Form,
   FormControl,
@@ -134,6 +135,8 @@ export default function AdminProducts() {
   const [moveMode, setMoveMode] = useState(false);
   const [moveTargetCategory, setMoveTargetCategory] = useState<string>('');
   const [moveNewCategoryName, setMoveNewCategoryName] = useState('');
+  const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
+  const [mediaLibraryTarget, setMediaLibraryTarget] = useState<'add-main' | 'add-gallery' | 'edit-main' | 'edit-gallery' | null>(null);
 
   const { data: attributes } = useQuery<ProductAttribute[]>({
     queryKey: ["admin", "attributes"],
@@ -514,7 +517,7 @@ export default function AdminProducts() {
           </AnimatePresence>
         </div>
         
-        <div className="flex items-center gap-2 mt-4 sm:mt-0">
+        <div className="hidden sm:flex items-center gap-2 mt-4 sm:mt-0">
           <Button 
             className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white shadow-sm"
             onClick={() => setAddOpen(true)}
@@ -803,6 +806,28 @@ export default function AdminProducts() {
                       </div>
                     </div>
 
+                    <div className="flex gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="flex-1 text-xs h-8"
+                        onClick={() => {
+                          setMediaLibraryTarget('add-main');
+                          setMediaLibraryOpen(true);
+                        }}
+                      >
+                        <FolderInput className="w-3.5 h-3.5 mr-2" /> Select from Library
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="flex-1 text-xs h-8"
+                        onClick={() => imageInputRef.current?.click()}
+                      >
+                        <Upload className="w-3.5 h-3.5 mr-2" /> Upload New
+                      </Button>
+                    </div>
+
                     <input
                       ref={imageInputRef}
                       type="file"
@@ -829,43 +854,28 @@ export default function AdminProducts() {
 
                     {/* Gallery Preview & Upload */}
                     <div className="space-y-2 pt-2">
-                       <input
-                        ref={galleryInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setUploadingImage(true);
-                          toast({ title: "Uploading gallery image..." });
-                          try {
-                            const dataUrl = await compressImage(file);
-                            const url = await uploadProductImage(dataUrl);
-                            
-                            // Append to galleryUrlsText
-                            const current = addForm.getValues("galleryUrlsText") || "";
-                            const next = current ? `${current}\n${url}` : url;
-                            addForm.setValue("galleryUrlsText", next, { shouldValidate: true, shouldDirty: true });
-                            toast({ title: "Gallery image added" });
-                          } catch {
-                            toast({ title: "Upload failed", variant: "destructive" });
-                          } finally {
-                            setUploadingImage(false);
-                            e.target.value = "";
-                          }
-                        }}
-                      />
-                      
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="w-full border-dashed"
-                        onClick={() => galleryInputRef.current?.click()}
-                        disabled={uploadingImage}
-                      >
-                        <Plus className="w-4 h-4 mr-2" /> Add More Pictures
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          className="flex-1 border-dashed text-xs h-9"
+                          onClick={() => {
+                            setMediaLibraryTarget('add-gallery');
+                            setMediaLibraryOpen(true);
+                          }}
+                        >
+                          <FolderInput className="w-3.5 h-3.5 mr-2" /> Select from Library
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          className="flex-1 border-dashed text-xs h-9"
+                          onClick={() => galleryInputRef.current?.click()}
+                          disabled={uploadingImage}
+                        >
+                          <Plus className="w-3.5 h-3.5 mr-2" /> Add More Pictures
+                        </Button>
+                      </div>
 
                       {addForm.watch("galleryUrlsText") && (
                         <div className="grid grid-cols-4 gap-2 pt-2">
@@ -1011,6 +1021,26 @@ export default function AdminProducts() {
         </div>
       )}
 
+      <MediaLibrary 
+        open={mediaLibraryOpen}
+        onOpenChange={setMediaLibraryOpen}
+        onSelect={(url) => {
+          if (mediaLibraryTarget === 'add-main') {
+            addForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
+          } else if (mediaLibraryTarget === 'add-gallery') {
+            const current = addForm.getValues("galleryUrlsText") || "";
+            const next = current ? `${current}\n${url}` : url;
+            addForm.setValue("galleryUrlsText", next, { shouldValidate: true, shouldDirty: true });
+          } else if (mediaLibraryTarget === 'edit-main') {
+            editForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
+          } else if (mediaLibraryTarget === 'edit-gallery') {
+            const current = editForm.getValues("galleryUrlsText") || "";
+            const next = current ? `${current}\n${url}` : url;
+            editForm.setValue("galleryUrlsText", next, { shouldValidate: true, shouldDirty: true });
+          }
+        }}
+      />
+
       <div className="flex flex-col gap-6 px-2 pt-4 pb-2 border-b border-border/50">
         {/* Mobile-first: Attributes and Add Product at the top */}
         <div className="flex flex-row justify-between items-center w-full order-1 sm:order-none">
@@ -1029,7 +1059,7 @@ export default function AdminProducts() {
           </Sheet>
 
           <Button
-            className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground font-bold text-xs px-6 h-10 shadow-md"
+            className="sm:hidden rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground font-bold text-xs px-6 h-10 shadow-md"
             onClick={() => {
               if (categoryFilter !== "all") {
                 addForm.setValue("category", categoryFilter);
@@ -1876,6 +1906,28 @@ export default function AdminProducts() {
                       </div>
                     </div>
 
+                    <div className="flex gap-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="flex-1 text-xs h-8"
+                        onClick={() => {
+                          setMediaLibraryTarget('edit-main');
+                          setMediaLibraryOpen(true);
+                        }}
+                      >
+                        <FolderInput className="w-3.5 h-3.5 mr-2" /> Select from Library
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="flex-1 text-xs h-8"
+                        onClick={() => imageInputRef.current?.click()}
+                      >
+                        <Upload className="w-3.5 h-3.5 mr-2" /> Upload New
+                      </Button>
+                    </div>
+
                     <input
                       ref={imageInputRef}
                       type="file"
@@ -1902,43 +1954,28 @@ export default function AdminProducts() {
 
                     {/* Gallery Preview & Upload */}
                     <div className="space-y-2 pt-2">
-                       <input
-                        ref={galleryInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setUploadingImage(true);
-                          toast({ title: "Uploading gallery image..." });
-                          try {
-                            const dataUrl = await compressImage(file);
-                            const url = await uploadProductImage(dataUrl);
-                            
-                            // Append to galleryUrlsText
-                            const current = editForm.getValues("galleryUrlsText") || "";
-                            const next = current ? `${current}\n${url}` : url;
-                            editForm.setValue("galleryUrlsText", next, { shouldValidate: true, shouldDirty: true });
-                            toast({ title: "Gallery image added" });
-                          } catch {
-                            toast({ title: "Upload failed", variant: "destructive" });
-                          } finally {
-                            setUploadingImage(false);
-                            e.target.value = "";
-                          }
-                        }}
-                      />
-                      
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="w-full border-dashed"
-                        onClick={() => galleryInputRef.current?.click()}
-                        disabled={uploadingImage}
-                      >
-                        <Plus className="w-4 h-4 mr-2" /> Add More Pictures
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          className="flex-1 border-dashed text-xs h-9"
+                          onClick={() => {
+                            setMediaLibraryTarget('edit-gallery');
+                            setMediaLibraryOpen(true);
+                          }}
+                        >
+                          <FolderInput className="w-3.5 h-3.5 mr-2" /> Select from Library
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          className="flex-1 border-dashed text-xs h-9"
+                          onClick={() => galleryInputRef.current?.click()}
+                          disabled={uploadingImage}
+                        >
+                          <Plus className="w-3.5 h-3.5 mr-2" /> Add More Pictures
+                        </Button>
+                      </div>
 
                       {editForm.watch("galleryUrlsText") && (
                         <div className="grid grid-cols-4 gap-2 pt-2">

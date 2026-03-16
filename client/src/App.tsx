@@ -36,6 +36,7 @@ const AdminMarketing = lazy(() => import("@/pages/admin/Marketing"));
 const AdminLogs = lazy(() => import("@/pages/admin/Logs"));
 const AdminProfilePage = lazy(() => import("@/pages/admin/Profile"));
 const AdminNotifications = lazy(() => import("@/pages/admin/Notifications"));
+const AdminLandingPageManager = lazy(() => import("@/pages/admin/LandingPageManager"));
 
 const LoginPage = lazy(() => import("@/pages/auth/Login"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -172,6 +173,13 @@ function Router() {
         <ProtectedRoute requireAdmin>
           <AdminLayout>
             <AdminNotifications />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/landing-page">
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminLandingPageManager />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

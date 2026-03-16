@@ -88,7 +88,7 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
   // Content Security Policy
   res.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://www.google.com; frame-ancestors 'none';"
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' https://www.google.com https://player.cloudinary.com; frame-ancestors 'none';"
   );
 
   // Permissions Policy (formerly Feature Policy)

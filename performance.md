@@ -63,6 +63,7 @@ Record the **DOMContentLoaded** and **Load** times shown at the bottom of the Ne
 | # | Date | Commit | DCL (ms) | Load (ms) | FCP (ms) | Delta | Notes |
 |---|------|--------|----------|-----------|----------|-------|-------|
 | 1 | 2026-03-10 | `baseline` | — | — | — | — | Fill in before first change |
+| 2 | 2026-03-16 | `landing-page-cloudinary-assets` | ___ | ___ | ___ | +__ KB | Moved landing hero and collection images to Cloudinary-backed site assets with admin management; storefront still uses fallbacks when API empty. |
 
 ---
 

@@ -68,6 +68,8 @@ export interface AdminAnalyticsKpis {
 export interface AdminAnalytics {
   kpis: AdminAnalyticsKpis;
   revenueByDay: { date: string; revenue: number }[];
+  ordersByDay: { date: string; count: number }[];
+  newCustomersByDay: { date: string; count: number }[];
   ordersByStatus: { completed: number; pending: number; cancelled: number };
   topProducts: { name: string; imageUrl?: string | null; units: number; revenue: number; percent: number }[];
   salesByCategory: { category: string; revenue: number; percent: number }[];

@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect, Link } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,7 +13,6 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { lazy, Suspense, useEffect } from "react";
 import Home from "@/pages/storefront/Home";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
-import { CreditCard } from "lucide-react";
 
 // Lazy load non-critical components
 const Products = lazy(() => import("@/pages/storefront/Products"));
@@ -270,22 +269,6 @@ function Router() {
   );
 }
 
-function FloatingPOSButton() {
-  const { user } = useCurrentUser();
-  const isAdmin = user && (user.role === "admin" || user.role === "staff");
-  if (!isAdmin) return null;
-
-  return (
-    <Link
-      href="/admin/pos"
-      className="fixed top-24 right-6 z-[80] inline-flex items-center gap-2 rounded-full bg-[#2C3E2D] text-white px-4 py-2 shadow-lg shadow-black/20 hover:bg-[#1A251B] transition-colors"
-    >
-      <CreditCard className="h-4 w-4" />
-      <span className="text-xs font-bold uppercase tracking-widest">POS</span>
-    </Link>
-  );
-}
-
 function App() {
   return (
     <HelmetProvider>
@@ -294,7 +277,6 @@ function App() {
           <Toaster />
           <Suspense fallback={<div className="fixed inset-0 z-50 bg-background" />}>
             <Router />
-            <FloatingPOSButton />
           </Suspense>
         </TooltipProvider>
       </QueryClientProvider>

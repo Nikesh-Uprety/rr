@@ -1,20 +1,4 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  Tooltip as RechartsTooltip,
-  XAxis,
-  YAxis,
-  ResponsiveContainer,
-} from "recharts";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ExportButton } from "@/components/admin/ExportButton";
 import { Button } from "@/components/ui/button";
 import {
   ChartContainer,
@@ -24,21 +8,50 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  deletePlatform,
+  exportAnalyticsCSV,
   fetchAnalytics,
   fetchAnalyticsCalendar,
   fetchPlatforms,
   upsertPlatform,
-  deletePlatform,
-  exportAnalyticsCSV,
   type AdminAnalytics,
   type AdminAnalyticsCalendarDay,
   type AdminPlatform,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { ExportButton } from "@/components/admin/ExportButton";
-import { Input } from "@/components/ui/input";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowDownRight, ArrowUpRight, ChevronDown } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 type RangeKey = "7d" | "30d" | "90d" | "1y";
 type CalendarView = "year" | "month";
@@ -52,8 +65,8 @@ const RANGE_LABELS: Record<RangeKey, string> = {
 
 const STATUS_COLORS: Record<"completed" | "pending" | "cancelled", string> = {
   completed: "hsl(142, 60%, 45%)", // Bright green
-  pending: "hsl(45, 93%, 47%)",    // Amber
-  cancelled: "hsl(0, 84%, 60%)",    // Red
+  pending: "hsl(45, 93%, 47%)", // Amber
+  cancelled: "hsl(0, 84%, 60%)", // Red
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -111,6 +124,41 @@ export default function AdminAnalytics() {
       })) ?? [],
     [data],
   );
+
+  const combinedByDay = useMemo(() => {
+    const revenueByDate = new Map(
+      (data?.revenueByDay ?? []).map((d) => [d.date, d.revenue] as const),
+    );
+    const ordersByDate = new Map(
+      (data?.ordersByDay ?? []).map((d) => [d.date, d.count] as const),
+    );
+    const customersByDate = new Map(
+      (data?.newCustomersByDay ?? []).map((d) => [d.date, d.count] as const),
+    );
+
+    const allDates = Array.from(
+      new Set([
+        ...(data?.revenueByDay ?? []).map((d) => d.date),
+        ...(data?.ordersByDay ?? []).map((d) => d.date),
+        ...(data?.newCustomersByDay ?? []).map((d) => d.date),
+      ]),
+    ).sort();
+
+    return allDates.map((date) => {
+      const revenue = revenueByDate.get(date) ?? 0;
+      const orders = ordersByDate.get(date) ?? 0;
+      const newCustomers = customersByDate.get(date) ?? 0;
+      const aov = orders > 0 ? revenue / orders : 0;
+      return {
+        date,
+        label: date.slice(5),
+        revenue,
+        orders,
+        newCustomers,
+        aov,
+      };
+    });
+  }, [data]);
 
   const ordersStatusChartData = useMemo(() => {
     if (!data) return [];
@@ -178,9 +226,7 @@ export default function AdminAnalytics() {
     });
 
     const weeksCount =
-      cells.length > 0
-        ? Math.max(...cells.map((c) => c.weekIndex)) + 1
-        : 0;
+      cells.length > 0 ? Math.max(...cells.map((c) => c.weekIndex)) + 1 : 0;
 
     // Month labels
     const monthLabels: { weekIndex: number; label: string }[] = [];
@@ -220,8 +266,15 @@ export default function AdminAnalytics() {
     endSunday.setDate(endSunday.getDate() + (6 - endWeekday));
 
     const byDate = new Map(calendarLayout.cells.map((c) => [c.date, c]));
-    const dates: { date: string; cell?: (typeof calendarLayout.cells)[number] }[] = [];
-    for (let d = new Date(startMonday); d < endSunday; d.setDate(d.getDate() + 1)) {
+    const dates: {
+      date: string;
+      cell?: (typeof calendarLayout.cells)[number];
+    }[] = [];
+    for (
+      let d = new Date(startMonday);
+      d < endSunday;
+      d.setDate(d.getDate() + 1)
+    ) {
       const key = d.toISOString().slice(0, 10);
       dates.push({ date: key, cell: byDate.get(key) });
     }
@@ -324,8 +377,10 @@ export default function AdminAnalytics() {
                   value: kpis ? kpis.newCustomers.toLocaleString("en-NP") : "0",
                   trend: kpis ? kpis.trends.newCustomers : 0,
                 },
-              ]
-          ) as Array<{ label: string; subtitle: string; value: string; trend: number } | undefined>
+              ]) as Array<
+            | { label: string; subtitle: string; value: string; trend: number }
+            | undefined
+          >
         ).map((card, idx) => {
           if (isLoading || !kpis || !card) {
             return (
@@ -345,6 +400,19 @@ export default function AdminAnalytics() {
             ? ArrowUpRight
             : ArrowDownRight;
 
+          const sparkKey =
+            card.label === "Total Revenue"
+              ? "revenue"
+              : card.label === "Total Orders"
+                ? "orders"
+                : card.label === "Avg Order Value"
+                  ? "aov"
+                  : "newCustomers";
+
+          const sparkColor = trendInfo.isPositive
+            ? "hsl(142, 60%, 45%)"
+            : "hsl(0, 84%, 60%)";
+
           return (
             <div
               key={card.label}
@@ -357,7 +425,14 @@ export default function AdminAnalytics() {
                 {card.value}
               </div>
               <div className="flex items-center justify-between text-xs">
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 text-emerald-800 dark:text-emerald-300">
+                <div
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-2 py-1",
+                    trendInfo.isPositive
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300"
+                      : "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300",
+                  )}
+                >
                   <TrendIcon className="h-3 w-3" />
                   <span className="font-medium tabular-nums">
                     {trendInfo.label}
@@ -365,20 +440,40 @@ export default function AdminAnalytics() {
                 </div>
                 <span className="text-muted-foreground">{card.subtitle}</span>
               </div>
+
+              {/* Mini sparkline */}
+              <div className="-mx-1 mt-1">
+                <AreaChart width={180} height={36} data={combinedByDay.slice(-Math.min(combinedByDay.length, 30))}>
+                  <defs>
+                    <linearGradient id={`spark-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={sparkColor} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={sparkColor} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    type="monotone"
+                    dataKey={sparkKey}
+                    stroke={sparkColor}
+                    strokeWidth={1.5}
+                    fill={`url(#spark-${idx})`}
+                    dot={false}
+                  />
+                </AreaChart>
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Revenue Trendline */}
+      {/* Revenue + Orders combo */}
       <section className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-serif font-medium">
-              Revenue Over Time
+              Revenue & Orders
             </h2>
             <p className="text-xs text-muted-foreground">
-              Daily revenue for the selected period
+              Daily revenue (line) with order volume (bars)
             </p>
           </div>
         </div>
@@ -388,14 +483,29 @@ export default function AdminAnalytics() {
               label: "Revenue",
               color: "hsl(142, 60%, 45%)",
             },
+            orders: {
+              label: "Orders",
+              color: "hsl(45, 93%, 47%)",
+            },
           }}
-          className="h-56 w-full mt-4"
+          className="h-56 w-full mt-4 aspect-auto"
         >
-          <AreaChart data={revenueChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <ComposedChart
+            data={combinedByDay}
+            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+          >
             <defs>
               <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(142, 60%, 45%)" stopOpacity={0.22} />
-                <stop offset="95%" stopColor="hsl(142, 60%, 45%)" stopOpacity={0} />
+                <stop
+                  offset="5%"
+                  stopColor="hsl(142, 60%, 45%)"
+                  stopOpacity={0.22}
+                />
+                <stop
+                  offset="95%"
+                  stopColor="hsl(142, 60%, 45%)"
+                  stopOpacity={0}
+                />
               </linearGradient>
             </defs>
             <CartesianGrid
@@ -408,27 +518,55 @@ export default function AdminAnalytics() {
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              tick={{ fill: 'currentColor', opacity: 0.6, fontSize: 11 }}
+              tick={{ fill: "currentColor", opacity: 0.6, fontSize: 11 }}
               interval="preserveStartEnd"
             />
             <YAxis
+              yAxisId="orders"
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              tick={{ fill: 'currentColor', opacity: 0.6, fontSize: 11 }}
-              tickFormatter={(value) => `Rs.${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`}
+              tick={{ fill: "currentColor", opacity: 0.6, fontSize: 11 }}
+              orientation="left"
+              allowDecimals={false}
+            />
+            <YAxis
+              yAxisId="revenue"
+              orientation="right"
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              tick={{ fill: "currentColor", opacity: 0.6, fontSize: 11 }}
+              tickFormatter={(value) =>
+                `Rs.${value >= 1000 ? (value / 1000).toFixed(0) + "k" : value}`
+              }
             />
             <ChartTooltip
-              cursor={{ stroke: 'currentColor', strokeWidth: 1, strokeOpacity: 0.2 }}
+              cursor={{
+                stroke: "currentColor",
+                strokeWidth: 1,
+                strokeOpacity: 0.2,
+              }}
               content={
                 <ChartTooltipContent
-                  formatter={(value) => (
-                    <span className="font-medium">
-                      {formatPrice(Number(value))}
-                    </span>
-                  )}
+                  formatter={(value, name) => {
+                    if (name === "orders") {
+                      return (
+                        <span className="font-medium">
+                          {Number(value).toLocaleString("en-NP")} orders
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="font-medium">
+                        {formatPrice(Number(value))}
+                      </span>
+                    );
+                  }}
                   labelFormatter={(_, payload) => {
-                    const date = payload?.[0]?.payload?.date as string | undefined;
+                    const date = payload?.[0]?.payload?.date as
+                      | string
+                      | undefined;
                     if (!date) return null;
                     const d = new Date(date);
                     return d.toLocaleDateString("en-NP", {
@@ -440,59 +578,100 @@ export default function AdminAnalytics() {
                 />
               }
             />
-            <Area
+            <Bar
+              dataKey="orders"
+              yAxisId="orders"
+              fill="var(--color-orders)"
+              radius={[4, 4, 0, 0]}
+              barSize={14}
+            />
+            <Line
               type="monotone"
               dataKey="revenue"
+              yAxisId="revenue"
               stroke="hsl(142, 60%, 45%)"
               strokeWidth={2.25}
               dot={false}
+            />
+            <Area
+              type="monotone"
+              dataKey="revenue"
+              yAxisId="revenue"
+              stroke="none"
               fillOpacity={1}
               fill="url(#colorRevenue)"
             />
-          </AreaChart>
+          </ComposedChart>
         </ChartContainer>
       </section>
 
-      {/* Orders status breakdown */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Donut: orders by status */}
-        <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
-          <h2 className="text-lg font-serif font-medium">
-            Orders by Status
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Distribution of orders in this period
-          </p>
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-full h-56">
-              <PieChart>
-                <Pie
-                  data={ordersStatusChartData}
-                  dataKey="value"
-                  nameKey="status"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={2}
-                  stroke="none"
-                >
-                  {ordersStatusChartData.map((entry) => (
-                    <Cell
-                      key={entry.key}
-                      fill={
-                        STATUS_COLORS[entry.key as "completed" | "pending" | "cancelled"]
-                      }
-                    />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  formatter={(value, name) => [
-                    value,
-                    name as string,
-                  ]}
-                />
-              </PieChart>
-            </div>
-            <div className="text-center">
+      {/* Orders status breakdown (single chart) */}
+      <section className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
+        <h2 className="text-lg font-serif font-medium">Orders by Status</h2>
+        <p className="text-xs text-muted-foreground">
+          Distribution of orders in this period
+        </p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+          <ChartContainer
+            config={{
+              completed: { label: "Completed", color: STATUS_COLORS.completed },
+              pending: { label: "Pending", color: STATUS_COLORS.pending },
+              cancelled: { label: "Cancelled", color: STATUS_COLORS.cancelled },
+            }}
+            className="h-56 w-full aspect-auto"
+          >
+            <PieChart>
+              <Pie
+                data={ordersStatusChartData}
+                dataKey="value"
+                nameKey="status"
+                innerRadius={60}
+                outerRadius={90}
+                paddingAngle={2}
+                stroke="none"
+              >
+                {ordersStatusChartData.map((entry) => (
+                  <Cell
+                    key={entry.key}
+                    fill={
+                      STATUS_COLORS[
+                        entry.key as "completed" | "pending" | "cancelled"
+                      ]
+                    }
+                  />
+                ))}
+              </Pie>
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value, _name, item) => {
+                      const status = (item?.payload as any)?.key as
+                        | "completed"
+                        | "pending"
+                        | "cancelled"
+                        | undefined;
+                      const label =
+                        status === "completed"
+                          ? "Completed"
+                          : status === "pending"
+                            ? "Pending"
+                            : status === "cancelled"
+                              ? "Cancelled"
+                              : undefined;
+                      return (
+                        <span className="font-medium">
+                          {(value as number).toLocaleString("en-NP")}
+                          {label ? ` · ${label}` : ""}
+                        </span>
+                      );
+                    }}
+                  />
+                }
+              />
+            </PieChart>
+          </ChartContainer>
+          <div className="space-y-3">
+            <div className="text-center lg:text-left">
               <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
                 Total Orders
               </p>
@@ -500,11 +679,10 @@ export default function AdminAnalytics() {
                 {kpis?.orders.toLocaleString("en-NP") ?? "0"}
               </p>
             </div>
-            <div className="w-full space-y-2">
+            <div className="space-y-2">
               {ordersStatusChartData.map((row) => {
                 const total = kpis?.orders ?? 0;
-                const pct =
-                  total > 0 ? (row.value / total) * 100 : 0;
+                const pct = total > 0 ? (row.value / total) * 100 : 0;
                 return (
                   <div
                     key={row.key}
@@ -525,64 +703,12 @@ export default function AdminAnalytics() {
                       </span>
                     </div>
                     <span className="font-medium tabular-nums">
-                      {row.value.toLocaleString("en-NP")} ·{" "}
-                      {pct.toFixed(1)}%
+                      {row.value.toLocaleString("en-NP")} · {pct.toFixed(1)}%
                     </span>
                   </div>
                 );
               })}
             </div>
-          </div>
-        </div>
-
-        {/* Horizontal bars: orders by status */}
-        <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
-          <h2 className="text-lg font-serif font-medium">
-            Status Breakdown
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Actual counts by order status
-          </p>
-          <div className="h-56">
-            <BarChart
-              data={ordersStatusChartData}
-              layout="vertical"
-              margin={{ left: 80, right: 16, top: 8, bottom: 8 }}
-            >
-              <XAxis
-                type="number"
-                hide
-              />
-              <YAxis
-                type="category"
-                dataKey="status"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 12 }}
-              />
-              <RechartsTooltip
-                formatter={(value) => [
-                  (value as number).toLocaleString("en-NP"),
-                  "Orders",
-                ]}
-              />
-              <Bar
-                dataKey="value"
-                radius={[0, 4, 4, 0]}
-                barSize={18}
-              >
-                {ordersStatusChartData.map((row) => (
-                  <Cell
-                    key={row.key}
-                    fill={
-                      STATUS_COLORS[
-                        row.key as "completed" | "pending" | "cancelled"
-                      ]
-                    }
-                  />
-                ))}
-              </Bar>
-            </BarChart>
           </div>
         </div>
       </section>
@@ -616,7 +742,7 @@ export default function AdminAnalytics() {
                 </button>
               ))}
             </div>
-            <input
+            <Input
               type="number"
               value={calendarYear}
               onChange={(e) =>
@@ -624,24 +750,28 @@ export default function AdminAnalytics() {
                   Number(e.target.value) || new Date().getFullYear(),
                 )
               }
-              className="w-24 h-9 rounded-lg border border-muted bg-background px-3 text-sm"
+              className="w-24 h-9"
               min={2020}
               max={new Date().getFullYear() + 1}
             />
             {calendarView === "month" && (
-              <select
-                value={calendarMonth}
-                onChange={(e) => setCalendarMonth(Number(e.target.value))}
-                className="h-9 rounded-lg border border-muted bg-background px-2 text-sm"
+              <Select
+                value={String(calendarMonth)}
+                onValueChange={(v) => setCalendarMonth(Number(v))}
               >
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <option key={i} value={i}>
-                    {new Date(calendarYear, i, 1).toLocaleString("default", {
-                      month: "short",
-                    })}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-9 w-28">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <SelectItem key={i} value={String(i)}>
+                      {new Date(calendarYear, i, 1).toLocaleString("default", {
+                        month: "short",
+                      })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
         </div>
@@ -686,10 +816,7 @@ export default function AdminAnalytics() {
                       {Array.from(
                         { length: calendarLayout.weeksCount },
                         (_, weekIndex) => (
-                          <div
-                            key={weekIndex}
-                            className="flex flex-col gap-1"
-                          >
+                          <div key={weekIndex} className="flex flex-col gap-1">
                             {Array.from({ length: 7 }, (_, weekday) => {
                               const cell = calendarLayout.cells.find(
                                 (c) =>
@@ -810,23 +937,38 @@ export default function AdminAnalytics() {
             <div className="flex items-center justify-between pt-3 text-[10px] text-muted-foreground">
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5" style={{ backgroundColor: "var(--calendar-0)" }} />
+                  <span
+                    className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5"
+                    style={{ backgroundColor: "var(--calendar-0)" }}
+                  />
                   <span>No sales</span>
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5" style={{ backgroundColor: "var(--calendar-1)" }} />
+                  <span
+                    className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5"
+                    style={{ backgroundColor: "var(--calendar-1)" }}
+                  />
                   <span>Low</span>
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5" style={{ backgroundColor: "var(--calendar-2)" }} />
+                  <span
+                    className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5"
+                    style={{ backgroundColor: "var(--calendar-2)" }}
+                  />
                   <span>Medium</span>
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5" style={{ backgroundColor: "var(--calendar-3)" }} />
+                  <span
+                    className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5"
+                    style={{ backgroundColor: "var(--calendar-3)" }}
+                  />
                   <span>High</span>
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5" style={{ backgroundColor: "var(--calendar-4)" }} />
+                  <span
+                    className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5"
+                    style={{ backgroundColor: "var(--calendar-4)" }}
+                  />
                   <span>Very High</span>
                 </span>
               </div>
@@ -858,7 +1000,11 @@ export default function AdminAnalytics() {
                 data={(data?.revenueByPlatform ?? []).slice(0, 8)}
                 margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
               >
-                <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
+                <CartesianGrid
+                  vertical={false}
+                  strokeDasharray="3 3"
+                  className="stroke-muted"
+                />
                 <XAxis
                   dataKey="label"
                   tickLine={false}
@@ -872,7 +1018,9 @@ export default function AdminAnalytics() {
                   tickMargin={8}
                   tick={{ fontSize: 11, fill: "currentColor", opacity: 0.7 }}
                   tickFormatter={(value) =>
-                    value >= 1000 ? `Rs.${Math.round(value / 1000)}k` : `Rs.${value}`
+                    value >= 1000
+                      ? `Rs.${Math.round(value / 1000)}k`
+                      : `Rs.${value}`
                   }
                 />
                 <ChartTooltip
@@ -882,7 +1030,8 @@ export default function AdminAnalytics() {
                         const pct = (item?.payload as any)?.percent ?? 0;
                         return (
                           <span className="font-medium">
-                            {formatPrice(Number(value))} · {Number(pct).toFixed(1)}%
+                            {formatPrice(Number(value))} ·{" "}
+                            {Number(pct).toFixed(1)}%
                           </span>
                         );
                       }}
@@ -893,72 +1042,91 @@ export default function AdminAnalytics() {
               </BarChart>
             </ChartContainer>
 
-            <div className="pt-2 border-t border-muted/30 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground font-semibold">
-                  Platforms
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Input
-                  placeholder="key (e.g. instagram)"
-                  value={newPlatformKey}
-                  onChange={(e) => setNewPlatformKey(e.target.value.toLowerCase())}
-                  className="h-9"
-                />
-                <Input
-                  placeholder="label (e.g. Instagram)"
-                  value={newPlatformLabel}
-                  onChange={(e) => setNewPlatformLabel(e.target.value)}
-                  className="h-9"
-                />
-                <Button
-                  type="button"
-                  className="h-9"
-                  disabled={!newPlatformKey || !newPlatformLabel || upsertPlatformMutation.isPending}
-                  onClick={() => {
-                    upsertPlatformMutation.mutate(
-                      { key: newPlatformKey, label: newPlatformLabel, isActive: true },
-                      {
-                        onSuccess: () => {
-                          setNewPlatformKey("");
-                          setNewPlatformLabel("");
-                        },
-                      },
-                    );
-                  }}
-                >
-                  Add
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {platforms.map((p) => (
-                  <div
-                    key={p.key}
-                    className="inline-flex items-center gap-2 rounded-full border border-muted/40 bg-muted/20 px-3 py-1.5 text-xs"
+            <Collapsible>
+              <div className="pt-2 border-t border-muted/30">
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between text-[11px] uppercase tracking-[0.22em] text-muted-foreground font-semibold py-2"
                   >
-                    <span className="font-medium">{p.label}</span>
-                    <span className="text-muted-foreground">({p.key})</span>
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-foreground"
-                      disabled={deletePlatformMutation.isPending}
-                      onClick={() => deletePlatformMutation.mutate(p.key)}
-                      aria-label={`Delete platform ${p.key}`}
-                    >
-                      ×
-                    </button>
+                    <span>Platform management</span>
+                    <ChevronDown className="h-4 w-4 opacity-70" />
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="space-y-3 pb-1">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input
+                        placeholder="key (e.g. instagram)"
+                        value={newPlatformKey}
+                        onChange={(e) =>
+                          setNewPlatformKey(e.target.value.toLowerCase())
+                        }
+                        className="h-9"
+                      />
+                      <Input
+                        placeholder="label (e.g. Instagram)"
+                        value={newPlatformLabel}
+                        onChange={(e) => setNewPlatformLabel(e.target.value)}
+                        className="h-9"
+                      />
+                      <Button
+                        type="button"
+                        className="h-9"
+                        disabled={
+                          !newPlatformKey ||
+                          !newPlatformLabel ||
+                          upsertPlatformMutation.isPending
+                        }
+                        onClick={() => {
+                          upsertPlatformMutation.mutate(
+                            {
+                              key: newPlatformKey,
+                              label: newPlatformLabel,
+                              isActive: true,
+                            },
+                            {
+                              onSuccess: () => {
+                                setNewPlatformKey("");
+                                setNewPlatformLabel("");
+                              },
+                            },
+                          );
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {platforms.map((p) => (
+                        <div
+                          key={p.key}
+                          className="inline-flex items-center gap-2 rounded-full border border-muted/40 bg-muted/20 px-3 py-1.5 text-xs"
+                        >
+                          <span className="font-medium">{p.label}</span>
+                          <span className="text-muted-foreground">({p.key})</span>
+                          <button
+                            type="button"
+                            className="text-muted-foreground hover:text-foreground"
+                            disabled={deletePlatformMutation.isPending}
+                            onClick={() => deletePlatformMutation.mutate(p.key)}
+                            aria-label={`Delete platform ${p.key}`}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                      {platforms.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          No custom platforms yet. Defaults (Website/POS/Instagram/TikTok) still work.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                ))}
-                {platforms.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    No custom platforms yet. Defaults (Website/POS/Instagram/TikTok) still work.
-                  </p>
-                )}
+                </CollapsibleContent>
               </div>
-            </div>
+            </Collapsible>
           </div>
 
           {/* Revenue by Category */}
@@ -1046,11 +1214,7 @@ export default function AdminAnalytics() {
                   axisLine={false}
                   tickMargin={6}
                 />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                />
+                <YAxis tickLine={false} axisLine={false} tickMargin={8} />
                 <ChartTooltip
                   content={
                     <ChartTooltipContent
@@ -1076,7 +1240,12 @@ export default function AdminAnalytics() {
             <h3 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
               Payment Methods
             </h3>
-            <div className="h-48">
+            <ChartContainer
+              config={{
+                payments: { label: "Payments", color: "#2D4A35" },
+              }}
+              className="h-48"
+            >
               <BarChart
                 data={paymentMethodsData}
                 layout="vertical"
@@ -1089,28 +1258,77 @@ export default function AdminAnalytics() {
                   axisLine={false}
                   tickLine={false}
                 />
-                <RechartsTooltip
-                  formatter={(value, _name, item) => {
-                    const percent =
-                      (item?.payload as any)?.percent ?? 0;
-                    return [
-                      `${(value as number).toLocaleString("en-NP")} · ${percent.toFixed(
-                        1,
-                      )}%`,
-                      "Payments",
-                    ];
-                  }}
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value, _name, item) => {
+                        const percent = (item?.payload as any)?.percent ?? 0;
+                        return (
+                          <span className="font-medium">
+                            {(value as number).toLocaleString("en-NP")} · {Number(percent).toFixed(1)}%
+                          </span>
+                        );
+                      }}
+                    />
+                  }
                 />
                 <Bar
                   dataKey="count"
                   radius={[0, 4, 4, 0]}
                   barSize={16}
-                  fill="#2D4A35"
+                  fill="var(--color-payments)"
                 />
               </BarChart>
-            </div>
+            </ChartContainer>
           </div>
         </div>
+      </section>
+
+      {/* New Customers over time */}
+      <section className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-serif font-medium">New Customers</h2>
+          <p className="text-xs text-muted-foreground">
+            New customer signups over the selected range
+          </p>
+        </div>
+        <ChartContainer
+          config={{
+            customers: { label: "Customers", color: "hsl(142, 60%, 45%)" },
+          }}
+          className="h-56 w-full"
+        >
+          <LineChart data={combinedByDay} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis
+              dataKey="label"
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              tick={{ fill: "currentColor", opacity: 0.6, fontSize: 11 }}
+              interval="preserveStartEnd"
+            />
+            <YAxis tickLine={false} axisLine={false} tickMargin={8} allowDecimals={false} />
+            <ChartTooltip
+              content={
+                <ChartTooltipContent
+                  formatter={(value) => (
+                    <span className="font-medium">
+                      {Number(value).toLocaleString("en-NP")} customers
+                    </span>
+                  )}
+                />
+              }
+            />
+            <Line
+              type="monotone"
+              dataKey="newCustomers"
+              stroke="var(--color-customers)"
+              strokeWidth={2.25}
+              dot={false}
+            />
+          </LineChart>
+        </ChartContainer>
       </section>
     </div>
   );
@@ -1188,7 +1406,9 @@ function TopProductsSection({
                         <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                           Revenue
                         </div>
-                        <div className="font-semibold">{formatPrice(p.revenue)}</div>
+                        <div className="font-semibold">
+                          {formatPrice(p.revenue)}
+                        </div>
                       </div>
                     </div>
                     <div className="mt-2 flex items-center gap-2">
@@ -1246,7 +1466,9 @@ function TopProductsSection({
                 content={
                   <ChartTooltipContent
                     formatter={(value, _name, item) => {
-                      const name = (item?.payload as any)?.name as string | undefined;
+                      const name = (item?.payload as any)?.name as
+                        | string
+                        | undefined;
                       return (
                         <span className="font-medium">
                           {name ? `${name}: ` : ""}
@@ -1257,7 +1479,10 @@ function TopProductsSection({
                   />
                 }
               />
-              <ChartLegend verticalAlign="bottom" content={<ChartLegendContent />} />
+              <ChartLegend
+                verticalAlign="bottom"
+                content={<ChartLegendContent />}
+              />
             </PieChart>
           </ChartContainer>
         </div>

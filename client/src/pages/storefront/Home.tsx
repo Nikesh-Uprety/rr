@@ -284,6 +284,8 @@ export default function Home() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  const showHeroVideo = isMobile && !videoFailed;
+
   // Hero images from CMS assets (fallback to placeholder)
   const heroImages = useMemo(() => {
     const images = heroAssets
@@ -364,9 +366,9 @@ export default function Home() {
       setCarouselIndex((i) => (i + 1) % lifestyleImages.length);
     }, 5000);
 
-    // Only cycle hero images if video failed (showing image fallback)
+    // Cycle hero images when video isn't used (desktop) or video failed.
     let heroInterval: ReturnType<typeof setInterval> | null = null;
-    if (videoFailed && heroImages.length > 1) {
+    if ((!showHeroVideo || videoFailed) && heroImages.length > 1) {
       heroInterval = setInterval(() => {
         setHeroIndex((prev) => (prev + 1) % heroImages.length);
       }, 6000);
@@ -377,7 +379,7 @@ export default function Home() {
       if (interactionTimeoutRef.current) clearTimeout(interactionTimeoutRef.current);
       if (heroInterval) clearInterval(heroInterval);
     };
-  }, [lifestyleImages.length, heroImages.length, videoFailed]);
+  }, [lifestyleImages.length, heroImages.length, videoFailed, showHeroVideo]);
 
   const newsletterMutation = useMutation({
     mutationFn: async (email: string) => {
@@ -460,7 +462,7 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative h-[90vh] min-h-[650px] md:min-h-[750px] lg:min-h-[850px] w-full overflow-hidden bg-neutral-900">
         {/* Native Video Background – autoplay, loop, muted */}
-        {!videoFailed ? (
+        {showHeroVideo ? (
           <motion.div
             key="hero-video"
             initial={{ opacity: 0 }}

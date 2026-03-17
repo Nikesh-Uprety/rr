@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ export default function AdminImagesPage() {
   const [provider, setProvider] = useState<"local" | "cloudinary">("cloudinary");
   const [category, setCategory] = useState<ImageCategory>("product");
   const [search, setSearch] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const imagesQuery = useQuery<AdminImageAsset[]>({
     queryKey: ["admin", "images", { provider, category }],
@@ -116,29 +117,27 @@ export default function AdminImagesPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="h-9"
             />
-            <label className="inline-flex items-center gap-2">
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) uploadMutation.mutate(file);
-                  e.currentTarget.value = "";
-                }}
-              />
-              <span>
-                <Button
-                  type="button"
-                  className="h-9"
-                  loading={uploadMutation.isPending}
-                  loadingText="Uploading…"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload
-                </Button>
-              </span>
-            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadMutation.mutate(file);
+                e.currentTarget.value = "";
+              }}
+            />
+            <Button
+              type="button"
+              className="h-9"
+              loading={uploadMutation.isPending}
+              loadingText="Uploading…"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Upload
+            </Button>
           </div>
         </div>
 

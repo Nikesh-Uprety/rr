@@ -196,30 +196,6 @@ export default function AdminLayout({
               <Images className="h-6 w-6" />
               <span className="text-[12px] tracking-wider">Landing Page</span>
             </Link>
-            <Link
-              href="/admin/landing-page?section=new_collection"
-              className={cn(
-                "mt-1 flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300 group/nav",
-                pathname === "/admin/landing-page" && location.includes("section=new_collection")
-                  ? "bg-white/10 dark:bg-black/10 text-white dark:text-black"
-                  : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
-              )}
-            >
-              <Images className="h-6 w-6 opacity-70" />
-              <span className="text-[12px] tracking-wider">Home Campaign</span>
-            </Link>
-            <Link
-              href="/admin/landing-page?section=collection_page"
-              className={cn(
-                "mt-1 flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300 group/nav",
-                pathname === "/admin/landing-page" && location.includes("section=collection_page")
-                  ? "bg-white/10 dark:bg-black/10 text-white dark:text-black"
-                  : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
-              )}
-            >
-              <Images className="h-6 w-6 opacity-70" />
-              <span className="text-[12px] tracking-wider">Collection Page</span>
-            </Link>
           </div>
         </nav>
 
@@ -325,36 +301,6 @@ export default function AdminLayout({
                     <Images className="h-6 w-6" />
                     <span className="text-[12px] tracking-wider">Landing Page</span>
                   </Link>
-                  <Link
-                    href="/admin/landing-page?section=new_collection"
-                    onClick={() => {
-                      setSidebarOpen(false);
-                    }}
-                    className={cn(
-                      "mt-1 flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300",
-                      pathname === "/admin/landing-page" && location.includes("section=new_collection")
-                        ? "bg-white/10 dark:bg-black/10 text-white dark:text-black"
-                        : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
-                    )}
-                  >
-                    <Images className="h-6 w-6 opacity-70" />
-                    <span className="text-[12px] tracking-wider">Home Campaign</span>
-                  </Link>
-                  <Link
-                    href="/admin/landing-page?section=collection_page"
-                    onClick={() => {
-                      setSidebarOpen(false);
-                    }}
-                    className={cn(
-                      "mt-1 flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300",
-                      pathname === "/admin/landing-page" && location.includes("section=collection_page")
-                        ? "bg-white/10 dark:bg-black/10 text-white dark:text-black"
-                        : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
-                    )}
-                  >
-                    <Images className="h-6 w-6 opacity-70" />
-                    <span className="text-[12px] tracking-wider">Collection Page</span>
-                  </Link>
                 </div>
               </nav>
 
@@ -379,6 +325,18 @@ export default function AdminLayout({
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#F5F5F3] dark:bg-neutral-900 transition-colors duration-500">
+        {/* Fixed POS button (admin-only) */}
+        {(user?.role === "admin" || user?.role === "staff") && (
+          <Link
+            href="/admin/pos"
+            className="hidden md:inline-flex fixed top-6 right-6 z-[55] items-center gap-2 rounded-full bg-[#2C3E2D] text-white px-5 py-2.5 shadow-lg shadow-black/20 hover:bg-[#1A251B] transition-colors"
+          >
+            <CreditCard className="h-4 w-4" />
+            <span className="text-xs font-black uppercase tracking-widest">
+              Point Of Sale
+            </span>
+          </Link>
+        )}
         {/* Header - only on mobile */}
         <header className="h-20 bg-neutral-950 dark:bg-white border-b border-white/10 dark:border-black/5 flex items-center justify-between px-6 md:hidden relative z-50">
           <div className="flex items-center gap-3">
@@ -390,6 +348,17 @@ export default function AdminLayout({
             </button>
           </div>
           <div className="flex items-center gap-3">
+            {(user?.role === "admin" || user?.role === "staff") && (
+              <Link
+                href="/admin/pos"
+                className="inline-flex items-center gap-2 rounded-full bg-[#2C3E2D] text-white px-3 py-1.5 shadow-sm hover:bg-[#1A251B] transition-colors"
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  POS
+                </span>
+              </Link>
+            )}
             <ThemeToggle />
             <NotificationBadge />
             <Link

@@ -68,6 +68,16 @@ export interface RevenueByDay {
   revenue: number;
 }
 
+export interface OrdersByDay {
+  date: string;
+  count: number;
+}
+
+export interface NewCustomersByDay {
+  date: string;
+  count: number;
+}
+
 export interface AnalyticsKpisTrends {
   revenue: number;
   orders: number;
@@ -131,6 +141,8 @@ export interface AnalyticsCalendarDay {
 export interface AnalyticsData {
   kpis: AnalyticsKpis;
   revenueByDay: RevenueByDay[];
+  ordersByDay: OrdersByDay[];
+  newCustomersByDay: NewCustomersByDay[];
   ordersByStatus: OrdersByStatus;
   topProducts: TopProduct[];
   salesByCategory: SalesByCategory[];
@@ -1594,6 +1606,40 @@ export class PgStorage implements IStorage {
       revenue: row.revenue,
     }));
 
+    // Orders by day
+    const ordersByDayRows = await db
+      .select({
+        day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
+        count: sql<number>`count(*)`,
+      })
+      .from(orders)
+      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
+      .orderBy(asc(sql`date_trunc('day', ${orders.createdAt})::date`));
+
+    const ordersByDay: OrdersByDay[] = ordersByDayRows.map((row) => ({
+      date: row.day,
+      count: row.count,
+    }));
+
+    // New customers by day
+    const newCustomersByDayRows = await db
+      .select({
+        day: sql<string>`date_trunc('day', ${customers.createdAt})::date`,
+        count: sql<number>`count(*)`,
+      })
+      .from(customers)
+      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .groupBy(sql`date_trunc('day', ${customers.createdAt})::date`)
+      .orderBy(asc(sql`date_trunc('day', ${customers.createdAt})::date`));
+
+    const newCustomersByDay: NewCustomersByDay[] = newCustomersByDayRows.map(
+      (row) => ({
+        date: row.day,
+        count: row.count,
+      }),
+    );
+
     // Orders by status
     const statusRows = await db
       .select({
@@ -1787,6 +1833,8 @@ export class PgStorage implements IStorage {
     return {
       kpis,
       revenueByDay,
+      ordersByDay,
+      newCustomersByDay,
       ordersByStatus,
       topProducts,
       salesByCategory,
@@ -2318,6 +2366,8 @@ export class MemStorage implements IStorage {
     return {
       kpis: { revenue: 0, orders: 0, avgOrderValue: 0, newCustomers: 0, trends: { revenue: 0, orders: 0, avgOrderValue: 0, newCustomers: 0 } },
       revenueByDay: [],
+      ordersByDay: [],
+      newCustomersByDay: [],
       ordersByStatus: { completed: 0, pending: 0, cancelled: 0 },
       topProducts: [],
       salesByCategory: [],

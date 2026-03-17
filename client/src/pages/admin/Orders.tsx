@@ -77,6 +77,7 @@ export default function AdminOrders() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [sortOrder, setSortOrder] = useState<"latest" | "oldest">("latest");
+  const [timeRange, setTimeRange] = useState<"all" | "1d" | "3d" | "7d">("all");
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -131,12 +132,30 @@ export default function AdminOrders() {
 
   const sortedOrders = useMemo(() => {
     if (!orders) return [];
-    return [...orders].sort((a, b) => {
+    const now = Date.now();
+    const cutoffMs =
+      timeRange === "1d"
+        ? now - 1 * 24 * 60 * 60 * 1000
+        : timeRange === "3d"
+          ? now - 3 * 24 * 60 * 60 * 1000
+          : timeRange === "7d"
+            ? now - 7 * 24 * 60 * 60 * 1000
+            : null;
+
+    const filtered =
+      cutoffMs === null
+        ? orders
+        : orders.filter((o) => {
+            const t = new Date(o.createdAt).getTime();
+            return Number.isFinite(t) && t >= cutoffMs;
+          });
+
+    return [...filtered].sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
       return sortOrder === "latest" ? dateB - dateA : dateA - dateB;
     });
-  }, [orders, sortOrder]);
+  }, [orders, sortOrder, timeRange]);
 
   const STATUS_TABS = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'POS'];
 
@@ -188,14 +207,35 @@ export default function AdminOrders() {
            <div className="flex items-center gap-2 border-l border-border pl-3 ml-1">
              <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
                <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-               <select
-                 className="bg-transparent text-xs font-medium focus:outline-none cursor-pointer"
+               <Select
                  value={sortOrder}
-                 onChange={(e) => setSortOrder(e.target.value as "latest" | "oldest")}
+                 onValueChange={(v) => setSortOrder(v as "latest" | "oldest")}
                >
-                 <option value="latest">Latest First</option>
-                 <option value="oldest">Oldest First</option>
-               </select>
+                 <SelectTrigger className="h-7 border-0 bg-transparent px-0 shadow-none focus:ring-0 text-xs font-medium">
+                   <SelectValue />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="latest">Latest First</SelectItem>
+                   <SelectItem value="oldest">Oldest First</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
+             <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
+               <Clock className="h-3 w-3 text-muted-foreground" />
+               <Select
+                 value={timeRange}
+                 onValueChange={(v) => setTimeRange(v as "all" | "1d" | "3d" | "7d")}
+               >
+                 <SelectTrigger className="h-7 border-0 bg-transparent px-0 shadow-none focus:ring-0 text-xs font-medium">
+                   <SelectValue />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="all">All time</SelectItem>
+                   <SelectItem value="1d">Last 1 day</SelectItem>
+                   <SelectItem value="3d">Last 3 days</SelectItem>
+                   <SelectItem value="7d">Last 7 days</SelectItem>
+                 </SelectContent>
+               </Select>
              </div>
              <ViewToggle view={viewMode} onViewChange={setViewMode} />
            </div>

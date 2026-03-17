@@ -42,7 +42,7 @@ const PRODUCTS_UPLOADS_DIR = path.join(process.cwd(), "uploads", "products");
 
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["image/jpeg", "image/png", "image/webp"];
     cb(null, allowed.includes(file.mimetype));
@@ -305,6 +305,7 @@ export async function registerRoutes(
 
   app.post(
     "/api/auth/verify-2fa",
+    rateLimit(),
     async (req: Request, res: Response, next: NextFunction) => {
       try {
         const parsed = verify2FASchema.safeParse(req.body);
@@ -368,6 +369,7 @@ export async function registerRoutes(
 
   app.post(
     "/api/auth/resend-otp",
+    rateLimit(),
     async (req: Request, res: Response) => {
       const parsed = resendOtpSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -396,7 +398,7 @@ export async function registerRoutes(
 
   // Storefront product routes
   // Public Contact API
-  app.post("/api/contact", async (req: Request, res: Response) => {
+  app.post("/api/contact", rateLimit(), async (req: Request, res: Response) => {
     try {
       const { name, email, subject, message } = req.body;
       if (!name || !email || !subject || !message) {
@@ -465,7 +467,7 @@ export async function registerRoutes(
   });
 
   // Newsletter
-  app.post("/api/newsletter/subscribe", async (req: Request, res: Response) => {
+  app.post("/api/newsletter/subscribe", rateLimit(), async (req: Request, res: Response) => {
     try {
       const parsed = insertNewsletterSubscriberSchema.safeParse(req.body);
       if (!parsed.success) {

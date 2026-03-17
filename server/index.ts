@@ -61,7 +61,7 @@ app.use(
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
 const PgSession = connectPgSimple(session);
 

@@ -11,6 +11,7 @@ import type {
   AdminProduct,
   POSSession,
   AdminCustomer,
+  AdminPlatform,
 } from "@/lib/adminApi";
 import {
   closePosSession,
@@ -21,6 +22,7 @@ import {
   fetchAdminCustomers,
   createAdminCustomer,
   exportPosBillsCSV,
+  fetchPlatforms,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,7 @@ import {
   Clock,
   CreditCard,
   DollarSign,
+  Landmark,
   Minus,
   ParkingCircle,
   Plus,
@@ -82,6 +85,11 @@ export default function AdminPOS() {
   const [customerName, setCustomerName] = useState("Walk-in Customer");
   const [customerPhone, setCustomerPhone] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [platformSource, setPlatformSource] = useState<string>("pos");
+  const [isPaid, setIsPaid] = useState(true);
+  const [deliveryRequired, setDeliveryRequired] = useState(false);
+  const [deliveryProvider, setDeliveryProvider] = useState<string>("");
+  const [deliveryAddress, setDeliveryAddress] = useState<string>("");
   const [cashReceived, setCashReceived] = useState<string>("");
   const [discount, setDiscount] = useState<string>("0");
   const [notes, setNotes] = useState("");
@@ -358,6 +366,11 @@ export default function AdminPOS() {
           lineTotal: i.lineTotal,
         })),
         paymentMethod,
+        source: platformSource,
+        isPaid,
+        deliveryRequired,
+        deliveryProvider: deliveryRequired ? (deliveryProvider || null) : null,
+        deliveryAddress: deliveryRequired ? (deliveryAddress || null) : null,
         cashReceived: paymentMethod === "cash" ? cashReceivedNum : null,
         discountAmount: discountAmount,
         notes: notes || undefined,
@@ -371,6 +384,11 @@ export default function AdminPOS() {
       setCashReceived("");
       setDiscount("0");
       setNotes("");
+      setPlatformSource("pos");
+      setIsPaid(true);
+      setDeliveryRequired(false);
+      setDeliveryProvider("");
+      setDeliveryAddress("");
       setSelectedCustomer(null);
       toast({ title: "Checkout successful" });
     },
@@ -426,7 +444,27 @@ export default function AdminPOS() {
     { key: "esewa", label: "eSewa", icon: Smartphone },
     { key: "khalti", label: "Khalti", icon: Smartphone },
     { key: "card", label: "Card", icon: CreditCard },
+    { key: "fonepay", label: "Fonepay", icon: Smartphone },
+    { key: "bank_transfer", label: "Bank Transfer", icon: Landmark },
   ];
+
+  const { data: platforms = [] } = useQuery<AdminPlatform[]>({
+    queryKey: ["admin", "platforms"],
+    queryFn: fetchPlatforms,
+  });
+
+  const platformOptions = useMemo(() => {
+    const defaults = [
+      { key: "website", label: "Website" },
+      { key: "pos", label: "POS" },
+      { key: "instagram", label: "Instagram" },
+      { key: "tiktok", label: "TikTok" },
+    ];
+    const custom = platforms.map((p) => ({ key: p.key, label: p.label }));
+    const merged = new Map<string, string>();
+    for (const d of [...defaults, ...custom]) merged.set(d.key, d.label);
+    return Array.from(merged.entries()).map(([key, label]) => ({ key, label }));
+  }, [platforms]);
 
   // ── Loading session? Show skeleton ──────────────────
   if (sessionLoading) {
@@ -1006,6 +1044,87 @@ export default function AdminPOS() {
           {/* Payment methods */}
           {cart.length > 0 && (
             <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border p-4 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    Platform
+                  </div>
+                  <select
+                    value={platformSource}
+                    onChange={(e) => setPlatformSource(e.target.value)}
+                    className="h-10 w-full rounded-full border border-[#E5E5E0] dark:border-border bg-background px-4 text-sm"
+                  >
+                    {platformOptions.map((p) => (
+                      <option key={p.key} value={p.key}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    Paid status
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsPaid((v) => !v)}
+                    className={cn(
+                      "h-10 w-full rounded-full border px-4 text-sm text-left transition-colors",
+                      isPaid
+                        ? "bg-[#2C3E2D] text-white border-[#2C3E2D]"
+                        : "bg-background border-[#E5E5E0] dark:border-border hover:bg-muted",
+                    )}
+                  >
+                    {isPaid ? "Paid" : "Unpaid"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-muted/40 bg-muted/10 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">Delivery</div>
+                  <button
+                    type="button"
+                    className={cn(
+                      "text-xs font-semibold rounded-full px-3 py-1 border transition-colors",
+                      deliveryRequired
+                        ? "bg-[#2C3E2D] text-white border-[#2C3E2D]"
+                        : "bg-background border-muted/50 text-muted-foreground hover:text-foreground",
+                    )}
+                    onClick={() => setDeliveryRequired((v) => !v)}
+                  >
+                    {deliveryRequired ? "Required" : "Not required"}
+                  </button>
+                </div>
+                {deliveryRequired && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Provider</div>
+                      <select
+                        value={deliveryProvider}
+                        onChange={(e) => setDeliveryProvider(e.target.value)}
+                        className="h-10 w-full rounded-full border border-[#E5E5E0] dark:border-border bg-background px-4 text-sm"
+                      >
+                        <option value="">Select…</option>
+                        <option value="pathao">Pathao Parcel</option>
+                        <option value="nepal_can_move">Nepal Can Move</option>
+                        <option value="yango">Yango</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Address</div>
+                      <Input
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        placeholder="Delivery address"
+                        className="h-10 bg-background border-[#E5E5E0] dark:border-border rounded-full"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="text-sm font-medium mb-2">Payment Method</div>
               <div className="grid grid-cols-2 gap-2">
                 {paymentMethods.map((pm) => {
@@ -1401,11 +1520,11 @@ export default function AdminPOS() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="firstName" className="text-xs uppercase font-bold tracking-widest text-muted-foreground">First Name *</Label>
-                <Input id="firstName" name="firstName" required border="none" className="bg-muted/30 border-none rounded-xl h-11 focus-visible:ring-1 focus-visible:ring-primary/20" />
+                <Input id="firstName" name="firstName" required className="bg-muted/30 border-none rounded-xl h-11 focus-visible:ring-1 focus-visible:ring-primary/20" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="lastName" className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Last Name *</Label>
-                <Input id="lastName" name="lastName" required border="none" className="bg-muted/30 border-none rounded-xl h-11 focus-visible:ring-1 focus-visible:ring-primary/20" />
+                <Input id="lastName" name="lastName" required className="bg-muted/30 border-none rounded-xl h-11 focus-visible:ring-1 focus-visible:ring-primary/20" />
               </div>
             </div>
             <div className="space-y-1.5">

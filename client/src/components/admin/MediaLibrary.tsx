@@ -10,12 +10,14 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, ImageIcon, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchAdminImages, type AdminImageAsset } from "@/lib/adminApi";
 
 interface MediaLibraryProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (url: string) => void;
   selectedUrl?: string;
+  category?: string;
 }
 
 export function MediaLibrary({
@@ -23,17 +25,15 @@ export function MediaLibrary({
   onOpenChange,
   onSelect,
   selectedUrl,
+  category = "product",
 }: MediaLibraryProps) {
-  const { data: images = [], isLoading } = useQuery<string[]>({
-    queryKey: ["admin", "media"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/media");
-      if (!res.ok) throw new Error("Failed to fetch media");
-      const json = await res.json();
-      return json.data || [];
-    },
+  const { data: assets = [], isLoading } = useQuery<AdminImageAsset[]>({
+    queryKey: ["admin", "images", { category }],
+    queryFn: () => fetchAdminImages({ category, limit: 120 }),
     enabled: open,
   });
+
+  const images = assets.map((a) => a.url);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

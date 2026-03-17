@@ -13,7 +13,9 @@ import { formatPrice } from "@/lib/format";
 const PAYMENT_OPTIONS = [
   { id: "esewa", label: "eSewa", logoUrl: "/images/esewa.webp" },
   { id: "khalti", label: "Khalti", logoUrl: "/images/khalti.webp", logoColor: "bg-white" },
-  { id: "bank", label: "Bank Transfer", icon: Building2, logoColor: "bg-slate-700" },
+  { id: "fonepay", label: "Fonepay", icon: Smartphone, logoColor: "bg-slate-700" },
+  { id: "card", label: "Card", icon: Wallet, logoColor: "bg-slate-700" },
+  { id: "bank_transfer", label: "Bank Transfer", icon: Building2, logoColor: "bg-slate-700" },
 ] as const;
 
 export type PaymentMethodId = (typeof PAYMENT_OPTIONS)[number]["id"] | "cash_on_delivery";
@@ -27,6 +29,9 @@ export default function Checkout() {
   const [formError, setFormError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId>("cash_on_delivery");
   const [locationCoordinates, setLocationCoordinates] = useState<string | null>(null);
+  const [deliveryRequired, setDeliveryRequired] = useState(true);
+  const [deliveryProvider, setDeliveryProvider] = useState<string>("pathao");
+  const [deliveryAddress, setDeliveryAddress] = useState<string>("");
 
   const shipping = 100;
   // Promo code state
@@ -154,6 +159,10 @@ export default function Checkout() {
           locationCoordinates: finalLocation,
         },
         paymentMethod,
+        source: "website",
+        deliveryRequired,
+        deliveryProvider: deliveryRequired ? deliveryProvider : null,
+        deliveryAddress: deliveryRequired ? (deliveryAddress || manualLocation || null) : null,
         promoCodeId: appliedPromo?.id,
       });
 
@@ -165,7 +174,9 @@ export default function Checkout() {
       const needsPaymentPage =
         paymentMethod === "esewa" ||
         paymentMethod === "khalti" ||
-        paymentMethod === "bank";
+        paymentMethod === "bank_transfer" ||
+        paymentMethod === "fonepay" ||
+        paymentMethod === "card";
 
       if (needsPaymentPage) {
         clearCart();
@@ -319,6 +330,53 @@ export default function Checkout() {
                       <p className="text-[10px] text-red-500 mt-1 uppercase font-bold">Please provide a delivery location</p>
                     )}
                   </>
+                )}
+              </div>
+
+              <div className="pt-2 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold uppercase tracking-wide">
+                    Delivery
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryRequired((v) => !v)}
+                    className={`text-[10px] uppercase font-bold underline hover:text-muted-foreground ${
+                      deliveryRequired ? "" : "opacity-70"
+                    }`}
+                  >
+                    {deliveryRequired ? "Required" : "Not required"}
+                  </button>
+                </div>
+                {deliveryRequired && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                        Delivery Partner
+                      </label>
+                      <select
+                        value={deliveryProvider}
+                        onChange={(e) => setDeliveryProvider(e.target.value)}
+                        className="h-14 w-full rounded-none border-2 border-gray-200 bg-background px-4 text-sm"
+                      >
+                        <option value="pathao">Pathao Parcel</option>
+                        <option value="nepal_can_move">Nepal Can Move</option>
+                        <option value="yango">Yango</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                        Address (optional)
+                      </label>
+                      <Input
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        placeholder="Extra address details for the rider"
+                        className="h-14 rounded-none transition-colors border-gray-200"
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

@@ -125,7 +125,7 @@ export async function sendInviteEmail(
 export async function sendContactReplyEmail(to: string, subject: string, html: string) {
   if (!isSMTPConfigured || !transporter) {
     console.warn("[DEV] SMTP not configured. Contact reply for", to, "->", subject);
-    return;
+    throw new Error("SMTP not configured");
   }
   try {
     await transporter.sendMail({
@@ -143,31 +143,45 @@ export async function sendContactReplyEmail(to: string, subject: string, html: s
       response: err.response,
       stack: err.stack
     });
+    throw err;
   }
 }
 
 export async function sendMarketingBroadcastEmail(bccList: string[], subject: string, html: string) {
   if (!isSMTPConfigured || !transporter || bccList.length === 0) {
     console.warn("[DEV] SMTP not configured or empty BCC. Broadcast ->", subject);
-    return;
+    return { sent: 0, failed: bccList.length, errors: ["SMTP not configured"] };
   }
-  try {
-    await transporter.sendMail({
-      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
-      bcc: bccList,
-      subject,
-      html,
-    });
-    console.log(`[SMTP] Marketing broadcast email sent to: ${bccList.length} recipients`);
-  } catch (err: any) {
-    console.warn("[SMTP] Marketing broadcast failed. Error:", {
-      message: err.message,
-      code: err.code,
-      command: err.command,
-      response: err.response,
-      stack: err.stack
-    });
+  const batchSize = Math.max(1, Number(process.env.SMTP_BCC_BATCH_SIZE ?? "50"));
+  let sent = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (let i = 0; i < bccList.length; i += batchSize) {
+    const batch = bccList.slice(i, i + batchSize);
+    try {
+      await transporter.sendMail({
+        from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+        bcc: batch,
+        subject,
+        html,
+      });
+      sent += batch.length;
+      console.log(`[SMTP] Broadcast batch sent: ${batch.length} recipients (${sent}/${bccList.length})`);
+    } catch (err: any) {
+      failed += batch.length;
+      const msg = err?.message ? String(err.message) : "Unknown SMTP error";
+      errors.push(msg);
+      console.warn("[SMTP] Broadcast batch failed. Error:", {
+        message: err.message,
+        code: err.code,
+        command: err.command,
+        response: err.response,
+      });
+    }
   }
+
+  return { sent, failed, errors };
 }
 
 export async function sendNewsletterWelcomeEmail(to: string) {

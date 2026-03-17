@@ -198,6 +198,7 @@ export const bills = pgTable("bills", {
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email"),
   customerPhone: text("customer_phone"),
+  source: text("source").notNull().default("pos"), // pos|website|instagram|tiktok
   items: jsonb("items").notNull(), // BillItem[]
   subtotal: numeric("subtotal").notNull(),
   taxRate: numeric("tax_rate").default("13"), // Nepal VAT 13%
@@ -205,6 +206,10 @@ export const bills = pgTable("bills", {
   discountAmount: numeric("discount_amount").default("0"),
   totalAmount: numeric("total_amount").notNull(),
   paymentMethod: text("payment_method").notNull(), // cash|esewa|card|khalti
+  isPaid: boolean("is_paid").notNull().default(true),
+  deliveryRequired: boolean("delivery_required").notNull().default(false),
+  deliveryProvider: text("delivery_provider"),
+  deliveryAddress: text("delivery_address"),
   cashReceived: numeric("cash_received"),
   changeGiven: numeric("change_given"),
   processedBy: text("processed_by").notNull(),
@@ -217,6 +222,39 @@ export const bills = pgTable("bills", {
 
 export type Bill = typeof bills.$inferSelect;
 export type NewBill = typeof bills.$inferInsert;
+
+// ── Platforms (order sources) ────────────────────────────
+export const platforms = pgTable("platforms", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(), // website|pos|instagram|tiktok|...
+  label: text("label").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type Platform = typeof platforms.$inferSelect;
+export type NewPlatform = typeof platforms.$inferInsert;
+
+// ── Media Assets (image library) ─────────────────────────
+export const mediaAssets = pgTable("media_assets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  url: text("url").notNull(),
+  provider: text("provider").notNull(), // cloudinary | local
+  category: text("category").notNull(), // product | model | website | landing_page | collection_page
+  publicId: text("public_id"), // for cloudinary deletes
+  filename: text("filename"),
+  bytes: integer("bytes"),
+  width: integer("width"),
+  height: integer("height"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type MediaAsset = typeof mediaAssets.$inferSelect;
+export type NewMediaAsset = typeof mediaAssets.$inferInsert;
 
 // BillItem shape (stored in items JSONB):
 // {

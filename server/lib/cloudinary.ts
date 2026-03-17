@@ -38,6 +38,7 @@ export async function uploadToCloudinary(
     hero: 1920,
     featured_collection: 1200,
     new_collection: 1200,
+    collection_page: 2400,
   };
 
   const width = maxWidths[section] ?? 1200;
@@ -53,12 +54,58 @@ export async function uploadToCloudinary(
           {
             width,
             crop: "limit", // never upscale, maintain ratio
-            quality: 85, // matches Sharp quality target
+            // Prefer better delivery quality for hero/campaign assets.
+            // Cloudinary will still optimize format/bytes automatically.
+            quality: "auto:best",
+            dpr: "auto",
             fetch_format: "auto",
           },
         ],
         // Generate a clean unique public ID
         public_id: `${section}-${Date.now()}`,
+        overwrite: false,
+      },
+      (error, result) => {
+        if (error || !result) return reject(error);
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+        });
+      },
+    );
+    uploadStream.end(buffer);
+  });
+}
+
+export async function uploadMediaToCloudinary(
+  buffer: Buffer,
+  category: string,
+): Promise<{ url: string; publicId: string }> {
+  const maxWidths: Record<string, number> = {
+    product: 2000,
+    model: 2400,
+    website: 2400,
+    landing_page: 2400,
+    collection_page: 2400,
+  };
+
+  const width = maxWidths[category] ?? 2000;
+
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: `rare-np/media/${category}`,
+        format: "webp",
+        transformation: [
+          {
+            width,
+            crop: "limit",
+            quality: "auto:best",
+            dpr: "auto",
+            fetch_format: "auto",
+          },
+        ],
+        public_id: `${category}-${Date.now()}`,
         overwrite: false,
       },
       (error, result) => {

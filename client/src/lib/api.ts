@@ -46,6 +46,10 @@ export interface OrderInput {
     locationCoordinates?: string;
   };
   paymentMethod: string;
+  source?: string;
+  deliveryRequired?: boolean;
+  deliveryProvider?: string | null;
+  deliveryAddress?: string | null;
   promoCodeId?: string;
 }
 

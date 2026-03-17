@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -156,6 +156,17 @@ export default function AdminMarketingPage() {
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
 
   const [includeCustomers, setIncludeCustomers] = useState(false);
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  useEffect(() => {
+    const tpl = emailTemplates[selectedTemplate as keyof typeof emailTemplates];
+    if (tpl) {
+      setMarketingSubject(tpl.subject);
+      setMarketingBody(tpl.html);
+    }
+  }, []);
 
   const subscribersQuery = useQuery<{ success: boolean; data: { email: string; createdAt: string }[] }>({
     queryKey: ["admin", "newsletter", "subscribers"],
@@ -233,6 +244,25 @@ export default function AdminMarketingPage() {
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (emails: string[]) => {
+      const res = await apiRequest("POST", "/api/admin/newsletter/bulk-delete", {
+        emails,
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Bulk delete failed");
+      return json as { success: boolean; deleted: number };
+    },
+    onSuccess: (result) => {
+      toast({ title: `Deleted ${result.deleted} subscribers` });
+      setSelectedEmails(new Set());
+      queryClient.invalidateQueries({ queryKey: ["admin", "newsletter", "subscribers"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Bulk delete failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   const broadcastMutation = useMutation({
     mutationFn: async (payload: { subject: string; html: string }) => {
       const res = await apiRequest("POST", "/api/admin/marketing/broadcast", payload);
@@ -242,8 +272,13 @@ export default function AdminMarketingPage() {
       if (result.success) {
         toast({ title: `Broadcast sent to ${result.count} subscribers` });
         setIsBroadcastConfirmOpen(false);
+      } else {
+        toast({ title: "Broadcast failed", description: result.error || "SMTP failed", variant: "destructive" });
       }
     },
+    onError: (err: Error) => {
+      toast({ title: "Broadcast failed", description: err.message, variant: "destructive" });
+    }
   });
   
   const sendTestMutation = useMutation({
@@ -356,11 +391,62 @@ export default function AdminMarketingPage() {
               />
             </div>
 
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-[10px]"
+                onClick={() => exportSubscribersCSV()}
+              >
+                <Download className="h-3 w-3 mr-1.5" />
+                Export CSV
+              </Button>
+
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="h-8 text-[10px]"
+                disabled={
+                  bulkDeleteMutation.isPending ||
+                  Array.from(selectedEmails).length === 0
+                }
+                onClick={() => bulkDeleteMutation.mutate(Array.from(selectedEmails))}
+              >
+                <Trash2 className="h-3 w-3 mr-1.5" />
+                Delete selected ({Array.from(selectedEmails).length})
+              </Button>
+            </div>
+
             <div className="max-h-[400px] overflow-y-auto border border-[#E5E5E0] dark:border-border rounded-xl">
               <table className="w-full text-xs">
                 <tbody className="divide-y divide-[#E5E5E0] dark:divide-border">
                   {filteredSubscribers.map((s) => (
                     <tr key={s.email} className="hover:bg-muted/10 transition-colors">
+                      <td className="pl-3 pr-1 py-2 w-8">
+                        {s.source === "newsletter" ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedEmails.has(s.email)}
+                            onChange={(e) => {
+                              setSelectedEmails((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(s.email);
+                                else next.delete(s.email);
+                                return next;
+                              });
+                            }}
+                            className="h-3 w-3 rounded border-border"
+                          />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            disabled
+                            className="h-3 w-3 rounded border-border opacity-30"
+                          />
+                        )}
+                      </td>
                       <td className="px-4 py-2 truncate max-w-[150px]">
                         <div className="flex flex-col">
                           <span className="font-medium">{s.email}</span>

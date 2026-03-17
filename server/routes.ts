@@ -8,14 +8,16 @@ import { z } from "zod";
 import { passport } from "./auth";
 import { storage } from "./storage";
 
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql, inArray } from "drizzle-orm";
 import {
     bills,
     emailTemplates,
     insertNewsletterSubscriberSchema,
     insertProductAttributeSchema,
+    mediaAssets,
     newsletterSubscribers,
     posSessions,
+    platforms,
     Product,
     products,
     promoCodes,
@@ -35,6 +37,7 @@ import { requireAuth } from "./middleware/requireAuth";
 import { rateLimit } from "./middleware/security";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
 import { uploadToCloudinary, deleteFromCloudinary } from "./lib/cloudinary";
+import { uploadMediaToCloudinary } from "./lib/cloudinary";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
@@ -43,7 +46,11 @@ const PRODUCTS_UPLOADS_DIR = path.join(process.cwd(), "uploads", "products");
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (
+    _req: Request,
+    file: Express.Multer.File,
+    cb: multer.FileFilterCallback,
+  ) => {
     const allowed = ["image/jpeg", "image/png", "image/webp"];
     cb(null, allowed.includes(file.mimetype));
   },
@@ -511,6 +518,10 @@ export async function registerRoutes(
     items: z.array(orderItemSchema).min(1),
     shipping: shippingSchema,
     paymentMethod: z.string().min(1),
+    source: z.string().optional(),
+    deliveryRequired: z.boolean().optional(),
+    deliveryProvider: z.string().optional().nullable(),
+    deliveryAddress: z.string().optional().nullable(),
     promoCodeId: z.string().optional(),
   });
 
@@ -521,7 +532,16 @@ export async function registerRoutes(
         return handleApiError(res, parsed.error, "orders/create", 400);
       }
 
-      const { items, shipping, paymentMethod, promoCodeId } = parsed.data;
+      const {
+        items,
+        shipping,
+        paymentMethod,
+        promoCodeId,
+        source,
+        deliveryRequired,
+        deliveryProvider,
+        deliveryAddress,
+      } = parsed.data;
 
       const orderSubtotal = items.reduce(
         (acc, item) => acc + item.priceAtTime * item.quantity,
@@ -587,6 +607,10 @@ export async function registerRoutes(
         country: shipping.country,
         total: orderTotal,
         paymentMethod,
+        source: source || "website",
+        deliveryRequired: deliveryRequired ?? true,
+        deliveryProvider: deliveryProvider ?? null,
+        deliveryAddress: deliveryAddress ?? null,
         promoCode,
         promoDiscountAmount,
         items: items.map((item) => ({
@@ -807,6 +831,7 @@ export async function registerRoutes(
     "hero",
     "featured_collection",
     "new_collection",
+    "collection_page",
   ] as const;
 
   type SiteAssetSection = (typeof validSiteAssetSections)[number];
@@ -959,14 +984,16 @@ export async function registerRoutes(
     async (req: Request, res: Response) => {
       try {
         const section = getQueryParam(req.query.section);
-
-        let query = db.select().from(siteAssets);
-
-        if (section) {
-          query = query.where(eq(siteAssets.section, section));
-        }
-
-        const assets = await query.orderBy(siteAssets.sortOrder);
+        const assets = section
+          ? await db
+              .select()
+              .from(siteAssets)
+              .where(eq(siteAssets.section, section))
+              .orderBy(siteAssets.sortOrder)
+          : await db
+              .select()
+              .from(siteAssets)
+              .orderBy(siteAssets.sortOrder);
 
         return res.json({ success: true, data: assets });
       } catch (err) {
@@ -2128,6 +2155,67 @@ export async function registerRoutes(
     },
   );
 
+  // Admin platforms (dynamic order sources)
+  app.get("/api/admin/platforms", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const rows = await db
+        .select()
+        .from(platforms)
+        .orderBy(desc(platforms.createdAt));
+      return res.json({ success: true, data: rows });
+    } catch (err) {
+      console.error("Error in GET /api/admin/platforms", err);
+      return res.status(500).json({ success: false, error: "Failed to load platforms" });
+    }
+  });
+
+  app.post("/api/admin/platforms", requireAdmin, async (req: Request, res: Response) => {
+    const schema = z.object({
+      key: z
+        .string()
+        .min(1)
+        .regex(/^[a-z0-9_]+$/),
+      label: z.string().min(1),
+      isActive: z.boolean().optional(),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: "Invalid payload" });
+    }
+
+    try {
+      const [row] = await db
+        .insert(platforms)
+        .values({
+          key: parsed.data.key,
+          label: parsed.data.label,
+          isActive: parsed.data.isActive ?? true,
+        })
+        .onConflictDoUpdate({
+          target: platforms.key,
+          set: { label: parsed.data.label, isActive: parsed.data.isActive ?? true },
+        })
+        .returning();
+      return res.json({ success: true, data: row });
+    } catch (err) {
+      console.error("Error in POST /api/admin/platforms", err);
+      return res.status(500).json({ success: false, error: "Failed to save platform" });
+    }
+  });
+
+  app.delete("/api/admin/platforms/:key", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const key = req.params.key as string;
+      if (!key) return res.status(400).json({ success: false, error: "Invalid key" });
+      await db.delete(platforms).where(eq(platforms.key, key));
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in DELETE /api/admin/platforms/:key", err);
+      return res.status(500).json({ success: false, error: "Failed to delete platform" });
+    }
+  });
+
   // Admin notifications
   app.get(
     "/api/admin/notifications",
@@ -2166,7 +2254,13 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const { type } = req.params;
+        const typeParam = (req.params as { type?: string | string[] }).type;
+        const type = Array.isArray(typeParam) ? typeParam[0] : typeParam;
+        if (!type) {
+          return res
+            .status(400)
+            .json({ success: false, error: "Invalid type" });
+        }
         await storage.markAdminNotificationsByTypeRead(type);
         return res.json({ success: true });
       } catch (err) {
@@ -2260,9 +2354,18 @@ export async function registerRoutes(
         }
 
         const bccList = subscribers.map((s) => s.email);
-        await sendMarketingBroadcastEmail(bccList, subject, html);
+        const result = await sendMarketingBroadcastEmail(bccList, subject, html);
+        if (result.failed > 0) {
+          return res.status(502).json({
+            success: false,
+            error: "SMTP delivery failed for one or more batches",
+            sent: result.sent,
+            failed: result.failed,
+            errors: result.errors,
+          });
+        }
 
-        return res.json({ success: true, count: bccList.length });
+        return res.json({ success: true, count: result.sent });
       } catch (err) {
         console.error("Error in POST /api/admin/marketing/broadcast", err);
         return res
@@ -2459,6 +2562,30 @@ export async function registerRoutes(
     },
   );
 
+  // ── Bulk Delete Emails ──────────────────────────────────
+  app.post(
+    "/api/admin/newsletter/bulk-delete",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const schema = z.object({ emails: z.array(z.string().email()).min(1) });
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) {
+          return sendError(res, "Invalid emails payload", undefined, 400);
+        }
+
+        const emails = Array.from(new Set(parsed.data.emails.map((e) => e.toLowerCase())));
+        await db
+          .delete(newsletterSubscribers)
+          .where(inArray(newsletterSubscribers.email, emails));
+
+        return res.json({ success: true, deleted: emails.length });
+      } catch (err: any) {
+        return handleApiError(res, err, "POST /api/admin/newsletter/bulk-delete");
+      }
+    },
+  );
+
   // ── Delete All Emails ───────────────────────────────────
   app.delete(
     "/api/admin/newsletter/clear-all",
@@ -2586,7 +2713,7 @@ export async function registerRoutes(
             `"${bill.customerName}"`,
             bill.customerPhone || "N/A",
             bill.subtotal.toString(),
-            bill.discountAmount.toString(),
+            (bill.discountAmount ?? 0).toString(),
             bill.totalAmount.toString(),
             bill.paymentMethod,
             `"${bill.processedBy}"`,
@@ -2609,8 +2736,40 @@ export async function registerRoutes(
   // POST /api/admin/bills/pos — create bill directly from POS (no order record)
   app.post("/api/admin/bills/pos", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { customerName, customerPhone, items, paymentMethod,
-              cashReceived, discountAmount, notes } = req.body;
+      const schema = z.object({
+        customerName: z.string().optional(),
+        customerPhone: z.string().optional().nullable(),
+        items: z.array(z.any()).min(1),
+        source: z.string().optional(),
+        paymentMethod: z.string().min(1),
+        isPaid: z.boolean().optional(),
+        deliveryRequired: z.boolean().optional(),
+        deliveryProvider: z.string().optional().nullable(),
+        deliveryAddress: z.string().optional().nullable(),
+        cashReceived: z.number().optional().nullable(),
+        discountAmount: z.number().optional(),
+        notes: z.string().optional(),
+      });
+
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, error: "Invalid payload" });
+      }
+
+      const {
+        customerName,
+        customerPhone,
+        items,
+        source,
+        paymentMethod,
+        isPaid,
+        deliveryRequired,
+        deliveryProvider,
+        deliveryAddress,
+        cashReceived,
+        discountAmount,
+        notes,
+      } = parsed.data;
 
       const subtotal = items.reduce((s: number, i: any) => s + i.lineTotal, 0);
       const taxAmount = Math.round(subtotal * 0.13);
@@ -2634,10 +2793,16 @@ export async function registerRoutes(
         discountAmount: String(discount),
         totalAmount: String(total),
         paymentMethod,
+        source: source || "pos",
+        isPaid: isPaid ?? true,
+        deliveryRequired: deliveryRequired ?? false,
+        deliveryProvider: deliveryProvider ?? null,
+        deliveryAddress: deliveryAddress ?? null,
         cashReceived: cashReceived ? String(cashReceived) : null,
         changeGiven: change > 0 ? String(change) : null,
         processedBy: user?.name ?? user?.email ?? "Admin",
         processedById: user?.id ?? null,
+        notes: notes ?? null,
         billType: "pos",
         status: "issued",
       }).returning();
@@ -2842,6 +3007,114 @@ export async function registerRoutes(
   });
 
   // ── Media Discovery (Admin Only) ──────────────────────────────────
+  app.get("/api/admin/images", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const category = getQueryParam(req.query.category);
+      const provider = getQueryParam(req.query.provider);
+      const limit = Math.min(200, Math.max(1, Number(getQueryParam(req.query.limit) ?? "60") || 60));
+      const offset = Math.max(0, Number(getQueryParam(req.query.offset) ?? "0") || 0);
+
+      const where = and(
+        category ? eq(mediaAssets.category, category) : sql`true`,
+        provider ? eq(mediaAssets.provider, provider) : sql`true`,
+      );
+
+      const rows = await db
+        .select()
+        .from(mediaAssets)
+        .where(where)
+        .orderBy(desc(mediaAssets.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      return res.json({ success: true, data: rows });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/admin/images");
+    }
+  });
+
+  app.post(
+    "/api/admin/images/upload",
+    requireAdmin,
+    memoryUpload.single("file"),
+    async (req: Request, res: Response) => {
+      try {
+        const category = String((req.body as any)?.category || "product");
+        const provider = String((req.body as any)?.provider || "local");
+
+        const file = (req as any).file as Express.Multer.File | undefined;
+        if (!file) return sendError(res, "Missing file", undefined, 400);
+
+        const allowedCategories = new Set([
+          "product",
+          "model",
+          "website",
+          "landing_page",
+          "collection_page",
+        ]);
+        if (!allowedCategories.has(category)) {
+          return sendError(res, "Invalid category", undefined, 400);
+        }
+
+        let url = "";
+        let publicId: string | null = null;
+
+        if (provider === "cloudinary") {
+          const uploaded = await uploadMediaToCloudinary(file.buffer, category);
+          url = uploaded.url;
+          publicId = uploaded.publicId;
+        } else {
+          const dir = path.join(UPLOADS_DIR, "images", category);
+          await fs.promises.mkdir(dir, { recursive: true });
+          const safeBase = (file.originalname || "image").replace(/[^a-zA-Z0-9._-]/g, "_");
+          const filename = `${Date.now()}_${safeBase}`;
+          const abs = path.join(dir, filename);
+          await fs.promises.writeFile(abs, file.buffer);
+          url = `/uploads/images/${category}/${filename}`;
+        }
+
+        const [row] = await db
+          .insert(mediaAssets)
+          .values({
+            url,
+            provider,
+            category,
+            publicId,
+            filename: file.originalname ?? null,
+            bytes: file.size ?? null,
+          })
+          .returning();
+
+        return res.json({ success: true, data: row });
+      } catch (err) {
+        handleApiError(res, err, "POST /api/admin/images/upload");
+      }
+    },
+  );
+
+  app.delete("/api/admin/images/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = getQueryParam(req.params.id);
+      if (!id) return sendError(res, "Invalid id", undefined, 400);
+
+      const [asset] = await db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).limit(1);
+      if (!asset) return res.status(404).json({ success: false, error: "Not found" });
+
+      if (asset.provider === "cloudinary" && asset.publicId) {
+        await deleteFromCloudinary(asset.publicId);
+      } else if (asset.provider === "local" && asset.url?.startsWith("/uploads/")) {
+        const rel = asset.url.replace(/^\/uploads\//, "");
+        const abs = path.join(UPLOADS_DIR, rel);
+        await fs.promises.unlink(abs).catch(() => {});
+      }
+
+      await db.delete(mediaAssets).where(eq(mediaAssets.id, id));
+      return res.json({ success: true });
+    } catch (err) {
+      handleApiError(res, err, "DELETE /api/admin/images/:id");
+    }
+  });
+
   app.get("/api/admin/media", requireAdmin, async (_req, res) => {
     try {
       const allSiteAssets = await db.select({ imageUrl: siteAssets.imageUrl }).from(siteAssets);

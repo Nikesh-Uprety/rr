@@ -26,15 +26,22 @@ import {
 import {
   fetchAnalytics,
   fetchAnalyticsCalendar,
+  fetchPlatforms,
+  upsertPlatform,
+  deletePlatform,
   exportAnalyticsCSV,
   type AdminAnalytics,
   type AdminAnalyticsCalendarDay,
+  type AdminPlatform,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ExportButton } from "@/components/admin/ExportButton";
+import { Input } from "@/components/ui/input";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 type RangeKey = "7d" | "30d" | "90d" | "1y";
+type CalendarView = "year" | "month";
 
 const RANGE_LABELS: Record<RangeKey, string> = {
   "7d": "Last 7 days",
@@ -85,8 +92,15 @@ function useAnalyticsCalendar(year: number) {
 export default function AdminAnalytics() {
   const [range, setRange] = useState<RangeKey>("30d");
   const { data, isLoading } = useAnalytics(range);
+  const [calendarYear, setCalendarYear] = useState<number>(
+    new Date().getFullYear(),
+  );
+  const [calendarView, setCalendarView] = useState<CalendarView>("year");
+  const [calendarMonth, setCalendarMonth] = useState<number>(
+    new Date().getMonth(),
+  );
   const { data: calendar, isLoading: isCalendarLoading } =
-    useAnalyticsCalendar(2025);
+    useAnalyticsCalendar(calendarYear);
 
   const revenueChartData = useMemo(
     () =>
@@ -190,7 +204,61 @@ export default function AdminAnalytics() {
     return { cells, weeksCount, monthLabels, maxRevenue };
   }, [calendar]);
 
+  const monthLayout = useMemo(() => {
+    if (!calendarLayout) return null;
+
+    const start = new Date(calendarYear, calendarMonth, 1);
+    const end = new Date(calendarYear, calendarMonth + 1, 1);
+
+    // Align grid to Monday-start week like the year view.
+    const startMonday = new Date(start);
+    const startWeekday = (startMonday.getDay() + 6) % 7; // 0=Mon
+    startMonday.setDate(startMonday.getDate() - startWeekday);
+
+    const endSunday = new Date(end);
+    const endWeekday = (endSunday.getDay() + 6) % 7;
+    endSunday.setDate(endSunday.getDate() + (6 - endWeekday));
+
+    const byDate = new Map(calendarLayout.cells.map((c) => [c.date, c]));
+    const dates: { date: string; cell?: (typeof calendarLayout.cells)[number] }[] = [];
+    for (let d = new Date(startMonday); d < endSunday; d.setDate(d.getDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      dates.push({ date: key, cell: byDate.get(key) });
+    }
+
+    return {
+      dates,
+      weeksCount: Math.ceil(dates.length / 7),
+      maxRevenue: calendarLayout.maxRevenue,
+    };
+  }, [calendarLayout, calendarYear, calendarMonth]);
+
   const kpis = data?.kpis;
+
+  const queryClient = useQueryClient();
+  const { data: platforms = [] } = useQuery<AdminPlatform[]>({
+    queryKey: ["admin", "platforms"],
+    queryFn: fetchPlatforms,
+  });
+
+  const upsertPlatformMutation = useMutation({
+    mutationFn: upsertPlatform,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "platforms"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "analytics"] });
+    },
+  });
+
+  const deletePlatformMutation = useMutation({
+    mutationFn: deletePlatform,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "platforms"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "analytics"] });
+    },
+  });
+
+  const [newPlatformKey, setNewPlatformKey] = useState("");
+  const [newPlatformLabel, setNewPlatformLabel] = useState("");
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -302,7 +370,7 @@ export default function AdminAnalytics() {
         })}
       </div>
 
-      {/* Revenue Bar Chart */}
+      {/* Revenue Trendline */}
       <section className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -321,12 +389,12 @@ export default function AdminAnalytics() {
               color: "hsl(142, 60%, 45%)",
             },
           }}
-          className="h-72 w-full mt-4"
+          className="h-56 w-full mt-4"
         >
           <AreaChart data={revenueChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(142, 60%, 45%)" stopOpacity={0.3} />
+                <stop offset="5%" stopColor="hsl(142, 60%, 45%)" stopOpacity={0.22} />
                 <stop offset="95%" stopColor="hsl(142, 60%, 45%)" stopOpacity={0} />
               </linearGradient>
             </defs>
@@ -341,6 +409,7 @@ export default function AdminAnalytics() {
               axisLine={false}
               tickMargin={8}
               tick={{ fill: 'currentColor', opacity: 0.6, fontSize: 11 }}
+              interval="preserveStartEnd"
             />
             <YAxis
               tickLine={false}
@@ -375,7 +444,8 @@ export default function AdminAnalytics() {
               type="monotone"
               dataKey="revenue"
               stroke="hsl(142, 60%, 45%)"
-              strokeWidth={2}
+              strokeWidth={2.25}
+              dot={false}
               fillOpacity={1}
               fill="url(#colorRevenue)"
             />
@@ -519,14 +589,60 @@ export default function AdminAnalytics() {
 
       {/* Sales calendar heatmap */}
       <section className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-serif font-medium">
-              Sales Activity — 2025
+              Sales Activity — {calendarYear}
             </h2>
             <p className="text-xs text-muted-foreground">
               GitHub-style calendar of daily revenue
             </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-1 rounded-full bg-muted p-1">
+              {(["year", "month"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setCalendarView(v)}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium rounded-full transition-colors",
+                    calendarView === v
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {v === "year" ? "Year" : "Month"}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              value={calendarYear}
+              onChange={(e) =>
+                setCalendarYear(
+                  Number(e.target.value) || new Date().getFullYear(),
+                )
+              }
+              className="w-24 h-9 rounded-lg border border-muted bg-background px-3 text-sm"
+              min={2020}
+              max={new Date().getFullYear() + 1}
+            />
+            {calendarView === "month" && (
+              <select
+                value={calendarMonth}
+                onChange={(e) => setCalendarMonth(Number(e.target.value))}
+                className="h-9 rounded-lg border border-muted bg-background px-2 text-sm"
+              >
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <option key={i} value={i}>
+                    {new Date(calendarYear, i, 1).toLocaleString("default", {
+                      month: "short",
+                    })}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
@@ -537,64 +653,127 @@ export default function AdminAnalytics() {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <div className="inline-flex gap-4">
-                <div className="flex flex-col items-end justify-between py-6 pr-2 text-[10px] text-muted-foreground">
-                  {["M", "T", "W", "T", "F", "S", "S"].map((d) => (
-                    <span key={d} className="h-3 leading-3">
-                      {d}
-                    </span>
-                  ))}
-                </div>
-                <div className="space-y-1">
-                  {/* Month labels */}
-                  <div className="flex text-[10px] text-muted-foreground mb-1">
-                    {Array.from({ length: calendarLayout.weeksCount }).map(
-                      (_, weekIndex) => {
-                        const month = calendarLayout.monthLabels.find(
-                          (m) => m.weekIndex === weekIndex,
-                        );
-                        return (
+              {calendarView === "year" ? (
+                <div className="inline-flex gap-4">
+                  <div className="flex flex-col items-end justify-between py-6 pr-2 text-[10px] text-muted-foreground">
+                    {["M", "T", "W", "T", "F", "S", "S"].map((d) => (
+                      <span key={d} className="h-3 leading-3">
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="space-y-1">
+                    {/* Month labels */}
+                    <div className="flex text-[10px] text-muted-foreground mb-1">
+                      {Array.from({ length: calendarLayout.weeksCount }).map(
+                        (_, weekIndex) => {
+                          const month = calendarLayout.monthLabels.find(
+                            (m) => m.weekIndex === weekIndex,
+                          );
+                          return (
+                            <div
+                              key={weekIndex}
+                              className="w-3 h-3 flex items-center justify-center"
+                            >
+                              {month?.label ?? ""}
+                            </div>
+                          );
+                        },
+                      )}
+                    </div>
+                    {/* Day cells */}
+                    <div className="flex gap-1">
+                      {Array.from(
+                        { length: calendarLayout.weeksCount },
+                        (_, weekIndex) => (
                           <div
                             key={weekIndex}
-                            className="w-3 h-3 flex items-center justify-center"
+                            className="flex flex-col gap-1"
                           >
-                            {month?.label ?? ""}
-                          </div>
-                        );
-                      },
-                    )}
-                  </div>
-                  {/* Day cells */}
-                  <div className="flex gap-1">
-                    {Array.from(
-                      { length: calendarLayout.weeksCount },
-                      (_, weekIndex) => (
-                        <div
-                          key={weekIndex}
-                          className="flex flex-col gap-1"
-                        >
-                          {Array.from({ length: 7 }, (_, weekday) => {
-                            const cell = calendarLayout.cells.find(
-                              (c) =>
-                                c.weekIndex === weekIndex &&
-                                c.weekday === weekday,
-                            );
-                            if (!cell) {
+                            {Array.from({ length: 7 }, (_, weekday) => {
+                              const cell = calendarLayout.cells.find(
+                                (c) =>
+                                  c.weekIndex === weekIndex &&
+                                  c.weekday === weekday,
+                              );
+                              if (!cell) {
+                                return (
+                                  <div
+                                    key={weekday}
+                                    className="w-3 h-3 rounded-[3px] bg-transparent"
+                                  />
+                                );
+                              }
+
+                              const { revenue, isHoliday } = cell;
+
+                              let bg = "var(--calendar-0)"; // no sales
+                              if (revenue > 0) {
+                                const ratio =
+                                  calendarLayout.maxRevenue > 0
+                                    ? revenue / calendarLayout.maxRevenue
+                                    : 0;
+                                if (ratio > 0.75) bg = "var(--calendar-4)";
+                                else if (ratio > 0.5) bg = "var(--calendar-3)";
+                                else if (ratio > 0.25) bg = "var(--calendar-2)";
+                                else bg = "var(--calendar-1)";
+                              } else if (isHoliday) {
+                                bg = "var(--calendar-holiday)";
+                              }
+
+                              const title =
+                                revenue > 0
+                                  ? `${cell.date} · ${formatPrice(
+                                      revenue,
+                                    )} revenue`
+                                  : `${cell.date} · No sales`;
+
                               return (
                                 <div
                                   key={weekday}
-                                  className="w-3 h-3 rounded-[3px] bg-transparent"
+                                  title={title}
+                                  className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5"
+                                  style={{ backgroundColor: bg }}
                                 />
                               );
-                            }
+                            })}
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="inline-flex gap-4">
+                  <div className="flex flex-col items-end justify-between py-6 pr-2 text-[10px] text-muted-foreground">
+                    {["M", "T", "W", "T", "F", "S", "S"].map((d) => (
+                      <span key={d} className="h-3 leading-3">
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-1">
+                    {Array.from({ length: monthLayout?.weeksCount ?? 0 }).map(
+                      (_, weekIndex) => (
+                        <div key={weekIndex} className="flex flex-col gap-1">
+                          {Array.from({ length: 7 }, (_, weekday) => {
+                            const idx = weekIndex * 7 + weekday;
+                            const entry = monthLayout?.dates[idx];
+                            const cell = entry?.cell;
+                            const dateObj = entry ? new Date(entry.date) : null;
+                            const inMonth =
+                              dateObj &&
+                              dateObj.getFullYear() === calendarYear &&
+                              dateObj.getMonth() === calendarMonth;
 
-                            const { revenue, isHoliday } = cell;
+                            const revenue = cell?.revenue ?? 0;
+                            const isHoliday = cell?.isHoliday ?? false;
 
-                            let bg = "var(--calendar-0)"; // no sales
+                            let bg = "var(--calendar-0)";
                             if (revenue > 0) {
                               const ratio =
-                                calendarLayout.maxRevenue > 0
-                                  ? revenue / calendarLayout.maxRevenue
+                                (monthLayout?.maxRevenue ?? 0) > 0
+                                  ? revenue / (monthLayout?.maxRevenue ?? 1)
                                   : 0;
                               if (ratio > 0.75) bg = "var(--calendar-4)";
                               else if (ratio > 0.5) bg = "var(--calendar-3)";
@@ -606,16 +785,17 @@ export default function AdminAnalytics() {
 
                             const title =
                               revenue > 0
-                                ? `${cell.date} · ${formatPrice(
-                                    revenue,
-                                  )} revenue`
-                                : `${cell.date} · No sales`;
+                                ? `${entry?.date} · ${formatPrice(revenue)} revenue`
+                                : `${entry?.date} · No sales`;
 
                             return (
                               <div
                                 key={weekday}
                                 title={title}
-                                className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5"
+                                className={cn(
+                                  "w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5",
+                                  inMonth ? "" : "opacity-35",
+                                )}
                                 style={{ backgroundColor: bg }}
                               />
                             );
@@ -625,7 +805,7 @@ export default function AdminAnalytics() {
                     )}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
             <div className="flex items-center justify-between pt-3 text-[10px] text-muted-foreground">
               <div className="flex items-center gap-2">
@@ -658,11 +838,129 @@ export default function AdminAnalytics() {
 
       {/* Top products + additional charts */}
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Top Products Table */}
-        <TopProductsTable analytics={data} isLoading={isLoading} />
+        {/* Top Products */}
+        <TopProductsSection analytics={data} isLoading={isLoading} />
 
         {/* Additional charts row */}
         <div className="space-y-4">
+          {/* Revenue by Platform */}
+          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-5 space-y-3">
+            <h3 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+              Revenue by Platform
+            </h3>
+            <ChartContainer
+              config={{
+                revenue: { label: "Revenue", color: "#2D4A35" },
+              }}
+              className="h-48 w-full"
+            >
+              <BarChart
+                data={(data?.revenueByPlatform ?? []).slice(0, 8)}
+                margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+              >
+                <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={6}
+                  tick={{ fontSize: 11, fill: "currentColor", opacity: 0.7 }}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tick={{ fontSize: 11, fill: "currentColor", opacity: 0.7 }}
+                  tickFormatter={(value) =>
+                    value >= 1000 ? `Rs.${Math.round(value / 1000)}k` : `Rs.${value}`
+                  }
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value, _name, item) => {
+                        const pct = (item?.payload as any)?.percent ?? 0;
+                        return (
+                          <span className="font-medium">
+                            {formatPrice(Number(value))} · {Number(pct).toFixed(1)}%
+                          </span>
+                        );
+                      }}
+                    />
+                  }
+                />
+                <Bar dataKey="revenue" radius={[4, 4, 0, 0]} fill="#2D4A35" />
+              </BarChart>
+            </ChartContainer>
+
+            <div className="pt-2 border-t border-muted/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground font-semibold">
+                  Platforms
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  placeholder="key (e.g. instagram)"
+                  value={newPlatformKey}
+                  onChange={(e) => setNewPlatformKey(e.target.value.toLowerCase())}
+                  className="h-9"
+                />
+                <Input
+                  placeholder="label (e.g. Instagram)"
+                  value={newPlatformLabel}
+                  onChange={(e) => setNewPlatformLabel(e.target.value)}
+                  className="h-9"
+                />
+                <Button
+                  type="button"
+                  className="h-9"
+                  disabled={!newPlatformKey || !newPlatformLabel || upsertPlatformMutation.isPending}
+                  onClick={() => {
+                    upsertPlatformMutation.mutate(
+                      { key: newPlatformKey, label: newPlatformLabel, isActive: true },
+                      {
+                        onSuccess: () => {
+                          setNewPlatformKey("");
+                          setNewPlatformLabel("");
+                        },
+                      },
+                    );
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {platforms.map((p) => (
+                  <div
+                    key={p.key}
+                    className="inline-flex items-center gap-2 rounded-full border border-muted/40 bg-muted/20 px-3 py-1.5 text-xs"
+                  >
+                    <span className="font-medium">{p.label}</span>
+                    <span className="text-muted-foreground">({p.key})</span>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                      disabled={deletePlatformMutation.isPending}
+                      onClick={() => deletePlatformMutation.mutate(p.key)}
+                      aria-label={`Delete platform ${p.key}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {platforms.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No custom platforms yet. Defaults (Website/POS/Instagram/TikTok) still work.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Revenue by Category */}
           <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-5 space-y-3">
             <h3 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
@@ -818,141 +1116,150 @@ export default function AdminAnalytics() {
   );
 }
 
-function TopProductsTable({
+function TopProductsSection({
   analytics,
   isLoading,
 }: {
   analytics: AdminAnalytics | undefined;
   isLoading: boolean;
 }) {
-  const [sortKey, setSortKey] = useState<
-    "revenue" | "units" | "percent" | "name"
-  >("revenue");
-  const [direction, setDirection] = useState<"asc" | "desc">("desc");
-
   const products = analytics?.topProducts ?? [];
 
-  const sorted = useMemo(() => {
-    const copy = [...products];
-    copy.sort((a, b) => {
-      const aVal =
-        sortKey === "name"
-          ? a.name.localeCompare(b.name)
-          : sortKey === "units"
-            ? a.units
-            : sortKey === "percent"
-              ? a.percent
-              : a.revenue;
-      const bVal =
-        sortKey === "name"
-          ? b.name.localeCompare(a.name)
-          : sortKey === "units"
-            ? b.units
-            : sortKey === "percent"
-              ? b.percent
-              : b.revenue;
-      return direction === "asc" ? aVal - bVal : bVal - aVal;
-    });
-    return copy.slice(0, 10);
-  }, [products, sortKey, direction]);
+  const top3 = useMemo(() => products.slice(0, 3), [products]);
+  const top3Total = useMemo(
+    () => top3.reduce((acc, p) => acc + p.revenue, 0),
+    [top3],
+  );
 
-  const handleSort = (key: typeof sortKey) => {
-    if (sortKey === key) {
-      setDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setDirection(key === "name" ? "asc" : "desc");
-    }
-  };
+  const pieColors = [
+    "hsl(142, 60%, 45%)",
+    "hsl(150, 60%, 55%)",
+    "hsl(160, 60%, 65%)",
+  ];
 
   return (
     <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-serif font-medium">
-            Top Products
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Ranked by revenue, top 10
-          </p>
-        </div>
+      <div>
+        <h2 className="text-lg font-serif font-medium">Top Products</h2>
+        <p className="text-xs text-muted-foreground">
+          Ranked by revenue, top 10
+        </p>
       </div>
 
-      <div className="rounded-xl border border-muted/40 overflow-hidden">
-        <div className="grid grid-cols-[40px,2fr,80px,120px,80px] gap-3 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground bg-muted/60">
-          <div>#</div>
-          <button
-            type="button"
-            onClick={() => handleSort("name")}
-            className="text-left"
-          >
-            Product
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSort("units")}
-            className="text-right"
-          >
-            Units
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSort("revenue")}
-            className="text-right"
-          >
-            Revenue
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSort("percent")}
-            className="text-right"
-          >
-            Share
-          </button>
-        </div>
-
-        <div className="divide-y divide-muted/60">
-          {isLoading && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left: list */}
+        <div className="space-y-3">
+          {isLoading ? (
             <div className="p-4 text-xs text-muted-foreground">
               Loading top products…
             </div>
-          )}
-          {!isLoading &&
-            sorted.map((p, index) => (
-              <div
-                key={`${p.name}-${index}`}
-                className="grid grid-cols-[40px,2fr,80px,120px,80px] gap-3 px-4 py-3 text-xs items-center"
-              >
-                <div className="text-muted-foreground tabular-nums">
-                  {index + 1}
-                </div>
-                <div className="truncate">
-                  <div className="font-medium">{p.name}</div>
-                </div>
-                <div className="text-right tabular-nums">
-                  {p.units.toLocaleString("en-NP")}
-                </div>
-                <div className="text-right tabular-nums">
-                  {formatPrice(p.revenue)}
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="tabular-nums text-[11px]">
-                    {p.percent.toFixed(1)}%
-                  </span>
-                  <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-[#2D4A35]"
-                      style={{ width: `${Math.min(p.percent, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          {!isLoading && sorted.length === 0 && (
+          ) : products.length === 0 ? (
             <div className="p-4 text-xs text-muted-foreground">
               No products in this period.
             </div>
+          ) : (
+            <div className="space-y-2">
+              {products.slice(0, 10).map((p, idx) => (
+                <div
+                  key={`${p.name}-${idx}`}
+                  className="flex items-center gap-3 rounded-xl border border-muted/40 bg-muted/20 px-3 py-2.5"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-muted overflow-hidden shrink-0">
+                    {p.imageUrl ? (
+                      <img
+                        src={p.imageUrl}
+                        alt={p.name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-muted" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="truncate">
+                        <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                          #{idx + 1}
+                        </div>
+                        <div className="font-medium truncate">{p.name}</div>
+                      </div>
+                      <div className="text-right tabular-nums">
+                        <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                          Revenue
+                        </div>
+                        <div className="font-semibold">{formatPrice(p.revenue)}</div>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[#2D4A35]"
+                          style={{ width: `${Math.min(p.percent, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                        {p.percent.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
+        </div>
+
+        {/* Right: pie (top 3) */}
+        <div className="rounded-xl border border-muted/40 p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+              Top 3 share
+            </div>
+            <div className="text-xs text-muted-foreground tabular-nums">
+              {formatPrice(top3Total)}
+            </div>
+          </div>
+          <ChartContainer
+            config={{
+              revenue: { label: "Revenue", color: "hsl(142, 60%, 45%)" },
+            }}
+            className="h-56 w-full"
+          >
+            <PieChart>
+              <Pie
+                data={top3}
+                dataKey="revenue"
+                nameKey="name"
+                innerRadius={55}
+                outerRadius={85}
+                paddingAngle={3}
+                stroke="none"
+              >
+                {top3.map((entry, index) => (
+                  <Cell
+                    key={`${entry.name}-${index}`}
+                    fill={pieColors[index % pieColors.length]}
+                  />
+                ))}
+              </Pie>
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    formatter={(value, _name, item) => {
+                      const name = (item?.payload as any)?.name as string | undefined;
+                      return (
+                        <span className="font-medium">
+                          {name ? `${name}: ` : ""}
+                          {formatPrice(Number(value))}
+                        </span>
+                      );
+                    }}
+                  />
+                }
+              />
+              <ChartLegend verticalAlign="bottom" content={<ChartLegendContent />} />
+            </PieChart>
+          </ChartContainer>
         </div>
       </div>
     </div>

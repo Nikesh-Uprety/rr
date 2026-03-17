@@ -5,6 +5,16 @@ import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { ArrowUpRight } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { motion } from "framer-motion";
+import { apiRequest } from "@/lib/queryClient";
+
+type SiteAsset = {
+  id: string;
+  imageUrl: string | null;
+  videoUrl: string | null;
+  altText: string | null;
+  sortOrder: number | null;
+  active: boolean | null;
+};
 
 // Scroll-reveal hook using IntersectionObserver
 function useScrollReveal() {
@@ -154,6 +164,15 @@ export default function NewCollection() {
     queryFn: () => fetchProducts(),
   });
 
+  const { data: bannerAssets = [] } = useQuery<SiteAsset[]>({
+    queryKey: ["site-assets", "collection_page"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/site-assets/collection_page");
+      const json = await res.json();
+      return json.data ?? [];
+    },
+  });
+
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
     queryFn: fetchCategories,
@@ -171,92 +190,68 @@ export default function NewCollection() {
       });
   }, [products]);
 
-  // Pick first 9 product images for the hero grid
-  const heroGridImages = useMemo(() => {
-    const withImages = sortedProducts.filter(p => p.imageUrl);
-    return withImages.slice(0, 9).map(p => ({
-      url: p.imageUrl!,
-      name: p.name,
-    }));
-  }, [sortedProducts]);
+  const bannerUrl = useMemo(() => {
+    const first = bannerAssets?.find((a) => !!a?.imageUrl)?.imageUrl ?? undefined;
+    return first || "/images/collection-banner.png";
+  }, [bannerAssets]);
 
   return (
     <div className="flex flex-col min-h-screen pt-20">
-      {/* Hero Banner — 3×3 Image Grid with Text Overlay */}
+      {/* Hero Banner — Full-bleed background image + Text */}
       <section className="relative w-full overflow-hidden bg-neutral-950">
-        {/* 3×3 Image Grid Background */}
-        <div className="relative w-full">
-          <div className="grid grid-cols-3 gap-[2px] md:gap-1">
-            {heroGridImages.length > 0 ? (
-              heroGridImages.map((img, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, scale: 1.05 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.8, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
-                  className="aspect-[3/4] overflow-hidden relative"
-                >
-                  <img
-                    src={img.url}
-                    alt={img.name}
-                    className="w-full h-full object-cover object-center"
-                    loading={i < 3 ? "eager" : "lazy"}
-                  />
-                </motion.div>
-              ))
-            ) : (
-              /* Skeleton placeholders while loading */
-              Array.from({ length: 9 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="aspect-[3/4] bg-neutral-800 animate-pulse"
-                />
-              ))
-            )}
-          </div>
+        <div className="relative w-full min-h-[46vh] md:min-h-[62vh] lg:min-h-[70vh]">
+          <img
+            src={bannerUrl}
+            alt="Collection banner"
+            className="absolute inset-0 w-full h-full object-cover object-top"
+            loading="eager"
+            fetchPriority="high"
+          />
 
-          {/* Dark Overlay for Text Legibility */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/70 pointer-events-none" />
+          {/* Dark overlays for legibility (dark mode only) */}
+          <div className="absolute inset-0 hidden dark:block bg-black/35" />
+          <div className="absolute inset-0 hidden dark:block bg-gradient-to-b from-black/55 via-black/25 to-black/60" />
+          <div
+            className="absolute inset-0 hidden dark:block pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%)",
+            }}
+          />
 
-          {/* Vignette edges */}
-          <div className="absolute inset-0 pointer-events-none" style={{
-            background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)'
-          }} />
+          <div className="relative z-10 container mx-auto px-4 md:px-6 h-full flex items-center">
+            <div className="w-full flex flex-col items-center text-center py-16 md:py-24">
+              <motion.p
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 0.85, y: 0 }}
+                transition={{ duration: 0.7, delay: 0.15 }}
+                className="text-[10px] md:text-xs uppercase tracking-[0.55em] text-white/90 font-bold mb-4 md:mb-6 drop-shadow-[0_10px_25px_rgba(0,0,0,0.45)] dark:drop-shadow-[0_10px_25px_rgba(0,0,0,0.55)]"
+              >
+                Curated Pieces, Captured in Detail
+              </motion.p>
 
-          {/* Text Overlay */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
-            <motion.p
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 0.6, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.3 }}
-              className="text-[9px] md:text-xs uppercase tracking-[0.6em] text-white font-bold mb-4 md:mb-6"
-            >
-              Curated Pieces, Captured in Detail
-            </motion.p>
+              <motion.h1
+                initial={{ opacity: 0, y: 22 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 1, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                className="font-serif text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-bold text-white tracking-tight leading-none drop-shadow-[0_14px_40px_rgba(0,0,0,0.55)]"
+              >
+                The Collection
+              </motion.h1>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="font-serif text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-bold text-white tracking-tight leading-none text-center"
-            >
-              The
-              <br />
-              Collection
-            </motion.h1>
-
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 1.0 }}
-              className="mt-6 md:mt-8 flex items-center gap-3"
-            >
-              <div className="h-px w-12 md:w-16 bg-white/30" />
-              <span className="text-[10px] md:text-xs uppercase tracking-[0.4em] text-white/50 font-medium">
-                {products ? products.length : "—"} Pieces
-              </span>
-              <div className="h-px w-12 md:w-16 bg-white/30" />
-            </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.8, delay: 0.75 }}
+                className="mt-6 md:mt-8 flex items-center gap-3"
+              >
+                <div className="h-px w-12 md:w-16 bg-white/35" />
+                <span className="text-[10px] md:text-xs uppercase tracking-[0.4em] text-white/70 font-medium">
+                  {products ? products.length : "—"} Pieces
+                </span>
+                <div className="h-px w-12 md:w-16 bg-white/35" />
+              </motion.div>
+            </div>
           </div>
         </div>
       </section>

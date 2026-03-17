@@ -69,10 +69,93 @@ export interface AdminAnalytics {
   kpis: AdminAnalyticsKpis;
   revenueByDay: { date: string; revenue: number }[];
   ordersByStatus: { completed: number; pending: number; cancelled: number };
-  topProducts: { name: string; units: number; revenue: number; percent: number }[];
+  topProducts: { name: string; imageUrl?: string | null; units: number; revenue: number; percent: number }[];
   salesByCategory: { category: string; revenue: number; percent: number }[];
+  revenueByPlatform: { platform: string; label: string; revenue: number; percent: number }[];
   ordersByDayOfWeek: { day: string; count: number }[];
   paymentMethods: { method: string; count: number; percent: number }[];
+}
+
+export interface AdminPlatform {
+  id: string;
+  key: string;
+  label: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function fetchPlatforms(): Promise<AdminPlatform[]> {
+  const res = await apiRequest("GET", "/api/admin/platforms");
+  const json = (await res.json()) as { success: boolean; data: AdminPlatform[] };
+  return json.data ?? [];
+}
+
+export async function upsertPlatform(input: {
+  key: string;
+  label: string;
+  isActive?: boolean;
+}): Promise<AdminPlatform> {
+  const res = await apiRequest("POST", "/api/admin/platforms", input);
+  const json = (await res.json()) as { success: boolean; data: AdminPlatform };
+  return json.data;
+}
+
+export async function deletePlatform(key: string): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/platforms/${encodeURIComponent(key)}`);
+}
+
+export interface AdminImageAsset {
+  id: string;
+  url: string;
+  provider: string;
+  category: string;
+  publicId: string | null;
+  filename: string | null;
+  bytes: number | null;
+  width: number | null;
+  height: number | null;
+  createdAt: string;
+}
+
+export async function fetchAdminImages(params?: {
+  category?: string;
+  provider?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<AdminImageAsset[]> {
+  const qs = new URLSearchParams();
+  if (params?.category) qs.set("category", params.category);
+  if (params?.provider) qs.set("provider", params.provider);
+  if (params?.limit) qs.set("limit", String(params.limit));
+  if (params?.offset) qs.set("offset", String(params.offset));
+  const res = await apiRequest("GET", `/api/admin/images?${qs.toString()}`);
+  const json = (await res.json()) as { success: boolean; data: AdminImageAsset[] };
+  return json.data ?? [];
+}
+
+export async function uploadAdminImage(input: {
+  file: File;
+  category: string;
+  provider: "local" | "cloudinary";
+}): Promise<AdminImageAsset> {
+  const form = new FormData();
+  form.append("file", input.file);
+  form.append("category", input.category);
+  form.append("provider", input.provider);
+  const res = await fetch("/api/admin/images/upload", {
+    method: "POST",
+    credentials: "include",
+    body: form,
+  });
+  const json = (await res.json()) as { success: boolean; data: AdminImageAsset; error?: string };
+  if (!json.success) throw new Error(json.error || "Upload failed");
+  return json.data;
+}
+
+export async function deleteAdminImage(id: string): Promise<void> {
+  const res = await apiRequest("DELETE", `/api/admin/images/${encodeURIComponent(id)}`);
+  const json = (await res.json()) as { success: boolean; error?: string };
+  if (!json.success) throw new Error(json.error || "Delete failed");
 }
 
 export async function fetchAdminProducts(filters?: {
@@ -322,6 +405,7 @@ export interface AdminBill {
   customerName: string;
   customerEmail: string | null;
   customerPhone: string | null;
+  source?: string;
   items: any[];
   subtotal: string;
   taxRate: string;
@@ -329,6 +413,10 @@ export interface AdminBill {
   discountAmount: string;
   totalAmount: string;
   paymentMethod: string;
+  isPaid?: boolean;
+  deliveryRequired?: boolean;
+  deliveryProvider?: string | null;
+  deliveryAddress?: string | null;
   cashReceived: string | null;
   changeGiven: string | null;
   processedBy: string;
@@ -355,7 +443,12 @@ export async function createPosBill(data: {
   customerName: string;
   customerPhone?: string;
   items: any[];
+  source?: string;
   paymentMethod: string;
+  isPaid?: boolean;
+  deliveryRequired?: boolean;
+  deliveryProvider?: string | null;
+  deliveryAddress?: string | null;
   cashReceived?: number | null;
   discountAmount?: number;
   notes?: string;

@@ -40,6 +40,7 @@ const ADMIN_NAV = [
   { href: "/admin/promo-codes", icon: Tags, label: "Promo Codes", type: "promo" },
   { href: "/admin/marketing", icon: Megaphone, label: "Marketing", type: "marketing" },
   { href: "/admin/pos", icon: CreditCard, label: "Point of Sale", type: "pos" },
+  { href: "/admin/images", icon: Images, label: "Images", type: "media" },
 ];
 
 export default function AdminLayout({
@@ -48,6 +49,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const [location] = useLocation();
+  const pathname = location.split("?")[0];
   const { user } = useCurrentUser();
   const { toast } = useToast();
   const { getUnreadCountByType, markTypeRead } = useNotifications();
@@ -186,13 +188,37 @@ export default function AdminLayout({
               href="/admin/landing-page"
               className={cn(
                 "flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300 group/nav",
-                location === "/admin/landing-page"
+                pathname === "/admin/landing-page"
                   ? "bg-white dark:bg-black text-black dark:text-white shadow-xl shadow-black/40 dark:shadow-white/20 scale-[1.02]"
                   : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
               )}
             >
               <Images className="h-6 w-6" />
               <span className="text-[12px] tracking-wider">Landing Page</span>
+            </Link>
+            <Link
+              href="/admin/landing-page?section=new_collection"
+              className={cn(
+                "mt-1 flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300 group/nav",
+                pathname === "/admin/landing-page" && location.includes("section=new_collection")
+                  ? "bg-white/10 dark:bg-black/10 text-white dark:text-black"
+                  : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
+              )}
+            >
+              <Images className="h-6 w-6 opacity-70" />
+              <span className="text-[12px] tracking-wider">Home Campaign</span>
+            </Link>
+            <Link
+              href="/admin/landing-page?section=collection_page"
+              className={cn(
+                "mt-1 flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300 group/nav",
+                pathname === "/admin/landing-page" && location.includes("section=collection_page")
+                  ? "bg-white/10 dark:bg-black/10 text-white dark:text-black"
+                  : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
+              )}
+            >
+              <Images className="h-6 w-6 opacity-70" />
+              <span className="text-[12px] tracking-wider">Collection Page</span>
             </Link>
           </div>
         </nav>
@@ -291,13 +317,43 @@ export default function AdminLayout({
                     }}
                     className={cn(
                       "flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300",
-                      location === "/admin/landing-page"
+                      pathname === "/admin/landing-page"
                         ? "bg-white dark:bg-black text-black dark:text-white shadow-xl"
                         : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
                     )}
                   >
                     <Images className="h-6 w-6" />
                     <span className="text-[12px] tracking-wider">Landing Page</span>
+                  </Link>
+                  <Link
+                    href="/admin/landing-page?section=new_collection"
+                    onClick={() => {
+                      setSidebarOpen(false);
+                    }}
+                    className={cn(
+                      "mt-1 flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300",
+                      pathname === "/admin/landing-page" && location.includes("section=new_collection")
+                        ? "bg-white/10 dark:bg-black/10 text-white dark:text-black"
+                        : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
+                    )}
+                  >
+                    <Images className="h-6 w-6 opacity-70" />
+                    <span className="text-[12px] tracking-wider">Home Campaign</span>
+                  </Link>
+                  <Link
+                    href="/admin/landing-page?section=collection_page"
+                    onClick={() => {
+                      setSidebarOpen(false);
+                    }}
+                    className={cn(
+                      "mt-1 flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300",
+                      pathname === "/admin/landing-page" && location.includes("section=collection_page")
+                        ? "bg-white/10 dark:bg-black/10 text-white dark:text-black"
+                        : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
+                    )}
+                  >
+                    <Images className="h-6 w-6 opacity-70" />
+                    <span className="text-[12px] tracking-wider">Collection Page</span>
                   </Link>
                 </div>
               </nav>

@@ -1,9 +1,11 @@
 import { db } from "./db";
 import {
+  bills,
   categories,
   customers,
   orderItems,
   orders,
+  platforms,
   products,
   users,
   otpTokens,
@@ -29,6 +31,8 @@ import {
   promoCodes,
   type PromoCode,
   type InsertPromoCode,
+  type Bill,
+  type Platform,
 } from "@shared/schema";
 import { and, or, asc, desc, eq, gte, ilike, sql } from "drizzle-orm";
 
@@ -49,6 +53,10 @@ export interface CreateOrderInput {
   country: string;
   total: number;
   paymentMethod: string;
+  source?: string;
+  deliveryRequired?: boolean;
+  deliveryProvider?: string | null;
+  deliveryAddress?: string | null;
   locationCoordinates?: string;
   promoCode?: string;
   promoDiscountAmount?: number;
@@ -83,6 +91,7 @@ export interface OrdersByStatus {
 
 export interface TopProduct {
   name: string;
+  imageUrl?: string | null;
   units: number;
   revenue: number;
   percent: number;
@@ -105,6 +114,13 @@ export interface PaymentMethodBreakdown {
   percent: number;
 }
 
+export interface RevenueByPlatform {
+  platform: string;
+  label: string;
+  revenue: number;
+  percent: number;
+}
+
 export interface AnalyticsCalendarDay {
   date: string;
   revenue: number;
@@ -118,6 +134,7 @@ export interface AnalyticsData {
   ordersByStatus: OrdersByStatus;
   topProducts: TopProduct[];
   salesByCategory: SalesByCategory[];
+  revenueByPlatform: RevenueByPlatform[];
   ordersByDayOfWeek: OrdersByDayOfWeek[];
   paymentMethods: PaymentMethodBreakdown[];
 }
@@ -155,6 +172,9 @@ export interface IStorage {
     id: string,
     paymentVerified: "verified" | "rejected",
   ): Promise<Order>;
+
+  // Bills (POS / invoices)
+  getBills(): Promise<Bill[]>;
 
   // Customers
   getCustomers(search?: string): Promise<Customer[]>;
@@ -270,6 +290,10 @@ export interface IStorage {
 }
 
 export class PgStorage implements IStorage {
+  async getBills(): Promise<Bill[]> {
+    return db.select().from(bills).orderBy(desc(bills.createdAt));
+  }
+
   async getProducts(filters?: {
     category?: string;
     search?: string;
@@ -670,6 +694,10 @@ export class PgStorage implements IStorage {
         locationCoordinates: data.locationCoordinates ?? null,
         promoCode: data.promoCode ?? null,
         promoDiscountAmount: data.promoDiscountAmount ?? 0,
+        source: data.source ?? "website",
+        deliveryRequired: data.deliveryRequired ?? true,
+        deliveryProvider: data.deliveryProvider ?? null,
+        deliveryAddress: data.deliveryAddress ?? null,
       })
       .returning({
         id: orders.id,
@@ -894,6 +922,7 @@ export class PgStorage implements IStorage {
         firstName: customers.firstName,
         lastName: customers.lastName,
         email: customers.email,
+        phoneNumber: customers.phoneNumber,
         totalSpent: customers.totalSpent,
         orderCount: customers.orderCount,
         avatarColor: customers.avatarColor,
@@ -1591,6 +1620,7 @@ export class PgStorage implements IStorage {
       .select({
         productId: products.id,
         name: products.name,
+        imageUrl: products.imageUrl,
         units: sql<number>`sum(${orderItems.quantity})`,
         revenue: sql<number>`sum(${orderItems.quantity} * ${orderItems.unitPrice})`,
       })
@@ -1598,7 +1628,7 @@ export class PgStorage implements IStorage {
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
       .innerJoin(products, eq(orderItems.productId, products.id))
       .where(sql.raw(`"orders"."created_at" >= now() - interval '${days} days'`))
-      .groupBy(products.id, products.name)
+      .groupBy(products.id, products.name, products.imageUrl)
       .orderBy(desc(sql`sum(${orderItems.quantity} * ${orderItems.unitPrice})`))
       .limit(10);
 
@@ -1609,6 +1639,7 @@ export class PgStorage implements IStorage {
 
     const topProducts: TopProduct[] = topProductRows.map((row) => ({
       name: row.name,
+      imageUrl: row.imageUrl ?? null,
       units: row.units,
       revenue: row.revenue,
       percent:
@@ -1685,12 +1716,81 @@ export class PgStorage implements IStorage {
       }),
     );
 
+    // Revenue by platform/source (orders + POS bills)
+    const platformRows = await db
+      .select({
+        platform: orders.source,
+        revenue: sql<number>`sum(${orders.total})`,
+      })
+      .from(orders)
+      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .groupBy(orders.source);
+
+    const posRows = await db
+      .select({
+        platform: bills.source,
+        revenue: sql<number>`sum(${bills.totalAmount})`,
+      })
+      .from(bills)
+      .where(
+        and(
+          eq(bills.status, "issued"),
+          eq(bills.billType, "pos"),
+          sql.raw(`"created_at" >= now() - interval '${days} days'`),
+        ),
+      )
+      .groupBy(bills.source);
+
+    const platformMap = new Map<string, number>();
+    for (const row of platformRows) {
+      const key = row.platform ?? "website";
+      platformMap.set(key, (platformMap.get(key) ?? 0) + (row.revenue ?? 0));
+    }
+    for (const row of posRows) {
+      const key = row.platform ?? "pos";
+      platformMap.set(key, (platformMap.get(key) ?? 0) + (row.revenue ?? 0));
+    }
+
+    const configuredPlatforms: Platform[] = await db
+      .select()
+      .from(platforms)
+      .where(eq(platforms.isActive, true))
+      .orderBy(asc(platforms.label));
+
+    const labelByKey = new Map<string, string>([
+      ["website", "Website"],
+      ["pos", "POS"],
+      ["instagram", "Instagram"],
+      ["tiktok", "TikTok"],
+      ...configuredPlatforms.map((p) => [p.key, p.label] as const),
+    ]);
+
+    // Ensure configured platforms show even if revenue is zero
+    for (const p of configuredPlatforms) {
+      if (!platformMap.has(p.key)) platformMap.set(p.key, 0);
+    }
+
+    const totalPlatformRevenue = Array.from(platformMap.values()).reduce(
+      (acc, v) => acc + v,
+      0,
+    );
+
+    const revenueByPlatform: RevenueByPlatform[] = Array.from(platformMap.entries())
+      .map(([platform, revenue]) => ({
+        platform,
+        label: labelByKey.get(platform) ?? platform,
+        revenue,
+        percent: totalPlatformRevenue > 0 ? (revenue / totalPlatformRevenue) * 100 : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
     return {
       kpis,
       revenueByDay,
       ordersByStatus,
       topProducts,
       salesByCategory,
+      revenueByPlatform,
       ordersByDayOfWeek,
       paymentMethods,
     };
@@ -1795,6 +1895,10 @@ export class PgStorage implements IStorage {
 }
 
 export class MemStorage implements IStorage {
+  async getBills(): Promise<Bill[]> {
+    return [];
+  }
+
   private _users: User[] = [];
   private _products: Product[] = [];
   private _orders: (Order & { items: OrderItem[] })[] = [];
@@ -2057,6 +2161,20 @@ export class MemStorage implements IStorage {
     return customer;
   }
 
+  async updateCustomer(
+    id: string,
+    data: Partial<Omit<Customer, "id" | "createdAt">>,
+  ): Promise<Customer> {
+    const customer = this._customers.find((c) => c.id === id);
+    if (!customer) throw new Error("Customer not found");
+    Object.assign(customer, data);
+    return customer;
+  }
+
+  async deleteCustomer(id: string): Promise<void> {
+    this._customers = this._customers.filter((c) => c.id !== id);
+  }
+
   async upsertCustomerFromOrder(
     email: string,
     firstName: string,
@@ -2081,7 +2199,19 @@ export class MemStorage implements IStorage {
     // No-op for memory storage
   }
 
-  async getNewsletterSubscribers(): Promise<{ email: string; createdAt: Date | null }[]> {
+  async unsubscribeFromNewsletter(_email: string): Promise<void> {
+    // No-op for memory storage
+  }
+
+  async unsubscribeAllFromNewsletter(): Promise<void> {
+    // No-op for memory storage
+  }
+
+  async getNewsletterSubscribers(
+    _includeUnsubscribed = false,
+  ): Promise<
+    { email: string; status: string; unsubscribedAt: Date | null; createdAt: Date | null }[]
+  > {
     return [];
   }
 
@@ -2191,6 +2321,7 @@ export class MemStorage implements IStorage {
       ordersByStatus: { completed: 0, pending: 0, cancelled: 0 },
       topProducts: [],
       salesByCategory: [],
+      revenueByPlatform: [],
       ordersByDayOfWeek: [],
       paymentMethods: [],
     };

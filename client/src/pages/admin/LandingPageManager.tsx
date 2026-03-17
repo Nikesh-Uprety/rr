@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,7 +57,7 @@ type SiteAsset = {
   createdAt: string;
 };
 
-type SectionKey = "hero" | "featured_collection" | "new_collection";
+type SectionKey = "hero" | "featured_collection" | "new_collection" | "collection_page";
 
 type UploadState = {
   file: File | null;
@@ -99,6 +100,7 @@ function SectionManager({ section }: { section: SectionKey }) {
     file: null,
     previewUrl: null,
     altText: "",
+    deviceTarget: "all",
   });
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -725,6 +727,48 @@ function SectionManager({ section }: { section: SectionKey }) {
 }
 
 export default function LandingPageManager() {
+  const [location] = useLocation();
+  const validTabs = useMemo(
+    () =>
+      ["hero", "featured_collection", "new_collection", "collection_page"] as const,
+    [],
+  );
+
+  const getInitialTab = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get("section");
+    if (section && (validTabs as readonly string[]).includes(section)) {
+      return section as (typeof validTabs)[number];
+    }
+    return "hero" as const;
+  }, [validTabs]);
+
+  const [tab, setTab] = useState<(typeof validTabs)[number]>(getInitialTab);
+
+  useEffect(() => {
+    const handler = () => setTab(getInitialTab());
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, [getInitialTab]);
+
+  useEffect(() => {
+    // Wouter navigation updates location via pushState (no popstate),
+    // so re-sync the selected tab whenever the URL changes.
+    setTab(getInitialTab());
+  }, [location, getInitialTab]);
+
+  const handleTabChange = (next: string) => {
+    if (!(validTabs as readonly string[]).includes(next)) return;
+    setTab(next as (typeof validTabs)[number]);
+    const params = new URLSearchParams(window.location.search);
+    params.set("section", next);
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}?${params.toString()}`,
+    );
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -733,7 +777,7 @@ export default function LandingPageManager() {
             Landing Page
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage hero banners and campaign imagery for the storefront home page.
+            Manage hero banners and campaign imagery for the storefront.
           </p>
         </div>
         <Button 
@@ -746,11 +790,12 @@ export default function LandingPageManager() {
         </Button>
       </div>
 
-      <Tabs defaultValue="hero" className="space-y-6">
+      <Tabs value={tab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList>
           <TabsTrigger value="hero">Hero Banner</TabsTrigger>
           <TabsTrigger value="featured_collection">Featured Collection</TabsTrigger>
-          <TabsTrigger value="new_collection">New Collection</TabsTrigger>
+          <TabsTrigger value="new_collection">Home Campaign</TabsTrigger>
+          <TabsTrigger value="collection_page">Collection Page</TabsTrigger>
         </TabsList>
         <TabsContent value="hero">
           <SectionManager section="hero" />
@@ -760,6 +805,9 @@ export default function LandingPageManager() {
         </TabsContent>
         <TabsContent value="new_collection">
           <SectionManager section="new_collection" />
+        </TabsContent>
+        <TabsContent value="collection_page">
+          <SectionManager section="collection_page" />
         </TabsContent>
       </Tabs>
     </div>

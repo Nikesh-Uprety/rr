@@ -762,7 +762,7 @@ export default function Home() {
         >
           <img
             alt={campaignAssets[0]?.altText || "Campaign story"}
-            className="w-full h-full object-cover scale-110"
+            className="w-full h-full object-cover object-center"
             src={campaignBannerImage}
           />
         </motion.div>

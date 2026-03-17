@@ -11,6 +11,7 @@ import { logger } from "./logger";
 import { corsHeaders, securityHeaders } from "./middleware/security";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
+import os from "node:os";
 
 const app = express();
 
@@ -27,6 +28,7 @@ const UPLOAD_DIRS = [
   "uploads/site-assets/hero",
   "uploads/site-assets/featured_collection",
   "uploads/site-assets/new_collection",
+  "uploads/site-assets/collection_page",
 ];
 
 UPLOAD_DIRS.forEach(dir => {
@@ -183,14 +185,49 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
+  const preferredPort = parseInt(process.env.PORT || "5000", 10);
+  const host = "0.0.0.0";
+
+  const listenWithFallback = (startPort: number) => {
+    let port = startPort;
+    const maxAttempts = process.env.NODE_ENV === "production" ? 1 : 20;
+
+    const tryListen = () => {
+      httpServer.once("error", (err: any) => {
+        if (err?.code === "EADDRINUSE" && maxAttempts > 1) {
+          port += 1;
+          const attemptsUsed = port - startPort + 1;
+          if (attemptsUsed <= maxAttempts) {
+            log(`port ${port - 1} in use, trying ${port}...`);
+            return tryListen();
+          }
+        }
+        throw err;
+      });
+
+      httpServer.listen({ port, host }, () => {
+        log(`serving on port ${port}`);
+        if (port !== preferredPort) {
+          log(`note: preferred port ${preferredPort} was busy`, "express");
+        }
+
+        if (process.env.NODE_ENV !== "production") {
+          const nets = os.networkInterfaces();
+          const ips = Object.values(nets)
+            .flat()
+            .filter((n): n is os.NetworkInterfaceInfo => !!n)
+            .filter((n) => n.family === "IPv4" && !n.internal)
+            .map((n) => n.address);
+          const primaryIp = ips[0];
+          if (primaryIp) {
+            log(`open from Windows: http://${primaryIp}:${port}`, "express");
+          }
+        }
+      });
+    };
+
+    tryListen();
+  };
+
+  listenWithFallback(preferredPort);
 })();

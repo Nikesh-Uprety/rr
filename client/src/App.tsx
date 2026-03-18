@@ -13,6 +13,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { lazy, Suspense, useEffect } from "react";
 import Home from "@/pages/storefront/Home";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import Footer from "@/components/layout/Footer";
 
 // Lazy load non-critical components
 const Products = lazy(() => import("@/pages/storefront/Products"));
@@ -60,36 +61,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 flex flex-col">
         {children}
       </main>
-      <footer className="py-12 border-t mt-auto bg-background">
-        <div className="container mx-auto px-4 text-center text-muted-foreground text-sm">
-          &copy; 2025 Rare Atelier. All rights reserved.
-          <div className="mt-4">
-            <a 
-              href="https://www.nikeshuprety.com.np/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-block text-[10px] uppercase tracking-[0.3em] font-black"
-              style={{
-                background: 'linear-gradient(90deg, var(--shimmer-1), var(--shimmer-2), var(--shimmer-1))',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundSize: '200% auto',
-                animation: 'shimmer 3s ease-in-out infinite',
-                textShadow: 'none',
-                filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.1))',
-              }}
-            >
-              designed & dev by : 0xn1ku-hacks
-            </a>
-            <style>{`
-              @keyframes shimmer {
-                0%, 100% { background-position: -200% center; opacity: 0.4; }
-                50% { background-position: 200% center; opacity: 1; }
-              }
-            `}</style>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

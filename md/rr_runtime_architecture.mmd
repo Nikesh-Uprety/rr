@@ -1,0 +1,18 @@
+flowchart LR
+  B[Browser<br/>Customer/Admin] -->|HTTP| C[Client SPA<br/>React + Vite<br/>client/]
+  C -->|HTTP /api/*| E[Express App<br/>server/index.ts]
+  E -->|serves SPA<br/>(dev: Vite middleware,<br/>prod: dist/public)| C
+
+  E --> R[API Routes<br/>server/routes.ts]
+  R --> A[Auth + Sessions<br/>Passport + express-session<br/>server/auth.ts]
+  A --> P[(PostgreSQL<br/>Drizzle<br/>server/db.ts + shared/schema.ts)]
+
+  R --> S[Storage layer<br/>PgStorage<br/>server/storage.ts]
+  S --> P
+
+  R --> U[(Local uploads<br/>uploads/*)]
+  R --> CL[Cloudinary]
+  R --> M[SMTP (Mailjet)]
+
+  E --> W[WebSocket server<br/>/ws/admin/notifications<br/>server/websocket.ts]
+  B <--> |WS| W

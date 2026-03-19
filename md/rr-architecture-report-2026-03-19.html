@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RARE Nepal (rr) — Codebase Architecture Report (2026-03-19)</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: #121a33;
+        --text: #e8ecff;
+        --muted: #b8c0ff;
+        --accent: #7aa2ff;
+        --code: #0e1630;
+        --border: rgba(255, 255, 255, 0.12);
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #ffffff;
+          --panel: #f7f8ff;
+          --text: #0c1022;
+          --muted: #384064;
+          --accent: #245bff;
+          --code: #eef2ff;
+          --border: rgba(0, 0, 0, 0.12);
+        }
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans",
+          "Apple Color Emoji", "Segoe UI Emoji";
+        color: var(--text);
+        background: radial-gradient(1200px 600px at 20% -10%, rgba(122, 162, 255, 0.25), transparent 60%),
+          radial-gradient(900px 500px at 80% 0%, rgba(120, 255, 232, 0.14), transparent 55%),
+          var(--bg);
+      }
+      .container {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 40px 18px 80px;
+      }
+      header {
+        padding: 22px 22px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 28px;
+        letter-spacing: -0.02em;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      section {
+        margin-top: 22px;
+        padding: 18px 22px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+      h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+        letter-spacing: -0.01em;
+      }
+      p, li {
+        line-height: 1.65;
+      }
+      code, pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+          monospace;
+      }
+      pre {
+        background: var(--code);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 14px;
+        overflow: auto;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover { text-decoration: underline; }
+      .hint {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .mermaid {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 10px;
+        overflow-x: auto;
+      }
+      @media print {
+        body { background: #fff; }
+        header, section { background: #fff; }
+        a { color: #000; text-decoration: none; }
+        .hint { display: none; }
+      }
+    </style>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "dark" });
+      const prefersLight = window.matchMedia?.("(prefers-color-scheme: light)")?.matches;
+      if (prefersLight) mermaid.initialize({ startOnLoad: true, theme: "default" });
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>RARE Nepal (rr) — Codebase Architecture Report</h1>
+        <div class="meta">
+          <div><b>Date</b>: 2026-03-19</div>
+          <div><b>Repo</b>: <code>rr</code></div>
+          <div class="hint">
+            Tip: use your browser’s <b>Print</b> → <b>Save as PDF</b> to export a PDF.
+          </div>
+        </div>
+      </header>
+
+      <section>
+        <h2>Executive summary</h2>
+        <p>
+          This repository is a <b>TypeScript + Node.js monolith</b>: one server process provides a
+          <b>React (Vite) SPA</b>, an <b>Express API</b> (<code>/api/*</code>), and an
+          <b>admin notifications WebSocket</b> (<code>/ws/admin/notifications</code>).
+          The main persistence layer is <b>PostgreSQL</b> accessed through <b>Drizzle ORM</b>.
+        </p>
+      </section>
+
+      <section>
+        <h2>Technology stack</h2>
+        <ul>
+          <li><b>Frontend</b>: React + Vite (<code>client/</code>)</li>
+          <li><b>Backend</b>: Express (<code>server/</code>)</li>
+          <li><b>Database</b>: PostgreSQL + Drizzle ORM (<code>shared/schema.ts</code>)</li>
+          <li><b>Auth</b>: Passport Local + Postgres-backed sessions</li>
+          <li><b>Realtime</b>: <code>ws</code> WebSocket server</li>
+          <li><b>Media</b>: local uploads (<code>uploads/*</code>) + Cloudinary</li>
+          <li><b>Email</b>: Nodemailer (Mailjet via env configuration)</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Repository layout (high level)</h2>
+        <pre><code>client/   React SPA (Vite)
+server/   Express app (API + auth + ws + middleware)
+shared/   Drizzle schema + shared types
+script/   build tooling (client build + server bundle)
+migrations/ Drizzle migrations output (configured)
+md/       documentation/reports</code></pre>
+      </section>
+
+      <section>
+        <h2>Runtime architecture</h2>
+        <div class="mermaid">
+flowchart LR
+  B[Browser<br/>Customer/Admin] -->|HTTP| C[Client SPA<br/>React + Vite<br/>client/]
+  C -->|HTTP /api/*| E[Express App<br/>server/index.ts]
+  E -->|serves SPA<br/>(dev: Vite middleware,<br/>prod: dist/public)| C
+
+  E --> R[API Routes<br/>server/routes.ts]
+  R --> A[Auth + Sessions<br/>Passport + express-session<br/>server/auth.ts]
+  A --> P[(PostgreSQL<br/>Drizzle<br/>server/db.ts + shared/schema.ts)]
+
+  R --> S[Storage layer<br/>PgStorage<br/>server/storage.ts]
+  S --> P
+
+  R --> U[(Local uploads<br/>uploads/*)]
+  R --> CL[Cloudinary]
+  R --> M[SMTP (Mailjet)]
+
+  E --> W[WebSocket server<br/>/ws/admin/notifications<br/>server/websocket.ts]
+  B <--> |WS| W
+        </div>
+      </section>
+
+      <section>
+        <h2>Build &amp; deploy packaging</h2>
+        <div class="mermaid">
+flowchart TB
+  Dev[npm run dev] --> TSX[tsx server/index.ts]
+  TSX --> VDev[Vite middleware (dev)<br/>server/vite.ts]
+  TSX --> DevRun[Single Node process<br/>serves API + SPA + WS]
+
+  Build[npm run build] --> Script[tsx script/build.ts]
+  Script --> VBuild[Vite build (client)<br/>dist/public]
+  Script --> ESBuild[esbuild bundle (server)<br/>dist/index.cjs]
+  ESBuild --> ProdRun[npm run start<br/>node dist/index.cjs]
+  VBuild --> ProdRun
+        </div>
+      </section>
+
+      <section>
+        <h2>Entry points and “centers of gravity”</h2>
+        <ul>
+          <li><b>Backend entry</b>: <code>server/index.ts</code></li>
+          <li><b>API surface</b>: <code>server/routes.ts</code></li>
+          <li><b>Auth</b>: <code>server/auth.ts</code></li>
+          <li><b>Database</b>: <code>server/db.ts</code> + <code>shared/schema.ts</code></li>
+          <li><b>Storage abstraction</b>: <code>server/storage.ts</code></li>
+          <li><b>Realtime</b>: <code>server/websocket.ts</code></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Operational dependencies</h2>
+        <ul>
+          <li><b>PostgreSQL</b>: required (<code>DATABASE_URL</code>)</li>
+          <li><b>Cloudinary</b>: media management</li>
+          <li><b>SMTP (Mailjet)</b>: outbound emails</li>
+          <li><b>Local disk</b>: uploads directory (ensure persistence in hosting)</li>
+        </ul>
+      </section>
+    </div>
+  </body>
+</html>
+

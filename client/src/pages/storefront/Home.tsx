@@ -38,6 +38,31 @@ const FEATURED_STATIC_IMAGES = [
   "https://cdn2.blanxer.com/uploads/67cd36dcf133882caba612b4/product_image-dsc02288-edit-2-8008.webp", // Lifestyle for Essential Hoodie
 ];
 
+const DUMMY_NEW_ARRIVAL_IMAGES = [
+  "https://placehold.co/900x1200/0b1020/ffffff?text=RARE+ALT+1",
+  "https://placehold.co/900x1200/111827/ffffff?text=RARE+ALT+2",
+  "https://placehold.co/900x1200/0f172a/ffffff?text=RARE+ALT+3",
+];
+
+function getGalleryImagesForCard(product: ProductApi, { addDummyFallback }: { addDummyFallback: boolean }) {
+  const main = product.imageUrl ?? "";
+  const parsed = (() => {
+    try {
+      const urls = product.galleryUrls ? JSON.parse(product.galleryUrls) : [];
+      return Array.isArray(urls) ? urls.filter((u) => typeof u === "string") : [];
+    } catch {
+      return [];
+    }
+  })();
+
+  const all = [main, ...parsed].filter(Boolean);
+  if (!addDummyFallback) return all.length > 0 ? all : [main].filter(Boolean);
+
+  // For testing: if there aren't multiple images, add dummy slides.
+  if (all.length >= 2) return all;
+  return [...all, ...DUMMY_NEW_ARRIVAL_IMAGES].filter(Boolean);
+}
+
 function FeaturedProductCard({ product, index }: { product: ProductApi; index: number }) {
   const [mobileImageIndex, setMobileImageIndex] = useState(0);
 
@@ -207,6 +232,101 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
         >
           <ExternalLink className="h-4 w-4" />
         </button>
+      </div>
+    </Link>
+  );
+}
+
+function NewArrivalCard({ product }: { product: ProductApi }) {
+  const images = useMemo(
+    () => getGalleryImagesForCard(product, { addDummyFallback: true }),
+    [product],
+  );
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const t = setInterval(() => setIdx((p) => (p + 1) % images.length), 2400);
+    return () => clearInterval(t);
+  }, [images.length]);
+
+  return (
+    <Link href={`/product/${product.id}`} className="group cursor-pointer">
+      <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[3/4] mb-6 rounded-lg group-hover:shadow-xl transition-all duration-500">
+        <div className="absolute inset-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${product.id}-${idx}`}
+              className="absolute inset-0"
+              initial={{ opacity: 0, scale: 1.02 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.995 }}
+              transition={{ duration: 0.7, ease: "easeInOut" }}
+            >
+              <OptimizedImage
+                src={images[idx] ?? product.imageUrl ?? ""}
+                alt={`${product.name} view ${idx + 1}`}
+                className="w-full h-full object-cover"
+              />
+            </motion.div>
+          </AnimatePresence>
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-30 mix-blend-overlay transition-opacity duration-700 bg-white" />
+        </div>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            window.open(`/product/${product.id}`, "_blank");
+          }}
+          className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity border border-white/30"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </button>
+
+        {/* Price: always visible on mobile/tablet, hover-reveal on desktop */}
+        <div className="absolute bottom-2 left-2 max-w-[85%] truncate opacity-100 md:opacity-0 md:group-hover:opacity-100 transform translate-y-0 md:translate-y-2 md:group-hover:translate-y-0 transition-all duration-300 pointer-events-none flex flex-col gap-1 items-start">
+          {product.saleActive && Number(product.salePercentage) > 0 && (
+            <span className="bg-primary text-primary-foreground text-[8px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded shadow-xl">
+              {product.salePercentage}% OFF
+            </span>
+          )}
+          <span className="bg-white/90 dark:bg-black/80 text-zinc-900 dark:text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm font-bold tracking-widest uppercase flex items-center gap-2 border border-black/5 dark:border-white/5">
+            {product.saleActive && Number(product.salePercentage) > 0 ? (
+              <>
+                <span className="text-primary">
+                  {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
+                </span>
+                <span className="text-zinc-500/50 dark:text-white/50 line-through text-[8px]">
+                  {formatPrice(product.price)}
+                </span>
+              </>
+            ) : (
+              formatPrice(product.price)
+            )}
+          </span>
+        </div>
+
+        {/* Slide indicators */}
+        {images.length > 1 && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
+            {images.slice(0, 6).map((_, dotIdx) => (
+              <div
+                key={dotIdx}
+                className={`h-1 rounded-full transition-all duration-500 ${
+                  dotIdx === idx ? "w-5 bg-white shadow-lg" : "w-1.5 bg-white/40"
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="px-1">
+        <h3 className="text-xs font-black uppercase tracking-widest truncate mb-1 text-foreground/80 group-hover:text-primary transition-colors">
+          {product.name}
+        </h3>
       </div>
     </Link>
   );
@@ -796,67 +916,7 @@ export default function Home() {
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-16">
           {newArrivals.map((product) => (
-            <Link
-              key={product.id}
-              href={`/product/${product.id}`}
-              className="group cursor-pointer"
-            >
-              <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[3/4] mb-6 rounded-lg group-hover:shadow-xl transition-all duration-500">
-                <motion.div
-                  className="w-full h-full"
-                  whileHover={{ scale: 1.05 }}
-                  transition={{ duration: 0.8 }}
-                >
-                  <OptimizedImage
-                    src={product.imageUrl ?? ""}
-                    alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
-                  />
-                  {/* Hover Secondary View */}
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-30 mix-blend-overlay transition-opacity duration-700 bg-white" />
-                </motion.div>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.open(`/product/${product.id}`, "_blank");
-                  }}
-                  className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity border border-white/30"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </button>
-
-                {/* Dynamic Price floating on hover */}
-                <div className="absolute bottom-2 left-2 truncate opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none flex flex-col gap-1 items-start">
-                   {product.saleActive && Number(product.salePercentage) > 0 && (
-                     <span className="bg-primary text-primary-foreground text-[8px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded shadow-xl animate-pulse">
-                        {product.salePercentage}% OFF
-                     </span>
-                   )}
-                   <span className="bg-white/90 dark:bg-black/80 text-zinc-900 dark:text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm font-bold tracking-widest uppercase flex items-center gap-2 border border-black/5 dark:border-white/5">
-                    {product.saleActive && Number(product.salePercentage) > 0 ? (
-                      <>
-                        <span className="text-primary">
-                          {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
-                        </span>
-                        <span className="text-zinc-500/50 dark:text-white/50 line-through text-[8px]">
-                          {formatPrice(product.price)}
-                        </span>
-                      </>
-                    ) : (
-                      formatPrice(product.price)
-                    )}
-                   </span>
-                </div>
-              </div>
-              <div className="px-1">
-                <h3 className="text-xs font-black uppercase tracking-widest truncate mb-1 text-foreground/80 group-hover:text-primary transition-colors">
-                  {product.name}
-                </h3>
-              </div>
-            </Link>
+            <NewArrivalCard key={product.id} product={product} />
           ))}
         </div>
       </section>

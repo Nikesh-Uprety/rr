@@ -17,25 +17,35 @@ import os from "node:os";
 
 const app = express();
 
-// RENDER DEPLOYMENT NOTE:
-// This app requires Render Persistent Disk to preserve uploads
-// across deploys. Mount path: /uploads, recommended size: 1GB.
-// Without Persistent Disk, all uploaded images are lost on redeploy.
-// Enable at: Render Dashboard → Your Service → Disks → Add Disk
+// UPLOADS PERSISTENCE NOTE:
+// Uploaded images are written to `UPLOADS_DIR`. On Railway, mount a persistent volume
+// to the container path you set in `UPLOADS_DIR` (recommended: `/uploads`).
+// Without a persistent mount, files may disappear on container redeploy/restart.
 import fs from "fs";
 import path from "path";
 
-const UPLOAD_DIRS = [
-  "uploads/products",
-  "uploads/site-assets/hero",
-  "uploads/site-assets/featured_collection",
-  "uploads/site-assets/new_collection",
-  "uploads/site-assets/collection_page",
+const UPLOADS_DIR =
+  process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads");
+
+const UPLOAD_SUBDIRS = [
+  "products",
+  path.join("site-assets", "hero"),
+  path.join("site-assets", "featured_collection"),
+  path.join("site-assets", "new_collection"),
+  path.join("site-assets", "collection_page"),
 ];
 
-UPLOAD_DIRS.forEach(dir => {
-  fs.mkdirSync(path.join(process.cwd(), dir), { recursive: true });
+UPLOAD_SUBDIRS.forEach((sub) => {
+  fs.mkdirSync(path.join(UPLOADS_DIR, sub), { recursive: true });
 });
+
+// Quick visibility if a persistent mount is misconfigured.
+try {
+  fs.accessSync(UPLOADS_DIR, fs.constants.W_OK);
+  console.log(`[UPLOADS] Writable: ${UPLOADS_DIR}`);
+} catch (err) {
+  console.warn(`[UPLOADS] WARNING: uploads dir not writable: ${UPLOADS_DIR}`, err);
+}
 
 // Behind Render's proxy, trust X-Forwarded-* so secure cookies work
 app.set("trust proxy", 1);
@@ -150,7 +160,7 @@ app.use((req, res, next) => {
 (async () => {
   // Serve uploaded files - MUST be before registerRoutes and vite
   const path = await import("path");
-  const uploadsPath = path.resolve(process.cwd(), "uploads");
+  const uploadsPath = path.resolve(UPLOADS_DIR);
   app.use("/uploads", express.static(uploadsPath));
 
   await registerRoutes(httpServer, app);

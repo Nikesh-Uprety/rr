@@ -4,7 +4,9 @@ import fs from "fs";
 import { storage } from "../storage";
 import { type NewMediaAsset } from "@shared/schema";
 
-const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+const UPLOADS_DIR = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : path.join(process.cwd(), "uploads");
 const MEDIA_DIR = path.join(UPLOADS_DIR, "media");
 
 /**

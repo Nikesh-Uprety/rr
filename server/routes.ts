@@ -49,10 +49,11 @@ import { generateBillFromOrder, generateBillNumber } from "./services/billServic
 import { uploadToCloudinary, deleteFromCloudinary } from "./lib/cloudinary";
 import { uploadMediaToCloudinary } from "./lib/cloudinary";
 
-const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+const UPLOADS_DIR =
+  process.env.UPLOADS_DIR ? path.resolve(process.env.UPLOADS_DIR) : path.join(process.cwd(), "uploads");
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
-const PRODUCTS_UPLOADS_DIR = path.join(process.cwd(), "uploads", "products");
-const MEDIA_UPLOADS_DIR = path.join(process.cwd(), "uploads", "media");
+const PRODUCTS_UPLOADS_DIR = path.join(UPLOADS_DIR, "products");
+const MEDIA_UPLOADS_DIR = path.join(UPLOADS_DIR, "media");
 
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
@@ -2014,7 +2015,7 @@ export async function registerRoutes(
 
         const fs = await import("fs");
         const path = await import("path");
-        const avatarDir = path.resolve(process.cwd(), "uploads", "avatars");
+        const avatarDir = path.join(UPLOADS_DIR, "avatars");
         fs.mkdirSync(avatarDir, { recursive: true });
 
         const filename = `avatar-${user.id}-${Date.now()}.webp`;

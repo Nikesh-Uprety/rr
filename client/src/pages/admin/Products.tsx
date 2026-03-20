@@ -266,11 +266,21 @@ export default function AdminProducts() {
       const galleryUrls = parseJsonArray(editProduct.galleryUrls);
       const colorOptions = parseJsonArray(editProduct.colorOptions);
       const sizeOptions = parseJsonArray(editProduct.sizeOptions);
+
+      const productCategoryRaw = editProduct.category ?? "";
+      const productCategoryNormalized = productCategoryRaw.trim();
+      const matchedCategory = categories.find(
+        (c) =>
+          c.slug === productCategoryNormalized ||
+          c.name.toLowerCase() === productCategoryNormalized.toLowerCase(),
+      );
+      const categorySlug = matchedCategory?.slug ?? productCategoryNormalized;
+
       editForm.reset({
         name: editProduct.name,
         shortDetails: editProduct.shortDetails ?? "",
         description: editProduct.description ?? "",
-        category: editProduct.category ?? "",
+        category: categorySlug,
         price: Number(editProduct.price),
         stockStatus: editProduct.stock === 0 ? "out_of_stock" : "in_stock",
         stock: editProduct.stock,
@@ -282,7 +292,7 @@ export default function AdminProducts() {
         saleActive: editProduct.saleActive ?? false,
       });
     }
-  }, [editProduct, editForm]);
+  }, [editProduct, editForm, categories]);
 
   function parseJsonArray(s: string | null | undefined): string[] {
     if (!s || !s.trim()) return [];
@@ -927,7 +937,7 @@ export default function AdminProducts() {
                           setMediaLibraryOpen(true);
                         }}
                       >
-                        <FolderInput className="w-3.5 h-3.5 mr-2" /> Select from Library
+                        <FolderInput className="w-3.5 h-3.5 mr-2" /> Select display picture
                       </Button>
                       <Button 
                         type="button" 
@@ -935,7 +945,7 @@ export default function AdminProducts() {
                         className="flex-1 text-xs h-8"
                         onClick={() => imageInputRef.current?.click()}
                       >
-                        <Upload className="w-3.5 h-3.5 mr-2" /> Upload New
+                        <Upload className="w-3.5 h-3.5 mr-2" /> Upload display picture
                       </Button>
                     </div>
 
@@ -1271,19 +1281,59 @@ export default function AdminProducts() {
       <MediaLibrary 
         open={mediaLibraryOpen}
         onOpenChange={setMediaLibraryOpen}
+        mode={
+          mediaLibraryTarget === "add-gallery" || mediaLibraryTarget === "edit-gallery"
+            ? "multiple"
+            : "single"
+        }
+        selectedUrl={
+          mediaLibraryTarget === "add-main"
+            ? addForm.watch("imageUrl")
+            : mediaLibraryTarget === "edit-main"
+              ? editForm.watch("imageUrl")
+              : undefined
+        }
+        selectedUrls={
+          mediaLibraryTarget === "add-gallery"
+            ? (addForm.watch("galleryUrlsText") || "")
+                .split(/\n/)
+                .map((u) => u.trim())
+                .filter(Boolean)
+            : mediaLibraryTarget === "edit-gallery"
+              ? (editForm.watch("galleryUrlsText") || "")
+                  .split(/\n/)
+                  .map((u) => u.trim())
+                  .filter(Boolean)
+              : undefined
+        }
         onSelect={(url) => {
-          if (mediaLibraryTarget === 'add-main') {
+          // Only used in "single" mode (main display picture)
+          if (mediaLibraryTarget === "add-main") {
             addForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
-          } else if (mediaLibraryTarget === 'add-gallery') {
-            const current = addForm.getValues("galleryUrlsText") || "";
-            const next = current ? `${current}\n${url}` : url;
-            addForm.setValue("galleryUrlsText", next, { shouldValidate: true, shouldDirty: true });
-          } else if (mediaLibraryTarget === 'edit-main') {
+          } else if (mediaLibraryTarget === "edit-main") {
             editForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
-          } else if (mediaLibraryTarget === 'edit-gallery') {
-            const current = editForm.getValues("galleryUrlsText") || "";
-            const next = current ? `${current}\n${url}` : url;
-            editForm.setValue("galleryUrlsText", next, { shouldValidate: true, shouldDirty: true });
+          }
+        }}
+        onConfirm={(urls) => {
+          // Only used in "multiple" mode (gallery)
+          if (!urls.length) return;
+
+          if (mediaLibraryTarget === "add-gallery") {
+            const currentText = addForm.getValues("galleryUrlsText") || "";
+            const current = currentText
+              .split(/\n/)
+              .map((u) => u.trim())
+              .filter(Boolean);
+            const merged = [...current, ...urls.filter((u) => !current.includes(u))];
+            addForm.setValue("galleryUrlsText", merged.join("\n"), { shouldValidate: true, shouldDirty: true });
+          } else if (mediaLibraryTarget === "edit-gallery") {
+            const currentText = editForm.getValues("galleryUrlsText") || "";
+            const current = currentText
+              .split(/\n/)
+              .map((u) => u.trim())
+              .filter(Boolean);
+            const merged = [...current, ...urls.filter((u) => !current.includes(u))];
+            editForm.setValue("galleryUrlsText", merged.join("\n"), { shouldValidate: true, shouldDirty: true });
           }
         }}
       />
@@ -2259,7 +2309,7 @@ export default function AdminProducts() {
                           setMediaLibraryOpen(true);
                         }}
                       >
-                        <FolderInput className="w-3.5 h-3.5 mr-2" /> Select from Library
+                      <FolderInput className="w-3.5 h-3.5 mr-2" /> Select display picture
                       </Button>
                       <Button 
                         type="button" 
@@ -2267,7 +2317,7 @@ export default function AdminProducts() {
                         className="flex-1 text-xs h-8"
                         onClick={() => imageInputRef.current?.click()}
                       >
-                        <Upload className="w-3.5 h-3.5 mr-2" /> Upload New
+                      <Upload className="w-3.5 h-3.5 mr-2" /> Upload display picture
                       </Button>
                     </div>
 

@@ -20,7 +20,14 @@ export async function generateBillFromOrder(
 ): Promise<Bill> {
   // Fetch order with all items
   const [order] = await db
-    .select()
+    .select({
+      id: orders.id,
+      userId: orders.userId,
+      email: orders.email,
+      fullName: orders.fullName,
+      total: orders.total,
+      paymentMethod: orders.paymentMethod,
+    })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);

@@ -633,6 +633,7 @@ export async function registerRoutes(
     city: z.string().min(1),
     zip: z.string().min(1),
     country: z.string().min(1),
+    deliveryLocation: z.string().min(1),
     locationCoordinates: z.string().optional(),
   });
 
@@ -737,7 +738,8 @@ export async function registerRoutes(
         addressLine2: undefined,
         city: shipping.city,
         region: "", // state removed
-        locationCoordinates: (shipping.locationCoordinates as string) || undefined,
+        locationCoordinates: (shipping.locationCoordinates ?? shipping.deliveryLocation) as string,
+        deliveryLocation: shipping.deliveryLocation,
         postalCode: shipping.zip,
         country: shipping.country,
         total: orderTotal,

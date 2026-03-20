@@ -833,6 +833,14 @@ export default function AdminOrders() {
                       </div>
                     ) : selectedOrder.deliveryRequired !== false && (
                       <div className="space-y-4">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">
+                            Delivery Location
+                          </p>
+                          <p className="text-sm font-medium text-foreground">
+                            {selectedOrder.deliveryLocation ?? "—"}
+                          </p>
+                        </div>
                         {selectedOrder.deliveryAddress ? (
                           <div>
                             <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Custom Delivery Address</p>

@@ -1,0 +1,122 @@
+<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;padding:40px;line-height:1.45;color:#111;}h1{font-size:28px;margin:0 0 12px 0;}h2{font-size:20px;margin-top:24px;}h3{font-size:16px;margin-top:18px;}code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:0.95em;}pre{background:#f5f5f5;padding:12px;border-radius:10px;overflow:auto;}pre code{white-space:pre;word-break:normal;}a{color:#0b5ed7;text-decoration:none;}a:hover{text-decoration:underline;}table{border-collapse:collapse;margin:12px 0;}td,th{border:1px solid #ddd;padding:6px 10px;}hr{border:none;border-top:1px solid #ddd;margin:22px 0;}blockquote{border-left:4px solid #ddd;margin:12px 0;padding-left:14px;color:#444;}</style></head><body><h1 id="admin-portal-core-changes-report-today-only">Admin Portal Core Changes Report (Today Only)</h1>
+<p>Prepared for: Arnav<br>Date: 2026-03-20<br>Scope: Changes committed on <code>2026-03-20</code> (excluding commits from earlier dates).</p>
+<h2 id="commit-summary-2026-03-20">Commit Summary (2026-03-20)</h2>
+<h3 id="1-7968176---feat-implemented-and-fixed-and-changed-a-lot-of-things-in-the-admin-portal">1) <code>7968176</code> - feat: Implemented and fixed and changed a lot of things in the admin portal</h3>
+<p>Primary focus: Admin portal core overhaul (routing, layout, admin pages, API, and supporting backend wiring).
+Key files:
+<code>client/src/components/layout/AdminLayout.tsx</code>
+<code>client/src/components/layout/TopLoadingBar.tsx</code>
+<code>client/src/components/ProtectedRoute.tsx</code>
+<code>client/src/lib/adminApi.ts</code>
+<code>client/src/pages/admin/Customers.tsx</code>
+<code>client/src/pages/admin/Images.tsx</code>
+<code>client/src/pages/admin/Marketing.tsx</code>
+<code>client/src/pages/admin/Orders.tsx</code>
+<code>client/src/pages/admin/POS.tsx</code>
+<code>client/src/pages/admin/Products.tsx</code>
+<code>client/src/pages/admin/PromoCodes.tsx</code>
+<code>client/src/pages/admin/StoreUsers.tsx</code>
+<code>server/middleware/requireAdmin.ts</code>
+<code>server/routes.ts</code>
+<code>server/storage.ts</code>
+<code>server/email.ts</code>
+<code>shared/schema.ts</code></p>
+<h3 id="2-7ff0ff0---refactor-move-as-seen-on-instagram-section---update-csp-allowlist">2) <code>7ff0ff0</code> - refactor: Move &quot;As Seen On Instagram&quot; section ... + update CSP allowlist</h3>
+<p>Purpose: Security-related update to support Instagram embeds and keep storefront CSP aligned.
+Key files:
+<code>client/src/pages/storefront/NewCollection.tsx</code>
+<code>server/middleware/security.ts</code></p>
+<h3 id="3-8cc222f---feat-enhance-storefront-functionality-by-adding-a-new-storefront-images-admin-page-">3) <code>8cc222f</code> - feat: Enhance storefront functionality by adding a new &quot;Storefront Images&quot; admin page ...</h3>
+<p>Purpose: Admin-driven image override support for storefront + admin cart activity notifications.
+Key files:
+<code>client/src/pages/admin/StorefrontImagePicker.tsx</code>
+<code>client/src/pages/storefront/Home.tsx</code>
+<code>client/src/store/cart.ts</code>
+<code>server/routes.ts</code>
+<code>server/uploads.ts</code>
+<code>server/lib/imageService.ts</code>
+<code>server/storage.ts</code>
+<code>server/vite.ts</code>
+<code>vite.config.ts</code></p>
+<h3 id="4-49cf812---feat-introduce-uploads-persistence-configuration-env-var-support">4) <code>49cf812</code> - feat: Introduce uploads persistence configuration (env var support)</h3>
+<p>Purpose: Make uploads/image persistence configurable for local vs production deployments.
+Key files:
+<code>.env.example</code>
+<code>md/railway_uploads_persistence.md</code>
+<code>script/smoke-test-uploads.ts</code>
+<code>server/index.ts</code>
+<code>server/lib/imageService.ts</code>
+<code>server/middleware/security.ts</code>
+<code>server/routes.ts</code>
+<code>server/vite.ts</code></p>
+<h3 id="5-e67db2a---refactor-simplify-order-email-parameters--consistent-shipping-fee-usage">5) <code>e67db2a</code> - refactor: Simplify order email parameters + consistent shipping fee usage</h3>
+<p>Purpose: Clean up order email parameter construction and keep shipping fee handling consistent.
+Key files:
+<code>.env.example</code>
+<code>script/smtp-test.ts</code>
+<code>server/middleware/security.ts</code>
+<code>server/routes.ts</code></p>
+<h3 id="6-d2f5813---feat-add-order-confirmation-and-status-update-emails">6) <code>d2f5813</code> - feat: Add order confirmation and status update emails</h3>
+<p>Purpose: Add the missing email triggers/endpoints for order confirmation and order status updates.
+Key files:
+<code>server/routes.ts</code></p>
+<h3 id="7-5388460---feat-redesign-atelier-page--add-a-data-wipe-safeguard-to-seed-script">7) <code>5388460</code> - feat: Redesign Atelier page + add a data wipe safeguard to seed script</h3>
+<p>Purpose: Storefront/seed safety; also includes updates to email-related server code used by workflows.
+Key files:
+<code>server/email.ts</code>
+<code>server/seed.ts</code>
+<code>client/src/pages/storefront/Contact.tsx</code>
+<code>client/src/pages/storefront/Home.tsx</code>
+<code>client/src/pages/storefront/NewCollection.tsx</code>
+<code>client/src/pages/storefront/ProductDetail.tsx</code></p>
+<h2 id="admin-portal-focus-what-to-review">Admin Portal Focus (What to Review)</h2>
+<ol>
+<li><p>Admin access + portal routing
+<code>client/src/components/ProtectedRoute.tsx</code>
+<code>server/middleware/requireAdmin.ts</code>
+<code>client/src/components/layout/AdminLayout.tsx</code></p>
+</li>
+<li><p>Admin UI pages updated today
+<code>client/src/pages/admin/Customers.tsx</code>
+<code>client/src/pages/admin/Images.tsx</code>
+<code>client/src/pages/admin/Marketing.tsx</code>
+<code>client/src/pages/admin/Orders.tsx</code>
+<code>client/src/pages/admin/POS.tsx</code>
+<code>client/src/pages/admin/Products.tsx</code>
+<code>client/src/pages/admin/PromoCodes.tsx</code>
+<code>client/src/pages/admin/StoreUsers.tsx</code></p>
+</li>
+<li><p>Admin image/media functionality and persistence
+<code>client/src/pages/admin/StorefrontImagePicker.tsx</code>
+<code>server/lib/imageService.ts</code>
+<code>server/storage.ts</code>
+<code>server/uploads.ts</code>
+<code>md/railway_uploads_persistence.md</code></p>
+</li>
+<li><p>Order email flows (relevant to admin operations)
+<code>server/routes.ts</code>
+<code>server/email.ts</code></p>
+</li>
+</ol>
+<h2 id="files-touched-today---high-level">Files Touched (Today) - High Level</h2>
+<p>Admin portal UI/runtime:
+<code>client/src/components/layout/AdminLayout.tsx</code>
+<code>client/src/components/layout/TopLoadingBar.tsx</code>
+<code>client/src/components/ProtectedRoute.tsx</code>
+<code>client/src/lib/adminApi.ts</code>
+<code>client/src/pages/admin/*</code></p>
+<p>Admin portal backend support:
+<code>server/routes.ts</code>
+<code>server/storage.ts</code>
+<code>server/uploads.ts</code>
+<code>server/lib/imageService.ts</code>
+<code>server/middleware/requireAdmin.ts</code></p>
+<p>Email + security support:
+<code>server/email.ts</code>
+<code>server/middleware/security.ts</code>
+<code>script/smtp-test.ts</code></p>
+<p>Upload persistence config + verification:
+<code>.env.example</code>
+<code>md/railway_uploads_persistence.md</code>
+<code>script/smoke-test-uploads.ts</code></p>
+</body></html>

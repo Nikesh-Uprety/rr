@@ -44,6 +44,7 @@ export interface OrderInput {
     zip: string;
     country: string;
     locationCoordinates?: string;
+    deliveryLocation: string;
   };
   paymentMethod: string;
   source?: string;
@@ -113,6 +114,7 @@ export interface OrderDetail {
   paymentProofUrl: string | null;
   paymentVerified: string | null;
   locationCoordinates: string | null;
+  deliveryLocation?: string | null;
   promoCode?: string | null;
   promoDiscountAmount?: number | null;
   createdAt: string | Date;

@@ -64,6 +64,7 @@ export interface CreateOrderInput {
   deliveryRequired?: boolean;
   deliveryProvider?: string | null;
   deliveryAddress?: string | null;
+  deliveryLocation?: string | null;
   locationCoordinates?: string;
   promoCode?: string;
   promoDiscountAmount?: number;
@@ -685,6 +686,9 @@ export class PgStorage implements IStorage {
         source: orders.source,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
+        // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
+        // Checkout already stores the selected delivery location inside `location_coordinates`.
+        deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
@@ -724,6 +728,9 @@ export class PgStorage implements IStorage {
         source: orders.source,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
+        // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
+        // Checkout already stores the selected delivery location inside `location_coordinates`.
+        deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
@@ -755,54 +762,61 @@ export class PgStorage implements IStorage {
   }
 
   async createOrder(data: CreateOrderInput): Promise<Order> {
-    const [orderRow] = await db
-      .insert(orders)
-      .values({
-        email: data.email,
-        fullName: data.fullName,
-        addressLine1: data.addressLine1,
-        addressLine2: data.addressLine2 ?? null,
-        city: data.city,
-        region: data.region,
-        postalCode: data.postalCode,
-        country: data.country,
-        total: data.total.toString(),
-        status: "pending",
-        paymentMethod: data.paymentMethod ?? "cash_on_delivery",
-        locationCoordinates: data.locationCoordinates ?? null,
-        promoCode: data.promoCode ?? null,
-        promoDiscountAmount: data.promoDiscountAmount ?? 0,
-        source: data.source ?? "website",
-        deliveryRequired: data.deliveryRequired ?? true,
-        deliveryProvider: data.deliveryProvider ?? null,
-        deliveryAddress: data.deliveryAddress ?? null,
-      })
-      .returning({
-        id: orders.id,
-        userId: orders.userId,
-        email: orders.email,
-        fullName: orders.fullName,
-        addressLine1: orders.addressLine1,
-        addressLine2: orders.addressLine2,
-        city: orders.city,
-        region: orders.region,
-        postalCode: orders.postalCode,
-        country: orders.country,
-        total: orders.total,
-        status: orders.status,
-        paymentMethod: orders.paymentMethod,
-        paymentProofUrl: orders.paymentProofUrl,
-        paymentVerified: orders.paymentVerified,
-        locationCoordinates: orders.locationCoordinates,
-        promoCode: orders.promoCode,
-        promoDiscountAmount: orders.promoDiscountAmount,
-        source: orders.source,
-        deliveryRequired: orders.deliveryRequired,
-        deliveryProvider: orders.deliveryProvider,
-        deliveryAddress: orders.deliveryAddress,
-        createdAt: orders.createdAt,
-        updatedAt: orders.updatedAt,
-      });
+    // IMPORTANT:
+    // Some deployed/staged DBs don't have `orders.delivery_location`.
+    // Using drizzle's insert with the full `orders` definition can still attempt
+    // to reference that missing column. To stay backward compatible, we
+    // explicitly omit it from the INSERT and store the selected location in
+    // `location_coordinates` instead.
+    const result = await db.execute(
+      sql`
+        INSERT INTO "orders" (
+          "email",
+          "full_name",
+          "address_line1",
+          "address_line2",
+          "city",
+          "region",
+          "postal_code",
+          "country",
+          "total",
+          "status",
+          "payment_method",
+          "location_coordinates",
+          "promo_code",
+          "promo_discount_amount",
+          "source",
+          "delivery_required",
+          "delivery_provider",
+          "delivery_address"
+        ) VALUES (
+          ${data.email},
+          ${data.fullName},
+          ${data.addressLine1},
+          ${data.addressLine2 ?? null},
+          ${data.city},
+          ${data.region},
+          ${data.postalCode},
+          ${data.country},
+          ${data.total.toString()},
+          'pending',
+          ${data.paymentMethod ?? "cash_on_delivery"},
+          ${data.locationCoordinates ?? null},
+          ${data.promoCode ?? null},
+          ${data.promoDiscountAmount ?? 0},
+          ${data.source ?? "website"},
+          ${data.deliveryRequired ?? true},
+          ${data.deliveryProvider ?? null},
+          ${data.deliveryAddress ?? null}
+        )
+        RETURNING
+          "id",
+          "email",
+          "full_name" as "fullName"
+      `,
+    );
+
+    const orderRow = result.rows[0] as any as Order;
 
     if (data.items.length > 0) {
       await db.insert(orderItems).values(
@@ -856,6 +870,9 @@ export class PgStorage implements IStorage {
         source: orders.source,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
+        // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
+        // Checkout already stores the selected delivery location inside `location_coordinates`.
+        deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
@@ -908,6 +925,9 @@ export class PgStorage implements IStorage {
         source: orders.source,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
+        // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
+        // Checkout already stores the selected delivery location inside `location_coordinates`.
+        deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
@@ -946,6 +966,9 @@ export class PgStorage implements IStorage {
         source: orders.source,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
+        // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
+        // Checkout already stores the selected delivery location inside `location_coordinates`.
+        deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
@@ -1050,6 +1073,9 @@ export class PgStorage implements IStorage {
         source: orders.source,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
+        // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
+        // Checkout already stores the selected delivery location inside `location_coordinates`.
+        deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
@@ -2519,6 +2545,7 @@ export class MemStorage implements IStorage {
       source: "website",
       deliveryRequired: true,
       deliveryProvider: null,
+      deliveryLocation: data.deliveryLocation ?? null,
       deliveryAddress: null,
       createdAt: new Date(),
       updatedAt: new Date(),

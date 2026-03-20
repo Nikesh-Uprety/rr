@@ -134,6 +134,8 @@ export const orders = pgTable("orders", {
   deliveryRequired: boolean("delivery_required").notNull().default(true),
   deliveryProvider: text("delivery_provider"),
     // "pathao" | "nepal_can_move" | "yango" | "other" | null
+  // Selected delivery location name from the Nepal locations list.
+  deliveryLocation: varchar("delivery_location"),
   deliveryAddress: text("delivery_address"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

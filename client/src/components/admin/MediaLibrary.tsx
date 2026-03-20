@@ -16,7 +16,10 @@ interface MediaLibraryProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (url: string) => void;
+  onConfirm?: (urls: string[]) => void;
   selectedUrl?: string;
+  selectedUrls?: string[];
+  mode?: "single" | "multiple";
   category?: string;
 }
 
@@ -25,15 +28,71 @@ export function MediaLibrary({
   onOpenChange,
   onSelect,
   selectedUrl,
+  selectedUrls,
+  onConfirm,
+  mode = "single",
   category = "product",
 }: MediaLibraryProps) {
-  const { data: assets = [], isLoading } = useQuery<AdminImageAsset[]>({
-    queryKey: ["admin", "images", { category }],
-    queryFn: () => fetchAdminImages({ category, limit: 120 }),
+  const [offset, setOffset] = React.useState(0);
+  const [accumulated, setAccumulated] = React.useState<AdminImageAsset[]>([]);
+  const [hasMore, setHasMore] = React.useState(true);
+
+  const pageSize = 120; // server clamps to <= 200; this keeps load reasonable
+
+  const { data: pageAssets = [], isLoading, isFetching } = useQuery<AdminImageAsset[]>({
+    queryKey: ["admin", "images", { category, limit: pageSize, offset }],
+    queryFn: () => fetchAdminImages({ category, limit: pageSize, offset }),
     enabled: open,
   });
 
-  const images = assets.map((a) => a.url);
+  React.useEffect(() => {
+    if (!open) return;
+    setOffset(0);
+    setAccumulated([]);
+    setHasMore(true);
+  }, [open, category]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (offset === 0) {
+      setAccumulated(pageAssets);
+    } else if (pageAssets.length > 0) {
+      setAccumulated((prev) => {
+        const seen = new Set(prev.map((a) => a.url));
+        const next = [...prev];
+        for (const a of pageAssets) {
+          if (!seen.has(a.url)) next.push(a);
+        }
+        return next;
+      });
+    }
+    // If server returned fewer than a full page, we likely hit the end.
+    if (pageAssets.length < pageSize) setHasMore(false);
+  }, [pageAssets, offset, open]);
+
+  const images = accumulated.map((a) => a.url);
+  const selectedSet = React.useMemo(() => {
+    const set = new Set<string>();
+    if (mode === "single") {
+      if (selectedUrl) set.add(selectedUrl);
+    } else {
+      (selectedUrls ?? []).forEach((u) => set.add(u));
+    }
+    return set;
+  }, [mode, selectedUrl, selectedUrls]);
+
+  const [localSelectedSet, setLocalSelectedSet] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (mode === "multiple") {
+      setLocalSelectedSet(new Set(selectedUrls ?? []));
+    } else {
+      setLocalSelectedSet(new Set(selectedUrl ? [selectedUrl] : []));
+    }
+  }, [open, mode, selectedUrl, selectedUrls]);
+
+  const effectiveSelected = mode === "multiple" ? localSelectedSet : selectedSet;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -67,13 +126,24 @@ export function MediaLibrary({
           <ScrollArea className="flex-1 -mx-1 pr-4">
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {images.map((url) => {
-                const isSelected = selectedUrl === url;
+                const isSelected = effectiveSelected.has(url);
                 return (
                   <button
                     key={url}
                     onClick={() => {
-                      onSelect(url);
-                      onOpenChange(false);
+                      if (mode === "single") {
+                        onSelect(url);
+                        onOpenChange(false);
+                        return;
+                      }
+
+                      // multiple: toggle selection, keep dialog open
+                      setLocalSelectedSet((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(url)) next.delete(url);
+                        else next.add(url);
+                        return next;
+                      });
                     }}
                     className={cn(
                       "group relative aspect-square rounded-xl border bg-muted overflow-hidden transition-all hover:ring-2 hover:ring-primary/20",
@@ -110,10 +180,56 @@ export function MediaLibrary({
           </ScrollArea>
         )}
 
-        <div className="mt-6 flex justify-end pt-4 border-t">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
+        <div className="mt-4 pt-4 border-t flex flex-col gap-3">
+          {mode === "multiple" ? (
+            <div className="flex items-center justify-between gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setLocalSelectedSet(new Set())}
+                disabled={localSelectedSet.size === 0}
+              >
+                Clear Selection
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => {
+                    const urls = Array.from(localSelectedSet);
+                    if (urls.length === 0) return;
+                    onConfirm?.(urls);
+                    onOpenChange(false);
+                  }}
+                  disabled={!onConfirm || localSelectedSet.size === 0}
+                >
+                  Add Selected ({localSelectedSet.size})
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+            </div>
+          )}
+
+          {hasMore && (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isFetching}
+                onClick={() => setOffset((o) => o + pageSize)}
+              >
+                {isFetching ? "Loading..." : "Load more"}
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

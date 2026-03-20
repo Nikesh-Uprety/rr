@@ -4,7 +4,7 @@ import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, AlertCircle, CheckCircle2, ShoppingBag, Wallet, Banknote, Building2, Smartphone } from "lucide-react";
-import { LocationPicker } from "@/components/LocationPicker";
+import { DeliveryLocationSelect, NEPAL_LOCATIONS } from "@/components/DeliveryLocationSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createOrder, validatePromoCode } from "@/lib/api";
@@ -28,10 +28,10 @@ export default function Checkout() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [formError, setFormError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId>("cash_on_delivery");
-  const [locationCoordinates, setLocationCoordinates] = useState<string | null>(null);
   const [deliveryRequired, setDeliveryRequired] = useState(true);
   const [deliveryProvider, setDeliveryProvider] = useState<string>("pathao");
   const [deliveryAddress, setDeliveryAddress] = useState<string>("");
+  const [deliveryLocation, setDeliveryLocation] = useState<string>("");
 
   const shipping = 100;
   // Promo code state
@@ -92,8 +92,6 @@ export default function Checkout() {
     mutationFn: createOrder,
   });
 
-  const [manualLocation, setManualLocation] = useState("");
-  const [showManualLocation, setShowManualLocation] = useState(true);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   
   const fieldRefs = {
@@ -137,8 +135,9 @@ export default function Checkout() {
     if (!city) newErrors.city = true;
     if (!phone) newErrors.phone = true;
     
-    const finalLocation = locationCoordinates || manualLocation;
-    if (!finalLocation) newErrors.location = true;
+    const isLocationValid =
+      !!deliveryLocation && NEPAL_LOCATIONS.includes(deliveryLocation);
+    if (!isLocationValid) newErrors.location = true;
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -166,13 +165,14 @@ export default function Checkout() {
           city,
           zip: "00000",
           country: "Nepal",
-          locationCoordinates: finalLocation,
+          locationCoordinates: deliveryLocation,
+          deliveryLocation,
         },
         paymentMethod,
         source: "website",
         deliveryRequired,
         deliveryProvider: deliveryRequired ? deliveryProvider : null,
-        deliveryAddress: deliveryRequired ? (deliveryAddress || manualLocation || null) : null,
+        deliveryAddress: deliveryRequired ? deliveryAddress || null : null,
         promoCodeId: appliedPromo?.id,
       });
 
@@ -305,42 +305,18 @@ export default function Checkout() {
               </div>
               
               <div className="pt-2 scroll-mt-20" ref={fieldRefs.location}>
-                <div className="flex justify-between items-center mb-2">
-                  <p className="text-sm font-semibold uppercase tracking-wide">Delivery Location</p>
-                    <button 
-                      type="button" 
-                      onClick={() => setShowManualLocation(!showManualLocation)}
-                      className="text-[10px] uppercase font-bold underline hover:text-muted-foreground"
-                    >
-                      {showManualLocation ? "Use Maps" : "Type Manually"}
-                    </button>
-                </div>
+                <p className="text-sm font-semibold uppercase tracking-wide mb-2">
+                  Delivery Location
+                </p>
 
-                {showManualLocation ? (
-                  <div className="space-y-2">
-                    <Input
-                      placeholder="Enter specific delivery location details (e.g. Near Big Mart, Baneshwor)"
-                      className={`h-14 rounded-none ${errors.location ? "border-red-500 border-2" : "border-gray-200"}`}
-                      value={manualLocation}
-                      onChange={(e) => {
-                        setManualLocation(e.target.value);
-                        if (e.target.value) clearError("location");
-                      }}
-                      onFocus={() => clearError("location")}
-                    />
-                    <p className="text-[10px] text-muted-foreground uppercase">Please be as specific as possible for faster delivery.</p>
-                  </div>
-                ) : (
-                  <>
-                    <LocationPicker onLocationSelect={(loc) => {
-                      setLocationCoordinates(loc);
-                      clearError("location");
-                    }} />
-                    {!locationCoordinates && errors.location && (
-                      <p className="text-[10px] text-red-500 mt-1 uppercase font-bold">Please provide a delivery location</p>
-                    )}
-                  </>
-                )}
+                <DeliveryLocationSelect
+                  value={deliveryLocation}
+                  onChange={(next) => {
+                    setDeliveryLocation(next);
+                    clearError("location");
+                  }}
+                  error={!!errors.location}
+                />
               </div>
 
               <div className="pt-2 space-y-3">
@@ -468,7 +444,7 @@ export default function Checkout() {
           <Button
             type="submit"
             className="w-full h-16 bg-black text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold"
-            disabled={isPending || (!locationCoordinates && !manualLocation)}
+            disabled={isPending}
           >
             {isPending ? "Processing..." : paymentMethod === "cash_on_delivery" ? "Confirm Order" : "Pay Now"}
           </Button>

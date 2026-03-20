@@ -23,6 +23,7 @@ export interface AdminOrder {
   postalCode?: string | null;
   country?: string | null;
   locationCoordinates?: string | null;
+  deliveryLocation?: string | null;
   promoCode?: string;
   promoDiscountAmount?: number;
   source?: string;

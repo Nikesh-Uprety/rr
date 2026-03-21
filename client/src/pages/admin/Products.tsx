@@ -267,14 +267,17 @@ export default function AdminProducts() {
       const colorOptions = parseJsonArray(editProduct.colorOptions);
       const sizeOptions = parseJsonArray(editProduct.sizeOptions);
 
-      const productCategoryRaw = editProduct.category ?? "";
-      const productCategoryNormalized = productCategoryRaw.trim();
-      const matchedCategory = categories.find(
-        (c) =>
-          c.slug === productCategoryNormalized ||
-          c.name.toLowerCase() === productCategoryNormalized.toLowerCase(),
-      );
-      const categorySlug = matchedCategory?.slug ?? productCategoryNormalized;
+      const productCategoryRaw = (editProduct.category ?? "").trim();
+      const normalize = (s: string) => s.trim().toLowerCase().replace(/[_\s-]+/g, "");
+      const wanted = normalize(productCategoryRaw);
+      const matchedCategory = categories.find((c) => {
+        const slug = normalize(c.slug);
+        const name = normalize(c.name);
+        const nameAsSlug = normalize(slugify(c.name));
+        return wanted.length > 0 && (slug === wanted || name === wanted || nameAsSlug === wanted);
+      });
+      // Important: prefer current product category; don't silently replace with the first category.
+      const categorySlug = matchedCategory?.slug ?? "";
 
       editForm.reset({
         name: editProduct.name,
@@ -658,7 +661,7 @@ export default function AdminProducts() {
 
       {/* Full-page Add Product overlay */}
       {addOpen && (
-        <div className="fixed inset-0 z-50 bg-background overflow-auto">
+        <div className="fixed inset-0 z-40 bg-background overflow-auto">
           <div className="max-w-[1400px] mx-auto p-4 sm:p-6 pb-20">
             <Button
               type="button"
@@ -1926,7 +1929,9 @@ export default function AdminProducts() {
                       value={moveNewCategoryName}
                       onChange={(e) => setMoveNewCategoryName(e.target.value)}
                       placeholder="New category name"
-                      disabled={moveMode !== "new"}
+                      // UX: clicking into the text field should switch the dialog
+                      // from "existing" to "new" automatically.
+                      onFocus={() => setMoveMode("new")}
                       className="h-9 max-w-xs text-xs"
                     />
                   </div>
@@ -1997,7 +2002,7 @@ export default function AdminProducts() {
 
       {/* Full-page Edit Product overlay */}
       {editOpen && editProduct && (
-        <div className="fixed inset-0 z-50 bg-background overflow-auto">
+        <div className="fixed inset-0 z-40 bg-background overflow-auto">
           <div className="max-w-[1400px] mx-auto p-4 sm:p-6 pb-20">
             <Button
               type="button"
@@ -2063,10 +2068,10 @@ export default function AdminProducts() {
                         control={editForm.control}
                         name="category"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem key={editProduct?.id}>
                             <FormLabel>Category *</FormLabel>
                             <div className="flex gap-2 flex-wrap">
-                              <Select onValueChange={field.onChange} value={field.value}>
+                              <Select onValueChange={field.onChange} value={field.value || undefined}>
                                 <FormControl>
                                   <SelectTrigger className="min-w-[180px]">
                                     <SelectValue placeholder="Select category" />

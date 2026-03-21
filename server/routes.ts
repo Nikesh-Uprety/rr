@@ -729,6 +729,7 @@ export async function registerRoutes(
         shipping.email,
         shipping.firstName,
         shipping.lastName,
+        shipping.phone ?? null,
       );
 
       const order = await storage.createOrder({
@@ -3716,7 +3717,7 @@ export async function registerRoutes(
   // Useful when uploads are not persistent on Railway free plans.
   app.get("/api/admin/storefront-image-library", requireAdmin, async (_req: Request, res: Response) => {
     try {
-      const images = listImagesInUploadsDir({ maxDepth: 2, maxFiles: 500 });
+      const images = listImagesInUploadsDir({ maxDepth: 5, maxFiles: 800 });
       // Return only a clean subset for thumbnails
       return res.json({
         success: true,

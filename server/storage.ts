@@ -242,6 +242,7 @@ export interface IStorage {
     email: string,
     firstName: string,
     lastName: string,
+    phoneNumber?: string | null,
   ): Promise<Customer>;
 
   // Users
@@ -694,7 +695,7 @@ export class PgStorage implements IStorage {
         updatedAt: orders.updatedAt,
       })
       .from(orders)
-      .leftJoin(customers, eq(orders.email, customers.email))
+      .leftJoin(customers, sql`lower(${orders.email}) = lower(${customers.email})`)
       .where(whereClause)
       .orderBy(desc(orders.createdAt))
       .limit(limit)
@@ -736,7 +737,7 @@ export class PgStorage implements IStorage {
         updatedAt: orders.updatedAt,
       })
       .from(orders)
-      .leftJoin(customers, eq(orders.email, customers.email))
+      .leftJoin(customers, sql`lower(${orders.email}) = lower(${customers.email})`)
       .where(eq(orders.id, id))
       .limit(1);
 
@@ -1287,6 +1288,7 @@ export class PgStorage implements IStorage {
     email: string,
     firstName: string,
     lastName: string,
+    phoneNumber?: string | null,
   ): Promise<Customer> {
     const emailLower = email.toLowerCase();
     const [existing] = await db
@@ -1306,8 +1308,14 @@ export class PgStorage implements IStorage {
       .limit(1);
 
     if (existing) {
-      // Logic to update name if it was missing or different? 
-      // For now just return existing.
+      if (phoneNumber && !existing.phoneNumber) {
+        const [updated] = await db
+          .update(customers)
+          .set({ phoneNumber })
+          .where(eq(customers.id, existing.id))
+          .returning();
+        return updated ?? existing;
+      }
       return existing;
     }
 
@@ -1317,7 +1325,7 @@ export class PgStorage implements IStorage {
         firstName,
         lastName,
         email: emailLower,
-        phoneNumber: null,
+        phoneNumber: phoneNumber ?? null,
         totalSpent: "0",
         orderCount: 0,
         avatarColor: "#2D4A35",
@@ -2654,16 +2662,20 @@ export class MemStorage implements IStorage {
     email: string,
     firstName: string,
     lastName: string,
+    phoneNumber?: string | null,
   ): Promise<Customer> {
     const existing = this._customers.find((c) => c.email === email);
     if (existing) {
+      if (phoneNumber && !existing.phoneNumber) {
+        existing.phoneNumber = phoneNumber;
+      }
       return existing;
     }
     return this.createCustomer({
       firstName,
       lastName,
       email,
-      phoneNumber: null,
+      phoneNumber: phoneNumber ?? null,
       totalSpent: "0",
       orderCount: 0,
       avatarColor: "#2D4A35",

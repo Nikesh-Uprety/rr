@@ -133,6 +133,12 @@ export interface AdminImageAsset {
   createdAt: string;
 }
 
+export interface AdminStorefrontImageEntry {
+  filename: string;
+  url: string;
+  relPath: string;
+}
+
 export async function fetchAdminImages(params?: {
   category?: string;
   provider?: string;
@@ -146,6 +152,15 @@ export async function fetchAdminImages(params?: {
   if (params?.offset) qs.set("offset", String(params.offset));
   const res = await apiRequest("GET", `/api/admin/images?${qs.toString()}`);
   const json = (await res.json()) as { success: boolean; data: AdminImageAsset[] };
+  return json.data ?? [];
+}
+
+export async function fetchAdminStorefrontImageLibrary(): Promise<AdminStorefrontImageEntry[]> {
+  const res = await apiRequest("GET", "/api/admin/storefront-image-library");
+  const json = (await res.json()) as {
+    success: boolean;
+    data?: AdminStorefrontImageEntry[];
+  };
   return json.data ?? [];
 }
 

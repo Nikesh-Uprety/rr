@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type MouseEvent } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, type MouseEvent } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
@@ -19,6 +19,48 @@ function parseJsonArray(s: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+/** Map a point in the container to image % for background-position; matches CSS object-fit: cover + center. */
+function objectCoverPointToImagePercent(
+  px: number,
+  py: number,
+  cw: number,
+  ch: number,
+  iw: number,
+  ih: number,
+): { x: number; y: number } {
+  if (!(iw > 0 && ih > 0 && cw > 0 && ch > 0)) {
+    return { x: (px / cw) * 100, y: (py / ch) * 100 };
+  }
+  const scale = Math.max(cw / iw, ch / ih);
+  const rw = iw * scale;
+  const rh = ih * scale;
+  const ox = (cw - rw) / 2;
+  const oy = (ch - rh) / 2;
+  const u = (px - ox) / scale;
+  const v = (py - oy) / scale;
+  const clampedU = Math.min(Math.max(u, 0), iw);
+  const clampedV = Math.min(Math.max(v, 0), ih);
+  return { x: (clampedU / iw) * 100, y: (clampedV / ih) * 100 };
+}
+
+/** Client coords relative to main image content box (inside border); used for hit-test and object-cover mapping. */
+function pointerInMainContentBox(
+  el: HTMLElement,
+  clientX: number,
+  clientY: number,
+): { inside: boolean; x: number; y: number; cw: number; ch: number } {
+  const rect = el.getBoundingClientRect();
+  const cs = window.getComputedStyle(el);
+  const bl = parseFloat(cs.borderLeftWidth) || 0;
+  const bt = parseFloat(cs.borderTopWidth) || 0;
+  const cw = el.clientWidth;
+  const ch = el.clientHeight;
+  const x = clientX - rect.left - bl;
+  const y = clientY - rect.top - bt;
+  const inside = x >= 0 && y >= 0 && x <= cw && y <= ch;
+  return { inside, x, y, cw, ch };
 }
 
 export default function ProductDetail() {
@@ -52,8 +94,12 @@ export default function ProductDetail() {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
   const [slideTrigger, setSlideTrigger] = useState(0);
-  const [lensActive, setLensActive] = useState(false);
-  const [lensPosition, setLensPosition] = useState({ x: 0, y: 0 });
+  const [hoverMedia, setHoverMedia] = useState(false);
+  const [pointerOnMain, setPointerOnMain] = useState(false);
+  const [lensPos, setLensPos] = useState({ x: 0, y: 0 });
+  const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
+  const [currentImageSrc, setCurrentImageSrc] = useState("");
+  const [panelZoomEnabled, setPanelZoomEnabled] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
   const [heightFt, setHeightFt] = useState("");
@@ -62,6 +108,13 @@ export default function ProductDetail() {
   const [sizeRecommendation, setSizeRecommendation] = useState<string | null>(null);
   const galleryCloseTimeoutRef = useRef<number | null>(null);
   const didSwipeRef = useRef(false);
+  const mainImageRef = useRef<HTMLDivElement | null>(null);
+  const lastPointerRef = useRef({ x: 0, y: 0 });
+  const hoverMediaRef = useRef(false);
+  const panelZoomRef = useRef(false);
+  const activeImageNaturalRef = useRef({ w: 0, h: 0 });
+  const selectedMainImgRef = useRef<HTMLImageElement | null>(null);
+  const applyMainPointerRef = useRef<(clientX: number, clientY: number) => void>(() => {});
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
   const sizes = useMemo(() => parseJsonArray(product?.sizeOptions ?? undefined), [product?.sizeOptions]);
@@ -72,8 +125,20 @@ export default function ProductDetail() {
     return list.length ? list : [""];
   }, [mainImageUrl, galleryUrls]);
   const displayImage = allImages[selectedImageIndex] ?? allImages[0];
-  const lensSize = 180;
-  const lensZoom = 5;
+  const lensHalf = 65;
+  const zoomLevel = 2.5;
+
+  useEffect(() => {
+    setCurrentImageSrc(displayImage || "");
+  }, [displayImage]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px) and (hover: hover) and (pointer: fine)");
+    const update = () => setPanelZoomEnabled(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (selectedImageIndex > allImages.length - 1) {
@@ -126,6 +191,102 @@ export default function ProductDetail() {
       }
     };
   }, [isGalleryOpen, isGalleryVisible]);
+
+  hoverMediaRef.current = hoverMedia;
+  panelZoomRef.current = panelZoomEnabled;
+
+  const applyMainPointerFromClient = (clientX: number, clientY: number) => {
+    lastPointerRef.current = { x: clientX, y: clientY };
+    if (!panelZoomRef.current || !hoverMediaRef.current) return;
+    const el = mainImageRef.current;
+    if (!el) return;
+    const { inside, x, y, cw, ch } = pointerInMainContentBox(el, clientX, clientY);
+    if (inside) {
+      setPointerOnMain(true);
+      setLensPos({ x: x - lensHalf, y: y - lensHalf });
+      const { w: iw, h: ih } = activeImageNaturalRef.current;
+      const { x: zx, y: zy } = objectCoverPointToImagePercent(x, y, cw, ch, iw, ih);
+      setZoomPos({ x: Number(zx.toFixed(2)), y: Number(zy.toFixed(2)) });
+    } else {
+      setPointerOnMain(false);
+    }
+  };
+
+  applyMainPointerRef.current = applyMainPointerFromClient;
+
+  useEffect(() => {
+    if (!product || !panelZoomEnabled) return;
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
+      const el = mainImageRef.current;
+      if (!el) return;
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+      const { inside } = pointerInMainContentBox(el, e.clientX, e.clientY);
+      if (inside) {
+        if (!hoverMediaRef.current) {
+          hoverMediaRef.current = true;
+          setHoverMedia(true);
+        }
+        applyMainPointerRef.current(e.clientX, e.clientY);
+      } else if (hoverMediaRef.current) {
+        hoverMediaRef.current = false;
+        setHoverMedia(false);
+        setPointerOnMain(false);
+      }
+    };
+    window.addEventListener("pointermove", onPointerMove, true);
+    return () => window.removeEventListener("pointermove", onPointerMove, true);
+  }, [product?.id, panelZoomEnabled]);
+
+  useLayoutEffect(() => {
+    if (!product) return;
+    const img = selectedMainImgRef.current;
+    if (img?.complete && img.naturalWidth > 0) {
+      activeImageNaturalRef.current = { w: img.naturalWidth, h: img.naturalHeight };
+    } else {
+      activeImageNaturalRef.current = { w: 0, h: 0 };
+    }
+    const { x: lx, y: ly } = lastPointerRef.current;
+    applyMainPointerRef.current(lx, ly);
+  }, [product?.id, selectedImageIndex, displayImage]);
+
+  useEffect(() => {
+    if (!product) return;
+    let ro: ResizeObserver | null = null;
+    let raf = 0;
+    let cancelled = false;
+    let attachAttempts = 0;
+
+    const schedule = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (cancelled) return;
+        const { x, y } = lastPointerRef.current;
+        applyMainPointerRef.current(x, y);
+      });
+    };
+
+    const attach = () => {
+      const el = mainImageRef.current;
+      if (!el) {
+        if (attachAttempts < 60) {
+          attachAttempts += 1;
+          raf = requestAnimationFrame(attach);
+        }
+        return;
+      }
+      ro = new ResizeObserver(schedule);
+      ro.observe(el);
+    };
+
+    attach();
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      ro?.disconnect();
+    };
+  }, [product?.id, panelZoomEnabled]);
 
   if (isLoading || !product) {
     if (isLoading) {
@@ -229,17 +390,15 @@ export default function ProductDetail() {
     setSizeRecommendation(`Recommended size${heightNote}: XL`);
   };
 
-  const handleDesktopImageMouseMove = (event: MouseEvent<HTMLDivElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 100;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-    const lensHalf = lensSize / 2;
-    const clampedX = Math.min(Math.max(event.clientX - rect.left, lensHalf), rect.width - lensHalf);
-    const clampedY = Math.min(Math.max(event.clientY - rect.top, lensHalf), rect.height - lensHalf);
-    setLensPosition({
-      x: rect.width ? (clampedX / rect.width) * 100 : x,
-      y: rect.height ? (clampedY / rect.height) * 100 : y,
-    });
+  const handleMainImageMouseEnter = (event: MouseEvent<HTMLDivElement>) => {
+    if (!panelZoomEnabled) return;
+    const el = mainImageRef.current;
+    if (!el) return;
+    const { inside } = pointerInMainContentBox(el, event.clientX, event.clientY);
+    if (!inside) return;
+    hoverMediaRef.current = true;
+    setHoverMedia(true);
+    applyMainPointerFromClient(event.clientX, event.clientY);
   };
 
   const structuredData = {
@@ -277,103 +436,159 @@ export default function ProductDetail() {
         </script>
       </Helmet>
       <div className="flex flex-col lg:flex-row gap-12 lg:gap-16">
-        <div className="lg:flex lg:w-3/5 lg:gap-6">
+        <div className="flex w-full flex-col gap-4 lg:w-3/5 lg:flex-row lg:items-start lg:gap-6">
           {allImages.length > 1 && (
-            <div className="hidden lg:flex flex-col gap-3 w-20 flex-shrink-0">
+            <div className="scrollbar-hide hidden max-h-[min(100%,70vh)] w-[72px] shrink-0 flex-col gap-2 self-start overflow-y-auto lg:flex">
               {allImages.map((url, i) => (
                 <button
                   key={i}
                   type="button"
                   onMouseEnter={() => goToImage(i, true)}
                   onClick={() => goToImage(i, true)}
-                  className={`aspect-[4/5] w-full bg-muted overflow-hidden rounded-sm border-2 transition-all ${
-                    selectedImageIndex === i ? "border-black border-opacity-100" : "border-transparent opacity-60 hover:opacity-100"
+                  className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border-2 bg-muted transition-all ${
+                    selectedImageIndex === i
+                      ? "border-black border-opacity-100 dark:border-white"
+                      : "border-transparent opacity-60 hover:opacity-100"
                   }`}
                 >
-                  <img src={url || ""} alt="" className="w-full h-full object-cover" />
+                  <img src={url || ""} alt="" className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>
           )}
 
-          <div className="flex-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-4 lg:gap-6">
             <div
-              className="aspect-[4/5] bg-muted overflow-hidden rounded-sm relative cursor-pointer group"
-              onClick={() => {
-                if (didSwipeRef.current) {
-                  didSwipeRef.current = false;
-                  return;
-                }
-                openGallery();
-              }}
-              onTouchStart={(event) => {
-                didSwipeRef.current = false;
-                if (event.touches[0]) {
-                  setTouchStartX(event.touches[0].clientX);
-                }
-              }}
-              onTouchEnd={(event) => {
-                if (touchStartX === null) return;
-                const deltaX = event.changedTouches[0].clientX - touchStartX;
-                if (Math.abs(deltaX) > 40) {
-                  didSwipeRef.current = true;
-                  if (deltaX < 0) goToNextImage(true);
-                  if (deltaX > 0) goToPreviousImage(true);
-                }
-                setTouchStartX(null);
-              }}
-              onMouseEnter={() => setLensActive(true)}
-              onMouseLeave={() => setLensActive(false)}
-              onMouseMove={handleDesktopImageMouseMove}
+              className={`flex flex-col gap-4 lg:flex-row lg:items-stretch lg:transition-[gap] lg:duration-300 lg:ease-out ${
+                panelZoomEnabled && hoverMedia ? "lg:gap-6" : "lg:gap-0"
+              }`}
             >
-              {product.stock === 0 && (
-                <div className="absolute top-3 left-3 lg:top-4 lg:left-4 z-20 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 lg:px-4 lg:py-2">
-                  Out of Stock
+              <div
+                ref={mainImageRef}
+                className={`relative box-border aspect-[4/5] overflow-hidden rounded-sm border border-border bg-muted transition-all duration-300 ease-out lg:min-h-0 ${
+                  panelZoomEnabled && hoverMedia
+                    ? "lg:min-w-0 lg:flex-1 lg:basis-0"
+                    : "lg:flex-1"
+                } ${
+                  panelZoomEnabled ? "cursor-pointer lg:cursor-crosshair" : "cursor-pointer"
+                }`}
+                onClick={() => {
+                  if (didSwipeRef.current) {
+                    didSwipeRef.current = false;
+                    return;
+                  }
+                  if (panelZoomEnabled) return;
+                  openGallery();
+                }}
+                onTouchStart={(event) => {
+                  didSwipeRef.current = false;
+                  if (event.touches[0]) {
+                    setTouchStartX(event.touches[0].clientX);
+                  }
+                }}
+                onTouchEnd={(event) => {
+                  if (touchStartX === null) return;
+                  const deltaX = event.changedTouches[0].clientX - touchStartX;
+                  if (Math.abs(deltaX) > 40) {
+                    didSwipeRef.current = true;
+                    if (deltaX < 0) goToNextImage(true);
+                    if (deltaX > 0) goToPreviousImage(true);
+                  }
+                  setTouchStartX(null);
+                }}
+                onMouseEnter={handleMainImageMouseEnter}
+              >
+                <div className="absolute inset-0 overflow-hidden">
+                  {product.stock === 0 && (
+                    <div className="absolute left-3 top-3 z-20 bg-black/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white lg:left-4 lg:top-4 lg:px-4 lg:py-2">
+                      Out of Stock
+                    </div>
+                  )}
+
+                  {allImages.map((url, idx) => (
+                    <img
+                      key={`${url}-${idx}`}
+                      ref={selectedImageIndex === idx ? selectedMainImgRef : undefined}
+                      src={url || ""}
+                      alt={`${product.name} - view ${idx + 1}`}
+                      className={`absolute inset-0 h-full w-full select-none object-cover object-center transition-opacity duration-700 ${
+                        selectedImageIndex === idx ? "opacity-100" : "opacity-0"
+                      }`}
+                      onLoad={(e) => {
+                        if (idx !== selectedImageIndex) return;
+                        const t = e.currentTarget;
+                        activeImageNaturalRef.current = {
+                          w: t.naturalWidth,
+                          h: t.naturalHeight,
+                        };
+                        applyMainPointerRef.current(lastPointerRef.current.x, lastPointerRef.current.y);
+                      }}
+                    />
+                  ))}
                 </div>
-              )}
 
-              {allImages.map((url, idx) => (
-                <img
-                  key={`${url}-${idx}`}
-                  src={url || ""}
-                  alt={`${product.name} - view ${idx + 1}`}
-                  className={`absolute inset-0 w-full h-full object-cover select-none transition-opacity duration-700 ${
-                    selectedImageIndex === idx ? "opacity-100" : "opacity-0"
-                  }`}
-                />
-              ))}
+                {panelZoomEnabled && pointerOnMain && currentImageSrc ? (
+                  <div
+                    className="pointer-events-none absolute z-30 hidden rounded-full border border-black/15 lg:block dark:border-white/40"
+                    style={{
+                      width: 130,
+                      height: 130,
+                      left: lensPos.x,
+                      top: lensPos.y,
+                    }}
+                  >
+                    <div className="pointer-events-none absolute inset-0">
+                      <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-[rgba(255,255,255,0.2)]" />
+                      <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-[rgba(255,255,255,0.2)]" />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
 
-              {lensActive && displayImage && (
+              <div
+                className={`hidden min-h-0 flex-col justify-end overflow-hidden transition-all duration-300 ease-out lg:flex ${
+                  panelZoomEnabled && hoverMedia
+                    ? "max-w-none flex-1 basis-0 opacity-100"
+                    : "pointer-events-none max-w-0 flex-none basis-0 opacity-0"
+                }`}
+                aria-hidden
+              >
                 <div
-                  className="hidden lg:block absolute z-30 pointer-events-none border border-white/80 shadow-2xl rounded-full"
-                  style={{
-                    width: `${lensSize}px`,
-                    height: `${lensSize}px`,
-                    left: `calc(${lensPosition.x}% - ${lensSize / 2}px)`,
-                    top: `calc(${lensPosition.y}% - ${lensSize / 2}px)`,
-                    backgroundImage: `url("${displayImage}")`,
-                    backgroundRepeat: "no-repeat",
-                    backgroundSize: `${lensZoom * 100}% ${lensZoom * 100}%`,
-                    backgroundPosition: `${lensPosition.x}% ${lensPosition.y}%`,
-                  }}
-                />
-              )}
+                  className={`box-border aspect-[4/5] w-full max-w-full overflow-hidden rounded-sm border border-border bg-muted transition-transform duration-300 ease-out ${
+                    panelZoomEnabled && hoverMedia ? "translate-y-0" : "translate-y-full"
+                  }`}
+                >
+                  <div
+                    className="h-full w-full"
+                    style={
+                      hoverMedia && currentImageSrc
+                        ? {
+                            backgroundImage: `url("${currentImageSrc}")`,
+                            backgroundSize: `${zoomLevel * 100}%`,
+                            backgroundPosition: `${zoomPos.x}% ${zoomPos.y}%`,
+                            backgroundRepeat: "no-repeat",
+                          }
+                        : undefined
+                    }
+                  />
+                </div>
+              </div>
             </div>
 
             {allImages.length > 1 && (
-              <div className="mt-4 lg:hidden overflow-x-auto">
-                <div className="flex gap-2 min-w-max pr-2">
+              <div className="mt-0 overflow-x-auto lg:hidden">
+                <div className="flex min-w-max gap-2 pr-2">
                   {allImages.map((url, i) => (
                     <button
                       key={i}
                       type="button"
                       onClick={() => goToImage(i, true)}
                       className={`h-[64px] w-[52px] overflow-hidden rounded-sm border transition-all ${
-                        selectedImageIndex === i ? "border-black" : "border-transparent opacity-70"
+                        selectedImageIndex === i ? "border-black dark:border-white" : "border-transparent opacity-70"
                       }`}
                       aria-label={`Select image ${i + 1}`}
                     >
-                      <img src={url || ""} alt="" className="w-full h-full object-cover" />
+                      <img src={url || ""} alt="" className="h-full w-full object-cover" />
                     </button>
                   ))}
                 </div>

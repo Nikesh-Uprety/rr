@@ -230,6 +230,9 @@ function Router() {
           <Products />
         </StorefrontLayout>
       </Route>
+      <Route path="/shop">
+        <Redirect to="/products" />
+      </Route>
       <Route path="/product/:id">
         <StorefrontLayout>
           <ProductDetail />

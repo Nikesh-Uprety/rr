@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AdminNotification } from "@shared/schema";
+import { playNotificationSound } from "@/lib/notificationSound";
 
 interface WebSocketMessage {
   type: "connected" | "notification" | "pong" | string;
@@ -55,7 +56,7 @@ export function useAdminWebSocket() {
             case "notification":
               if (message.data) {
                 setLastNotification(message.data);
-                
+
                 // Update the React Query cache with the new notification
                 queryClient.setQueryData<{ data: AdminNotification[] }>(
                   ["/api/admin/notifications"],
@@ -64,6 +65,10 @@ export function useAdminWebSocket() {
                     return { data: [message.data!, ...old.data] };
                   }
                 );
+
+                if (message.data.isRead === 0) {
+                  playNotificationSound();
+                }
               }
               break;
               

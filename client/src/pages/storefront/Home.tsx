@@ -9,6 +9,7 @@ import { fetchHomeFeaturedProducts, fetchProducts, type ProductApi } from "@/lib
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { Helmet } from "react-helmet-async";
+import OurServices from "@/components/home/OurServices";
 
 type SiteAsset = {
   id: string;
@@ -1078,6 +1079,8 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      <OurServices />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useRoute, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Printer } from "lucide-react";
+import { CheckCircle2, Package, Truck, MapPin, Printer, LifeBuoy } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 import { fetchOrderById } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
@@ -16,6 +17,12 @@ function paymentMethodLabel(method: string) {
     fonepay: "Fonepay",
   };
   return labels[method] ?? method.replace(/_/g, " ");
+}
+
+function firstNameFromFull(fullName: string) {
+  const t = fullName.trim();
+  if (!t) return "";
+  return t.split(/\s+/)[0] ?? t;
 }
 
 export default function OrderSuccess() {
@@ -61,13 +68,88 @@ export default function OrderSuccess() {
     );
   }
 
+  const firstName = firstNameFromFull(order.fullName);
+  const orderDateLabel = new Date(order.createdAt).toLocaleDateString("en-NP", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
   return (
     <div className="order-confirmation-page container mx-auto px-4 py-10 lg:py-16 max-w-5xl mt-8">
-      <div className="no-print flex flex-col gap-3 mb-8">
-        <h1 className="text-3xl font-black uppercase tracking-tight">Order Confirmed</h1>
-        <p className="text-sm text-muted-foreground">
-          Your order has been received. You can use this page as your official bill preview.
-        </p>
+      <Helmet>
+        <title>Order confirmed | Rare Atelier</title>
+        <meta
+          name="description"
+          content={`Your order ${order.id.slice(0, 8)}… has been confirmed. View your bill and delivery details.`}
+        />
+      </Helmet>
+
+      {/* Success hero — screen only */}
+      <div className="no-print mb-10 rounded-2xl border border-border/80 bg-card/50 p-6 md:p-8 backdrop-blur-sm">
+        <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left md:gap-8">
+          <div className="mb-4 flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 md:mb-0">
+            <CheckCircle2 className="h-9 w-9" strokeWidth={2} aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1 space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-muted-foreground">Order confirmed</p>
+            <h1 className="text-2xl font-black uppercase tracking-tight md:text-3xl">
+              {firstName ? `Thank you, ${firstName}` : "Thank you for your order"}
+            </h1>
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto md:mx-0">
+              We&apos;ve received your payment details and your order is being processed. A confirmation has been sent to{" "}
+              <span className="font-medium text-foreground">{order.email}</span>. Keep this page as your receipt or print
+              it below.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2 md:justify-start">
+              <span className="inline-flex items-center rounded-md border border-border bg-background/80 px-3 py-1.5 font-mono text-xs font-semibold">
+                Order ID · {order.id}
+              </span>
+              <span className="text-xs text-muted-foreground">{orderDateLabel}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* What happens next — screen only */}
+      <div className="no-print mb-10">
+        <h2 className="text-[10px] font-bold uppercase tracking-[0.35em] text-muted-foreground mb-4">What happens next</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-border/80 bg-muted/30 p-5">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-background text-foreground">
+              <Package className="h-5 w-5" aria-hidden />
+            </div>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">Step 1</p>
+            <p className="font-semibold text-sm mb-1">Confirmation</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              We verify your order and prepare it for fulfillment at our atelier.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border/80 bg-muted/30 p-5">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-background text-foreground">
+              <Truck className="h-5 w-5" aria-hidden />
+            </div>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">Step 2</p>
+            <p className="font-semibold text-sm mb-1">Packing & dispatch</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Your items are packed carefully. Our delivery partner will be assigned when the order ships.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border/80 bg-muted/30 p-5">
+            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-background text-foreground">
+              <MapPin className="h-5 w-5" aria-hidden />
+            </div>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">Step 3</p>
+            <p className="font-semibold text-sm mb-1">Delivery</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Estimated delivery within 3–5 business days in Nepal. See our{" "}
+              <Link href="/shipping" className="underline font-medium text-foreground hover:no-underline">
+                shipping policy
+              </Link>
+              .
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="order-confirmation-bill bg-white text-black border border-zinc-200 shadow-sm p-6 md:p-10">
@@ -81,13 +163,7 @@ export default function OrderSuccess() {
           </div>
           <div className="text-right text-sm">
             <p className="font-semibold">Order ID: {order.id}</p>
-            <p className="text-zinc-500">
-              {new Date(order.createdAt).toLocaleDateString("en-NP", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </p>
+            <p className="text-zinc-500">{orderDateLabel}</p>
           </div>
         </div>
 
@@ -173,6 +249,24 @@ export default function OrderSuccess() {
             <span>{formatPrice(order.total)}</span>
           </div>
         </div>
+      </div>
+
+      {/* Help — screen only */}
+      <div className="no-print mt-8 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-5 md:px-6 md:flex md:items-center md:justify-between md:gap-6">
+        <div className="flex gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground">
+            <LifeBuoy className="h-5 w-5" aria-hidden />
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Need help with your order?</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Reach our team for changes, sizing, or delivery questions.
+            </p>
+          </div>
+        </div>
+        <Button asChild variant="outline" className="mt-4 md:mt-0 shrink-0 rounded-none uppercase tracking-widest text-[10px] h-10">
+          <Link href="/atelier#contact">Contact us</Link>
+        </Button>
       </div>
 
       <div className="order-confirmation-actions no-print flex flex-wrap gap-3 mt-6">

@@ -76,6 +76,21 @@ export default function Contact() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const scrollToContact = () => {
+      if (window.location.hash !== "#contact") return;
+      const el = document.getElementById("contact");
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
+      }
+    };
+    scrollToContact();
+    window.addEventListener("hashchange", scrollToContact);
+    return () => window.removeEventListener("hashchange", scrollToContact);
+  }, []);
+
   return (
     <div className="flex-1">
       <Helmet>
@@ -145,7 +160,7 @@ export default function Contact() {
         </div>
       </section>
 
-      <section className="py-24">
+      <section id="contact" className="py-24">
         <div className="container mx-auto px-4 max-w-6xl">
           <div className="grid md:grid-cols-2 gap-16">
             <div className="space-y-12">

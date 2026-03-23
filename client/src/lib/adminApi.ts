@@ -26,6 +26,7 @@ export interface AdminOrder {
   deliveryLocation?: string | null;
   promoCode?: string;
   promoDiscountAmount?: number;
+  discountAmount?: number;
   source?: string;
   deliveryRequired?: boolean;
   deliveryProvider?: string | null;
@@ -347,7 +348,15 @@ export async function fetchAdminOrders(filters?: {
     success: boolean;
     data: AdminOrder[];
   };
-  return json.data;
+  return (json.data ?? []).map((order) => ({
+    ...order,
+    discountAmount:
+      typeof order.discountAmount === "number"
+        ? order.discountAmount
+        : typeof order.promoDiscountAmount === "number"
+          ? order.promoDiscountAmount
+          : 0,
+  }));
 }
 
 export async function updateOrderStatus(

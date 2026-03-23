@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useLayoutEffect, useRef, type MouseEvent } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, type MouseEvent, type PointerEvent } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
@@ -110,11 +110,8 @@ export default function ProductDetail() {
   const didSwipeRef = useRef(false);
   const mainImageRef = useRef<HTMLDivElement | null>(null);
   const lastPointerRef = useRef({ x: 0, y: 0 });
-  const hoverMediaRef = useRef(false);
-  const panelZoomRef = useRef(false);
   const activeImageNaturalRef = useRef({ w: 0, h: 0 });
   const selectedMainImgRef = useRef<HTMLImageElement | null>(null);
-  const applyMainPointerRef = useRef<(clientX: number, clientY: number) => void>(() => {});
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
   const sizes = useMemo(() => parseJsonArray(product?.sizeOptions ?? undefined), [product?.sizeOptions]);
@@ -139,6 +136,12 @@ export default function ProductDetail() {
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
   }, []);
+
+  useEffect(() => {
+    if (panelZoomEnabled) return;
+    setHoverMedia(false);
+    setPointerOnMain(false);
+  }, [panelZoomEnabled]);
 
   useEffect(() => {
     if (selectedImageIndex > allImages.length - 1) {
@@ -192,12 +195,9 @@ export default function ProductDetail() {
     };
   }, [isGalleryOpen, isGalleryVisible]);
 
-  hoverMediaRef.current = hoverMedia;
-  panelZoomRef.current = panelZoomEnabled;
-
   const applyMainPointerFromClient = (clientX: number, clientY: number) => {
     lastPointerRef.current = { x: clientX, y: clientY };
-    if (!panelZoomRef.current || !hoverMediaRef.current) return;
+    if (!panelZoomEnabled || !hoverMedia) return;
     const el = mainImageRef.current;
     if (!el) return;
     const { inside, x, y, cw, ch } = pointerInMainContentBox(el, clientX, clientY);
@@ -212,32 +212,6 @@ export default function ProductDetail() {
     }
   };
 
-  applyMainPointerRef.current = applyMainPointerFromClient;
-
-  useEffect(() => {
-    if (!product || !panelZoomEnabled) return;
-    const onPointerMove = (e: PointerEvent) => {
-      if (e.pointerType === "touch") return;
-      const el = mainImageRef.current;
-      if (!el) return;
-      lastPointerRef.current = { x: e.clientX, y: e.clientY };
-      const { inside } = pointerInMainContentBox(el, e.clientX, e.clientY);
-      if (inside) {
-        if (!hoverMediaRef.current) {
-          hoverMediaRef.current = true;
-          setHoverMedia(true);
-        }
-        applyMainPointerRef.current(e.clientX, e.clientY);
-      } else if (hoverMediaRef.current) {
-        hoverMediaRef.current = false;
-        setHoverMedia(false);
-        setPointerOnMain(false);
-      }
-    };
-    window.addEventListener("pointermove", onPointerMove, true);
-    return () => window.removeEventListener("pointermove", onPointerMove, true);
-  }, [product?.id, panelZoomEnabled]);
-
   useLayoutEffect(() => {
     if (!product) return;
     const img = selectedMainImgRef.current;
@@ -247,8 +221,8 @@ export default function ProductDetail() {
       activeImageNaturalRef.current = { w: 0, h: 0 };
     }
     const { x: lx, y: ly } = lastPointerRef.current;
-    applyMainPointerRef.current(lx, ly);
-  }, [product?.id, selectedImageIndex, displayImage]);
+    applyMainPointerFromClient(lx, ly);
+  }, [product?.id, selectedImageIndex, displayImage, panelZoomEnabled, hoverMedia]);
 
   useEffect(() => {
     if (!product) return;
@@ -262,7 +236,7 @@ export default function ProductDetail() {
       raf = requestAnimationFrame(() => {
         if (cancelled) return;
         const { x, y } = lastPointerRef.current;
-        applyMainPointerRef.current(x, y);
+        applyMainPointerFromClient(x, y);
       });
     };
 
@@ -286,7 +260,7 @@ export default function ProductDetail() {
       cancelAnimationFrame(raf);
       ro?.disconnect();
     };
-  }, [product?.id, panelZoomEnabled]);
+  }, [product?.id, panelZoomEnabled, hoverMedia]);
 
   if (isLoading || !product) {
     if (isLoading) {
@@ -390,15 +364,27 @@ export default function ProductDetail() {
     setSizeRecommendation(`Recommended size${heightNote}: XL`);
   };
 
-  const handleMainImageMouseEnter = (event: MouseEvent<HTMLDivElement>) => {
+  const handleMainImagePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
     if (!panelZoomEnabled) return;
     const el = mainImageRef.current;
     if (!el) return;
     const { inside } = pointerInMainContentBox(el, event.clientX, event.clientY);
     if (!inside) return;
-    hoverMediaRef.current = true;
     setHoverMedia(true);
     applyMainPointerFromClient(event.clientX, event.clientY);
+  };
+
+  const handleMainImagePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!panelZoomEnabled) return;
+    if (event.pointerType === "touch") return;
+    if (!hoverMedia) setHoverMedia(true);
+    applyMainPointerFromClient(event.clientX, event.clientY);
+  };
+
+  const handleMainImagePointerLeave = () => {
+    if (!panelZoomEnabled) return;
+    setHoverMedia(false);
+    setPointerOnMain(false);
   };
 
   const structuredData = {
@@ -458,18 +444,10 @@ export default function ProductDetail() {
           )}
 
           <div className="flex min-w-0 flex-1 flex-col gap-4 lg:gap-6">
-            <div
-              className={`flex flex-col gap-4 lg:flex-row lg:items-stretch lg:transition-[gap] lg:duration-300 lg:ease-out ${
-                panelZoomEnabled && hoverMedia ? "lg:gap-6" : "lg:gap-0"
-              }`}
-            >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch lg:gap-4">
               <div
                 ref={mainImageRef}
-                className={`relative box-border aspect-[4/5] overflow-hidden rounded-sm border border-border bg-muted transition-all duration-300 ease-out lg:min-h-0 ${
-                  panelZoomEnabled && hoverMedia
-                    ? "lg:min-w-0 lg:flex-1 lg:basis-0"
-                    : "lg:flex-1"
-                } ${
+                className={`relative box-border aspect-[4/5] overflow-hidden rounded-sm border border-border bg-muted lg:min-h-0 lg:flex-1 ${
                   panelZoomEnabled ? "cursor-pointer lg:cursor-crosshair" : "cursor-pointer"
                 }`}
                 onClick={() => {
@@ -496,7 +474,9 @@ export default function ProductDetail() {
                   }
                   setTouchStartX(null);
                 }}
-                onMouseEnter={handleMainImageMouseEnter}
+                onPointerEnter={handleMainImagePointerEnter}
+                onPointerMove={handleMainImagePointerMove}
+                onPointerLeave={handleMainImagePointerLeave}
               >
                 <div className="absolute inset-0 overflow-hidden">
                   {product.stock === 0 && (
@@ -521,7 +501,7 @@ export default function ProductDetail() {
                           w: t.naturalWidth,
                           h: t.naturalHeight,
                         };
-                        applyMainPointerRef.current(lastPointerRef.current.x, lastPointerRef.current.y);
+                        applyMainPointerFromClient(lastPointerRef.current.x, lastPointerRef.current.y);
                       }}
                     />
                   ))}
@@ -546,18 +526,12 @@ export default function ProductDetail() {
               </div>
 
               <div
-                className={`hidden min-h-0 flex-col justify-end overflow-hidden transition-all duration-300 ease-out lg:flex ${
-                  panelZoomEnabled && hoverMedia
-                    ? "max-w-none flex-1 basis-0 opacity-100"
-                    : "pointer-events-none max-w-0 flex-none basis-0 opacity-0"
+                className={`hidden min-h-0 shrink-0 flex-col justify-end overflow-hidden transition-opacity duration-150 ease-out lg:flex lg:w-[min(36vw,420px)] ${
+                  panelZoomEnabled && hoverMedia ? "opacity-100" : "pointer-events-none opacity-0"
                 }`}
                 aria-hidden
               >
-                <div
-                  className={`box-border aspect-[4/5] w-full max-w-full overflow-hidden rounded-sm border border-border bg-muted transition-transform duration-300 ease-out ${
-                    panelZoomEnabled && hoverMedia ? "translate-y-0" : "translate-y-full"
-                  }`}
-                >
+                <div className="box-border aspect-[4/5] w-full max-w-full overflow-hidden rounded-sm border border-border bg-muted">
                   <div
                     className="h-full w-full"
                     style={

@@ -6,7 +6,8 @@ export function ThemeToggle() {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("theme");
       if (saved === "light" || saved === "dark") return saved;
-      return "light";
+      const hour = new Date().getHours();
+      return hour >= 6 && hour < 18 ? "light" : "dark";
     }
     return "light";
   });

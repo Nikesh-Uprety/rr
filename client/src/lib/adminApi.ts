@@ -540,6 +540,7 @@ export async function createPosBill(data: {
   isPaid?: boolean;
   deliveryRequired?: boolean;
   deliveryProvider?: string | null;
+  deliveryLocation?: string | null;
   deliveryAddress?: string | null;
   cashReceived?: number | null;
   discountAmount?: number;

@@ -260,6 +260,10 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  .admin-font {
+    font-family: 'Iosevka Charon Mono', monospace !important;
+  }
 }
 
 /* Quote section icon animations */

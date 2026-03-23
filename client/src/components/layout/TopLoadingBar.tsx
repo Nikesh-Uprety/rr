@@ -58,7 +58,7 @@ export function TopLoadingBar({ isLoading, className }: TopLoadingBarProps) {
         hideTimeoutRef.current = window.setTimeout(() => {
           setVisible(false);
           setProgress(0);
-        }, 300);
+        }, 80);
       }
     }
 
@@ -79,18 +79,17 @@ export function TopLoadingBar({ isLoading, className }: TopLoadingBarProps) {
   return (
     <div
       className={cn(
-        "fixed inset-x-0 top-0 z-[9999] h-0.5 bg-transparent transition-opacity duration-300",
+        "fixed inset-x-0 top-0 z-[9999] h-0.5 bg-transparent transition-opacity duration-100",
         visible ? "opacity-100" : "opacity-0 pointer-events-none",
         className,
       )}
     >
       <div className="relative h-full overflow-hidden">
         <div
-          className="absolute left-0 top-0 h-full bg-primary shadow-[0_0_8px_rgba(34,197,94,0.6)] transition-[width] duration-200 ease-out"
+          className="absolute left-0 top-0 h-full bg-primary shadow-[0_0_8px_rgba(34,197,94,0.35)] transition-[width] duration-150 ease-out"
           style={{ width: `${clampedProgress}%` }}
         />
       </div>
     </div>
   );
 }
-

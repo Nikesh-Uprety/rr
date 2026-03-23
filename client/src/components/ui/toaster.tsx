@@ -112,6 +112,8 @@ export function Toaster() {
                     ? "h-full bg-red-400"
                     : variant === "warning"
                       ? "h-full bg-amber-300"
+                      : variant === "info"
+                        ? "h-full bg-sky-300"
                       : variant === "success"
                         ? "h-full bg-emerald-300"
                         : "h-full bg-foreground/40"

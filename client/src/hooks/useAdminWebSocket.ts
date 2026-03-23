@@ -2,11 +2,32 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AdminNotification } from "@shared/schema";
 import { playNotificationSound } from "@/lib/notificationSound";
+import { toast } from "@/hooks/use-toast";
 
 interface WebSocketMessage {
   type: "connected" | "notification" | "pong" | string;
   data?: AdminNotification;
   message?: string;
+}
+
+function getNotificationVariant(
+  notification: AdminNotification,
+): "success" | "warning" | "destructive" | "info" {
+  const text = `${notification.title} ${notification.message}`.toLowerCase();
+  const successKeywords = ["success", "completed", "approved", "created", "paid", "delivered", "updated"];
+  const destructiveKeywords = ["failed", "error", "delete", "deleted", "removed", "rejected", "cancelled", "canceled"];
+  const warningKeywords = ["warning", "pending", "low stock", "attention"];
+
+  if (destructiveKeywords.some((keyword) => text.includes(keyword))) {
+    return "destructive";
+  }
+  if (successKeywords.some((keyword) => text.includes(keyword))) {
+    return "success";
+  }
+  if (warningKeywords.some((keyword) => text.includes(keyword))) {
+    return "warning";
+  }
+  return "info";
 }
 
 export function useAdminWebSocket() {
@@ -68,6 +89,12 @@ export function useAdminWebSocket() {
 
                 if (message.data.isRead === 0) {
                   playNotificationSound();
+                  toast({
+                    title: message.data.title || "New notification",
+                    description: message.data.message,
+                    variant: getNotificationVariant(message.data),
+                    duration: 3500,
+                  });
                 }
               }
               break;

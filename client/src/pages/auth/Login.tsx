@@ -204,7 +204,7 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950 px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950 px-4 py-12 admin-font">
       <div className="w-full max-w-[400px] bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-lg shadow-black/5 dark:shadow-none p-10">
         <div className="text-center mb-10">
           <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-400 font-bold mb-1">

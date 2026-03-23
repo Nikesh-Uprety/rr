@@ -33,6 +33,7 @@ import {
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { ArrowDownRight, ArrowUpRight, ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -73,6 +74,26 @@ const PAYMENT_LABELS: Record<string, string> = {
   bank_transfer: "Bank",
 };
 
+const COLOR_TOKENS = {
+  emerald: "var(--ag-green-m)",
+  amber: "var(--ag-amber)",
+  blue: "var(--ag-blue)",
+  purple: "var(--ag-purple)",
+  red: "hsl(var(--destructive))",
+  border: "hsl(var(--border))",
+  muted: "hsl(var(--muted-foreground))",
+  heatLow: "var(--ag-green-l)",
+  heatMedium: "var(--ag-green-m)",
+  heatHigh: "var(--ag-green)",
+  heatPeak: "hsl(var(--primary))",
+};
+
+const TOOLTIP_CONTENT_STYLE = {
+  backgroundColor: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
+  borderRadius: "8px",
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function toSafeNum(val: any): number {
@@ -101,22 +122,13 @@ const AgTooltip = ({ active, payload, label, formatter }: any) => {
   if (!active || !payload?.length) return null;
   return (
     <div
-      style={{
-        background: "var(--ag-bg2)",
-        border: "0.5px solid var(--ag-border2)",
-        borderRadius: 10,
-        padding: "8px 12px",
-        fontFamily: "'DM Mono', monospace",
-        fontSize: 11,
-        color: "var(--ag-text)",
-        boxShadow: "0 4px 24px rgba(0,0,0,.10)",
-      }}
+      className="bg-card border border-border rounded-xl p-3 shadow-xl admin-font text-[11px] text-foreground"
     >
       {label && (
-        <div style={{ color: "var(--ag-text3)", marginBottom: 4 }}>{label}</div>
+        <div className="text-muted-foreground mb-1 font-bold">{label}</div>
       )}
       {payload.map((p: any, i: number) => (
-        <div key={i} style={{ color: p.color ?? "var(--ag-text)", marginBottom: 2 }}>
+        <div key={i} className="mb-0.5" style={{ color: p.color ?? "inherit" }}>
           {formatter ? formatter(p) : `${p.name}: ${p.value}`}
         </div>
       ))}
@@ -144,55 +156,26 @@ function useAnalyticsCalendar(year: number) {
 
 const Skel = ({ w = "100%", h = 16 }: { w?: string | number; h?: number }) => (
   <div
-    className="animate-pulse rounded-lg"
-    style={{ width: w, height: h, background: "var(--ag-bg4)" }}
+    className="animate-pulse rounded-lg bg-muted"
+    style={{ width: w, height: h }}
   />
 );
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
-const card: React.CSSProperties = {
-  background: "var(--ag-bg2)",
-  border: "0.5px solid var(--ag-border)",
-  borderRadius: 14,
-  padding: 16,
-  position: "relative",
-  overflow: "hidden",
-};
+const cardStyles = "bg-card border border-border rounded-2xl p-6 relative overflow-hidden shadow-sm";
 
-const monoLabel: React.CSSProperties = {
-  fontFamily: "'DM Mono', monospace",
-  fontSize: 10,
-  letterSpacing: "0.14em",
-  color: "var(--ag-text3)",
-  textTransform: "uppercase",
-  display: "block",
-  marginBottom: 4,
-};
+const monoLabelStyles = "text-[10px] tracking-[0.2em] text-muted-foreground uppercase block mb-1 font-black";
 
-const sectionTitle: React.CSSProperties = {
-  fontFamily: "'Syne', sans-serif",
-  fontSize: 12,
-  fontWeight: 600,
-  color: "var(--ag-text2)",
-  letterSpacing: "0.05em",
-  marginBottom: 12,
-};
+const sectionTitleStyles = "text-xs font-black text-foreground uppercase tracking-widest mb-4";
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 const KPI_ACCENT: Record<number, string> = {
-  0: "var(--ag-green)",
-  1: "var(--ag-amber)",
-  2: "var(--ag-blue)",
-  3: "var(--ag-purple)",
-};
-
-const SPARK_COLOR: Record<number, string> = {
-  0: "#39e88e",
-  1: "#f5a623",
-  2: "#5b8def",
-  3: "#9b7cf8",
+  0: COLOR_TOKENS.emerald,
+  1: COLOR_TOKENS.amber,
+  2: COLOR_TOKENS.blue,
+  3: COLOR_TOKENS.purple,
 };
 
 function KpiCard({
@@ -204,10 +187,10 @@ function KpiCard({
   const trendInfo = formatTrend(trend);
   const TrendIcon = trendInfo.isPositive ? ArrowUpRight : ArrowDownRight;
   const accent = KPI_ACCENT[idx];
-  const sparkColor = SPARK_COLOR[idx];
+  const sparkColor = accent;
 
   return (
-    <div style={{ ...card, borderTop: `2px solid ${accent}44` }}>
+    <div className={cardStyles} style={{ borderTop: `4px solid ${accent}` }}>
       {isLoading ? (
         <div className="space-y-3">
           <Skel w={80} h={10} />
@@ -216,47 +199,38 @@ function KpiCard({
         </div>
       ) : (
         <>
-          <span style={monoLabel}>{label}</span>
-          <div style={{
-            fontFamily: "'Syne', sans-serif",
-            fontSize: 26, fontWeight: 700,
-            letterSpacing: "-0.5px", lineHeight: 1,
-            color: "var(--ag-text)", margin: "6px 0 6px",
-          }}>
+          <span className={monoLabelStyles}>{label}</span>
+          <div className="text-3xl font-black tracking-tight text-foreground my-2 leading-none">
             {value}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{
-              fontFamily: "'DM Mono', monospace", fontSize: 11,
-              display: "inline-flex", alignItems: "center", gap: 3,
-              padding: "2px 7px", borderRadius: 20,
-              background: trendInfo.isPositive ? "var(--ag-green-l)" : "var(--ag-red-l)",
-              color: trendInfo.isPositive ? "var(--ag-green)" : "var(--ag-red)",
-            }}>
-              <TrendIcon size={11} />
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "text-[10px] font-black inline-flex items-center gap-1 px-2 py-0.5 rounded-full uppercase tracking-wider",
+              trendInfo.isPositive ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"
+            )}>
+              <TrendIcon size={10} />
               {trendInfo.label}
             </span>
-            <span style={{
-              fontSize: 10, color: "var(--ag-text3)",
-              fontFamily: "'DM Mono', monospace",
-            }}>
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
               {subtitle}
             </span>
           </div>
-          <div style={{ marginTop: 8, marginLeft: -4, marginRight: -4 }}>
-            <AreaChart width={200} height={38} data={sparkData.map((v) => ({ v }))}>
-              <defs>
-                <linearGradient id={`spark-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={sparkColor} stopOpacity={0.25} />
-                  <stop offset="95%" stopColor={sparkColor} stopOpacity={0}    />
-                </linearGradient>
-              </defs>
-              <Area type="monotone" dataKey="v"
-                stroke={sparkColor} strokeWidth={1.5}
-                fill={`url(#spark-${idx})`} dot={false}
-                isAnimationActive={false}
-              />
-            </AreaChart>
+          <div className="mt-4 -mx-6 -mb-6">
+            <ResponsiveContainer width="100%" height={40}>
+              <AreaChart data={sparkData.map((v) => ({ v }))}>
+                <defs>
+                  <linearGradient id={`spark-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor={sparkColor} stopOpacity={0.1} />
+                    <stop offset="95%" stopColor={sparkColor} stopOpacity={0}    />
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="v"
+                  stroke={sparkColor} strokeWidth={2}
+                  fill={`url(#spark-${idx})`} dot={false}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </>
       )}
@@ -318,9 +292,9 @@ export default function AdminAnalytics() {
   const ordersStatusData = useMemo(() => {
     if (!data) return [];
     return [
-      { status: "Completed", key: "completed", value: toSafeNum(data.ordersByStatus.completed), color: "var(--ag-green)", hex: "#39e88e" },
-      { status: "Pending",   key: "pending",   value: toSafeNum(data.ordersByStatus.pending),   color: "var(--ag-amber)", hex: "#f5a623" },
-      { status: "Cancelled", key: "cancelled", value: toSafeNum(data.ordersByStatus.cancelled), color: "var(--ag-red)",   hex: "#ff4d4d" },
+      { status: "Completed", key: "completed", value: toSafeNum(data.ordersByStatus.completed), color: COLOR_TOKENS.emerald, hex: COLOR_TOKENS.emerald },
+      { status: "Pending",   key: "pending",   value: toSafeNum(data.ordersByStatus.pending),   color: COLOR_TOKENS.amber, hex: COLOR_TOKENS.amber },
+      { status: "Cancelled", key: "cancelled", value: toSafeNum(data.ordersByStatus.cancelled), color: COLOR_TOKENS.red, hex: COLOR_TOKENS.red },
     ];
   }, [data]);
 
@@ -393,58 +367,47 @@ export default function AdminAnalytics() {
   // ── Heat colour ──────────────────────────────────────────────────────────
 
   const heatColor = (revenue: number, max: number, isHoliday: boolean) => {
-    if (revenue <= 0 && isHoliday) return "var(--ag-amber-l)";
-    if (revenue <= 0)              return "var(--ag-bg4)";
+    if (revenue <= 0 && isHoliday) return "hsl(var(--muted)/0.3)";
+    if (revenue <= 0)              return "hsl(var(--muted)/0.1)";
     const r = max > 0 ? revenue / max : 0;
-    if (r > 0.75) return "var(--ag-green)";
-    if (r > 0.5)  return "var(--ag-green-m)";
-    if (r > 0.25) return "#4db885";
-    return "var(--ag-green-l)";
+    if (r > 0.75) return COLOR_TOKENS.heatPeak;
+    if (r > 0.5)  return COLOR_TOKENS.heatHigh;
+    if (r > 0.25) return COLOR_TOKENS.heatMedium;
+    return COLOR_TOKENS.heatLow;
   };
-
-  // ── Tab style helpers ────────────────────────────────────────────────────
-
-  const pillTab = (active: boolean): React.CSSProperties => ({
-    fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.1em",
-    padding: "3px 9px", border: active ? "0.5px solid var(--ag-border2)" : "none",
-    borderRadius: 6,
-    background: active ? "var(--ag-bg2)" : "transparent",
-    color:  active ? "var(--ag-text)" : "var(--ag-text3)",
-    cursor: "pointer",
-    boxShadow: active ? "0 1px 3px rgba(0,0,0,.06)" : "none",
-  });
-
-  const rangeTab = (active: boolean): React.CSSProperties => ({
-    fontFamily: "'DM Mono', monospace", fontSize: 10, padding: "3px 8px",
-    border: "none", borderRadius: 5,
-    background: active ? "var(--ag-text)" : "transparent",
-    color:  active ? "var(--ag-bg)"  : "var(--ag-text3)",
-    cursor: "pointer", letterSpacing: "0.08em",
-  });
 
   // ────────────────────────────────────────────────────────────────────────
 
-  const commonPieColors = ["#39e88e","#5b8def","#9b7cf8","#f5a623","#ff4d4d"];
+  const commonPieColors = [COLOR_TOKENS.emerald, COLOR_TOKENS.blue, COLOR_TOKENS.purple, COLOR_TOKENS.amber, COLOR_TOKENS.red];
 
   return (
-    <div style={{ background: "var(--ag-bg)", minHeight: "100vh", padding: "0 0 40px", fontFamily: "'Syne', sans-serif" }}>
+    <div className="min-h-screen bg-muted dark:bg-neutral-900 pb-20 admin-font">
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 24px 16px", borderBottom: "0.5px solid var(--ag-border)", marginBottom: 16 }}>
+      <div className="flex items-center justify-between p-8 border-b border-border/50 mb-8 bg-card/30 backdrop-blur-sm">
         <div>
-          <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 800, letterSpacing: "0.15em", color: "var(--ag-text)", lineHeight: 1 }}>
-            ANALYTICS
+          <h1 className="text-2xl font-black uppercase tracking-[0.2em] text-foreground leading-none">
+            Analytics
           </h1>
-          <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--ag-text3)", marginTop: 4, letterSpacing: "0.06em" }}>
-            {RANGE_LABELS[range].toLowerCase()} — historical performance
+          <p className="text-[10px] text-muted-foreground mt-2 font-black uppercase tracking-[0.2em]">
+            {RANGE_LABELS[range]} — performance overview
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ display: "flex", gap: 3, background: "var(--ag-bg2)", border: "0.5px solid var(--ag-border)", borderRadius: 8, padding: 3 }}>
+        <div className="flex items-center gap-4">
+          <div className="flex gap-1 bg-card border border-border rounded-xl p-1 shadow-sm">
             {(["7d", "30d", "90d", "1y"] as const).map((r) => (
-              <button key={r} type="button" onClick={() => setRange(r)} style={rangeTab(range === r)}>
-                {r.toUpperCase()}
-              </button>
+              <Button 
+                key={r} 
+                variant={range === r ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setRange(r)}
+                className={cn(
+                  "h-8 px-4 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all",
+                  range === r ? "shadow-md" : "hover:bg-muted"
+                )}
+              >
+                {r}
+              </Button>
             ))}
           </div>
           <ExportButton onExport={() => exportAnalyticsCSV(range)} />
@@ -452,7 +415,7 @@ export default function AdminAnalytics() {
       </div>
 
       {/* Bento Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, padding: "0 24px" }}>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-8">
 
         {/* KPI Row */}
         {kpiCards.map((c, idx) => (
@@ -460,73 +423,72 @@ export default function AdminAnalytics() {
         ))}
 
         {/* Revenue + Orders combo — 3 cols */}
-        <div style={{ ...card, gridColumn: "span 3" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div className={cn(cardStyles, "lg:col-span-3")}>
+          <div className="flex justify-between items-center mb-6">
             <div>
-              <div style={sectionTitle}>Revenue & Orders</div>
-              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--ag-text3)", marginTop: -8 }}>
-                Daily revenue (line) · order volume (bars)
+              <div className={sectionTitleStyles}>Revenue & Orders</div>
+              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest -mt-3">
+                Daily trends and volume
               </p>
             </div>
-            <div style={{ display: "flex", gap: 4, background: "var(--ag-bg3)", borderRadius: 8, padding: 3, border: "0.5px solid var(--ag-border)" }}>
-              <button style={pillTab(true)}>Revenue</button>
-              <button style={pillTab(false)}>Orders</button>
-            </div>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
+          <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={combinedByDay} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="rev-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#39e88e" stopOpacity={0.18} />
-                  <stop offset="95%" stopColor="#39e88e" stopOpacity={0}    />
+                <defs>
+                  <linearGradient id="rev-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={COLOR_TOKENS.emerald} stopOpacity={0.1} />
+                  <stop offset="95%" stopColor={COLOR_TOKENS.emerald} stopOpacity={0}    />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--ag-border)" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} tick={{ fill: "var(--ag-text3)", fontSize: 10, fontFamily: "'DM Mono', monospace" }} interval="preserveStartEnd" />
-              <YAxis yAxisId="orders"  orientation="left"  tickLine={false} axisLine={false} tick={{ fill: "var(--ag-text3)", fontSize: 10, fontFamily: "'DM Mono', monospace" }} allowDecimals={false} />
-              <YAxis yAxisId="revenue" orientation="right" tickLine={false} axisLine={false} tick={{ fill: "var(--ag-text3)", fontSize: 10, fontFamily: "'DM Mono', monospace" }} tickFormatter={(v) => `Rs.${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
-              <RechartsTooltip content={<AgTooltip formatter={(p: any) => p.name === "orders" ? `${p.value.toLocaleString("en-NP")} orders` : formatPrice(p.value)} />} />
-              <Bar  dataKey="orders"  yAxisId="orders"  fill="var(--ag-amber)" fillOpacity={0.25} stroke="var(--ag-amber)" strokeOpacity={0.5} strokeWidth={0.5} radius={[3,3,0,0]} barSize={12} />
-              <Area dataKey="revenue" yAxisId="revenue" type="monotone" stroke="var(--ag-green)" strokeWidth={2} fill="url(#rev-fill)" dot={false} />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.5} />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={12} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} interval="preserveStartEnd" />
+              <YAxis yAxisId="orders"  orientation="left"  tickLine={false} axisLine={false} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} allowDecimals={false} />
+              <YAxis yAxisId="revenue" orientation="right" tickLine={false} axisLine={false} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} tickFormatter={(v) => `Rs.${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
+              <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => p.name === "orders" ? `${p.value.toLocaleString("en-NP")} orders` : formatPrice(p.value)} />} />
+              <Bar  dataKey="orders"  yAxisId="orders"  fill={COLOR_TOKENS.amber} fillOpacity={0.2} stroke={COLOR_TOKENS.amber} strokeWidth={1} radius={[4,4,0,0]} barSize={20} />
+              <Area dataKey="revenue" yAxisId="revenue" type="monotone" stroke={COLOR_TOKENS.emerald} strokeWidth={3} fill="url(#rev-fill)" dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
 
         {/* Order status donut — 1 col */}
-        <div style={{ ...card, display: "flex", flexDirection: "column" }}>
-          <div style={sectionTitle}>Order Status</div>
-          <div style={{ display: "flex", justifyContent: "center", minHeight: 140 }}>
+        <div className={cardStyles}>
+          <div className={sectionTitleStyles}>Order Status</div>
+          <div className="flex justify-center items-center h-48 mb-4">
             {ordersStatusData.length > 0 && (
-              <PieChart width={140} height={140}>
-                <Pie
-                  data={ordersStatusData}
-                  dataKey="value"
-                  isAnimationActive={false}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={35}
-                  outerRadius={60}
-                  stroke="none"
-                >
-                  {ordersStatusData.map((e, i) => (
-                    <Cell key={i} fill={e.hex} />
-                  ))}
-                </Pie>
-                <RechartsTooltip content={<AgTooltip formatter={(p: any) => `${p.payload?.status}: ${p.value?.toLocaleString("en-NP")}`} />} />
-              </PieChart>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={ordersStatusData}
+                    dataKey="value"
+                    isAnimationActive={false}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={4}
+                    stroke="none"
+                  >
+                    {ordersStatusData.map((e, i) => (
+                      <Cell key={i} fill={e.hex} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${p.payload?.status}: ${p.value?.toLocaleString("en-NP")}`} />} />
+                </PieChart>
+              </ResponsiveContainer>
             )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 4 }}>
+          <div className="space-y-3">
             {ordersStatusData.map((row) => {
               const total = ordersStatusData.reduce((s,o)=>s+o.value,0);
               const pct = total > 0 ? ((row.value / total) * 100).toFixed(1) : "0.0";
               return (
-                <div key={row.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: row.color, flexShrink: 0, display: "inline-block" }} />
-                    <span style={{ color: "var(--ag-text2)" }}>{row.status}</span>
+                <div key={row.key} className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest">
+                  <span className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: row.color }} />
+                    <span className="text-muted-foreground">{row.status}</span>
                   </span>
-                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--ag-text)" }}>
+                  <span className="text-foreground">
                     {row.value.toLocaleString("en-NP")} · {pct}%
                   </span>
                 </div>
@@ -536,161 +498,170 @@ export default function AdminAnalytics() {
         </div>
 
         {/* Top Products — 2 cols */}
-        <TopProductsSection analytics={data} isLoading={isLoading} style={{ gridColumn: "span 2" }} />
+        <TopProductsSection analytics={data} isLoading={isLoading} className="lg:col-span-2" />
 
         {/* Orders by weekday */}
-        <div style={card}>
-          <div style={sectionTitle}>Orders by Day</div>
-          <ResponsiveContainer width="100%" height={170}>
-            <BarChart data={ordersByDayOfWeekData}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--ag-border)" />
-              <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fill: "var(--ag-text3)", fontSize: 10, fontFamily: "'DM Mono', monospace" }} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fill: "var(--ag-text3)", fontSize: 10, fontFamily: "'DM Mono', monospace" }} />
-              <RechartsTooltip content={<AgTooltip formatter={(p: any) => `${p.value.toLocaleString("en-NP")} orders`} />} />
-              <Bar dataKey="count" radius={[4,4,0,0]} fill="var(--ag-purple)" fillOpacity={0.3} stroke="var(--ag-purple)" strokeWidth={0.5} />
+        <div className={cardStyles}>
+          <div className={sectionTitleStyles}>Orders by Day</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={ordersByDayOfWeekData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.5} />
+              <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={10} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} />
+              <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${p.value.toLocaleString("en-NP")} orders`} />} />
+              <Bar dataKey="count" radius={[4,4,0,0]} fill={COLOR_TOKENS.purple} fillOpacity={0.2} stroke={COLOR_TOKENS.purple} strokeWidth={1} barSize={30} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Payment methods */}
-        <div style={card}>
-          <div style={sectionTitle}>Payment Methods</div>
-          <ResponsiveContainer width="100%" height={170}>
-            <BarChart data={paymentMethodsData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+        <div className={cardStyles}>
+          <div className={sectionTitleStyles}>Payment Methods</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={paymentMethodsData} layout="vertical" margin={{ left: 0, right: 20, top: 10, bottom: 10 }}>
               <XAxis type="number" hide />
-              <YAxis type="category" dataKey="method" axisLine={false} tickLine={false} width={40} tick={{ fill: "var(--ag-text2)", fontSize: 11, fontFamily: "'DM Mono', monospace" }} />
-              <RechartsTooltip content={<AgTooltip formatter={(p: any) => `${p.value.toLocaleString("en-NP")} · ${p.payload?.percent?.toFixed(1)}%`} />} />
-              <Bar dataKey="count" radius={[0,4,4,0]} barSize={14} fill="var(--ag-blue)" fillOpacity={0.3} stroke="var(--ag-blue)" strokeWidth={0.5} />
+              <YAxis type="category" dataKey="method" axisLine={false} tickLine={false} width={80} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} />
+              <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${p.value.toLocaleString("en-NP")} · ${p.payload?.percent?.toFixed(1)}%`} />} />
+              <Bar dataKey="count" radius={[0,4,4,0]} barSize={16} fill={COLOR_TOKENS.blue} fillOpacity={0.2} stroke={COLOR_TOKENS.blue} strokeWidth={1} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Revenue by Platform — 2 cols */}
-        <div style={{ ...card, gridColumn: "span 2" }}>
-          <div style={sectionTitle}>Revenue by Platform</div>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={(data?.revenueByPlatform ?? []).slice(0, 8)} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--ag-border)" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "var(--ag-text3)", fontSize: 10, fontFamily: "'DM Mono', monospace" }} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fill: "var(--ag-text3)", fontSize: 10, fontFamily: "'DM Mono', monospace" }} tickFormatter={(v) => v >= 1000 ? `Rs.${Math.round(v / 1000)}k` : `Rs.${v}`} />
-              <RechartsTooltip content={<AgTooltip formatter={(p: any) => `${formatPrice(p.value)} · ${p.payload?.percent?.toFixed(1)}%`} />} />
-              <Bar dataKey="revenue" radius={[4,4,0,0]} fill="var(--ag-green)" fillOpacity={0.35} stroke="var(--ag-green)" strokeWidth={0.5} />
+        <div className={cn(cardStyles, "lg:col-span-2")}>
+          <div className={sectionTitleStyles}>Revenue by Platform</div>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={(data?.revenueByPlatform ?? []).slice(0, 8)} margin={{ left: 0, right: 10, top: 10, bottom: 0 }}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.5} />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} tickFormatter={(v) => v >= 1000 ? `Rs.${Math.round(v / 1000)}k` : `Rs.${v}`} />
+              <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${formatPrice(p.value)} · ${p.payload?.percent?.toFixed(1)}%`} />} />
+              <Bar dataKey="revenue" radius={[6,6,0,0]} fill={COLOR_TOKENS.emerald} fillOpacity={0.2} stroke={COLOR_TOKENS.emerald} strokeWidth={1} barSize={40} />
             </BarChart>
           </ResponsiveContainer>
-          <Collapsible>
-            <div style={{ paddingTop: 8, borderTop: "0.5px solid var(--ag-border)", marginTop: 8 }}>
-              <CollapsibleTrigger asChild>
-                <button type="button" style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--ag-text3)", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>
-                  Platform management <ChevronDown size={14} />
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 8 }}>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <Input placeholder="key (e.g. instagram)" value={newPlatformKey} onChange={(e) => setNewPlatformKey(e.target.value.toLowerCase())} className="h-8 text-xs" />
-                    <Input placeholder="label" value={newPlatformLabel} onChange={(e) => setNewPlatformLabel(e.target.value)} className="h-8 text-xs" />
-                    <Button type="button" size="sm" className="h-8 px-3 text-xs"
-                      disabled={!newPlatformKey || !newPlatformLabel || upsertPlatformMutation.isPending}
-                      onClick={() => upsertPlatformMutation.mutate({ key: newPlatformKey, label: newPlatformLabel, isActive: true }, { onSuccess: () => { setNewPlatformKey(""); setNewPlatformLabel(""); } })}
-                    >Add</Button>
+          <Collapsible className="mt-6 pt-6 border-t border-border/50">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="w-full flex items-center justify-between h-9 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground hover:bg-muted/50 rounded-xl">
+                Platform management <ChevronDown size={14} className="ml-2" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4 space-y-4">
+              <div className="flex gap-2">
+                <Input placeholder="key (e.g. instagram)" value={newPlatformKey} onChange={(e) => setNewPlatformKey(e.target.value.toLowerCase())} className="h-9 text-xs font-bold uppercase tracking-wider rounded-xl" />
+                <Input placeholder="label" value={newPlatformLabel} onChange={(e) => setNewPlatformLabel(e.target.value)} className="h-9 text-xs font-bold uppercase tracking-wider rounded-xl" />
+                <Button type="button" size="sm" className="h-9 px-4 text-[10px] font-black uppercase tracking-widest rounded-xl"
+                  disabled={!newPlatformKey || !newPlatformLabel || upsertPlatformMutation.isPending}
+                  onClick={() => upsertPlatformMutation.mutate({ key: newPlatformKey, label: newPlatformLabel, isActive: true }, { onSuccess: () => { setNewPlatformKey(""); setNewPlatformLabel(""); } })}
+                >Add</Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {platforms.map((p) => (
+                  <div key={p.key} className="inline-flex items-center gap-2 bg-muted/50 border border-border rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-foreground">
+                    {p.label}
+                    <button type="button" className="text-muted-foreground hover:text-red-500 transition-colors" disabled={deletePlatformMutation.isPending} onClick={() => deletePlatformMutation.mutate(p.key)}>
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {platforms.map((p) => (
-                      <div key={p.key} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--ag-bg3)", border: "0.5px solid var(--ag-border)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontFamily: "'DM Mono', monospace", color: "var(--ag-text2)" }}>
-                        {p.label}
-                        <button type="button" style={{ color: "var(--ag-text3)", background: "none", border: "none", cursor: "pointer", lineHeight: 1 }} disabled={deletePlatformMutation.isPending} onClick={() => deletePlatformMutation.mutate(p.key)}>×</button>
-                      </div>
-                    ))}
-                    {platforms.length === 0 && <p style={{ fontSize: 11, color: "var(--ag-text3)", fontFamily: "'DM Mono', monospace" }}>No custom platforms yet.</p>}
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </div>
+                ))}
+              </div>
+            </CollapsibleContent>
           </Collapsible>
         </div>
 
         {/* Revenue by Category */}
-        <div style={card}>
-          <div style={sectionTitle}>Revenue by Category</div>
-          <div style={{ display: "flex", justifyContent: "center", minHeight: 180 }}>
-            <PieChart width={180} height={180}>
-              <Pie
-                data={(data?.salesByCategory ?? []).map(c=>({...c, revenue: toSafeNum(c.revenue)}))}
-                dataKey="revenue"
-                isAnimationActive={false}
-                cx="50%"
-                cy="50%"
-                innerRadius={45}
-                outerRadius={80}
-                stroke="none"
-              >
-                {(data?.salesByCategory ?? []).map((_, i) => (
-                  <Cell key={i} fill={commonPieColors[i % commonPieColors.length]} />
-                ))}
-              </Pie>
-              <RechartsTooltip content={<AgTooltip formatter={(p: any) => `${p.payload?.category}: ${formatPrice(p.value)}`} />} />
-            </PieChart>
+        <div className={cardStyles}>
+          <div className={sectionTitleStyles}>Revenue by Category</div>
+          <div className="flex justify-center items-center h-56 mb-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={(data?.salesByCategory ?? []).map(c=>({...c, revenue: toSafeNum(c.revenue)}))}
+                  dataKey="revenue"
+                  isAnimationActive={false}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={90}
+                  paddingAngle={4}
+                  stroke="none"
+                >
+                  {(data?.salesByCategory ?? []).map((_, i) => (
+                    <Cell key={i} fill={commonPieColors[i % commonPieColors.length]} />
+                  ))}
+                </Pie>
+                <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${p.payload?.category}: ${formatPrice(p.value)}`} />} />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
+          <div className="space-y-2.5">
             {(data?.salesByCategory ?? []).slice(0, 4).map((cat, i) => (
-              <div key={cat.category} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: 2, background: commonPieColors[i % commonPieColors.length], flexShrink: 0, display: "inline-block" }} />
-                  <span style={{ color: "var(--ag-text2)", fontFamily: "'DM Mono', monospace" }}>{cat.category}</span>
+              <div key={cat.category} className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest">
+                <span className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: commonPieColors[i % commonPieColors.length] }} />
+                  <span className="text-muted-foreground">{cat.category}</span>
                 </span>
-                <span style={{ fontFamily: "'DM Mono', monospace", color: "var(--ag-text)" }}>{formatPrice(cat.revenue)}</span>
+                <span className="text-foreground">{formatPrice(cat.revenue)}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* New Customers */}
-        <div style={{ ...card, borderTop: "2px solid var(--ag-purple)44" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-            <div style={sectionTitle}>New Customers</div>
-            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, padding: "2px 7px", borderRadius: 20, background: "var(--ag-purple-l)", color: "var(--ag-purple)" }}>
-              {kpis?.newCustomers ?? 0} this period
+        <div className={cn(cardStyles, "border-t-4 border-t-violet-500")}>
+          <div className="flex justify-between items-start mb-6">
+            <div className={sectionTitleStyles}>New Customers</div>
+            <span className="text-[10px] font-black uppercase tracking-widest bg-violet-500/10 text-violet-500 px-2.5 py-1 rounded-full">
+              {kpis?.newCustomers ?? 0} signups
             </span>
           </div>
-          <ResponsiveContainer width="100%" height={130}>
-            <AreaChart data={combinedByDay} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+          <ResponsiveContainer width="100%" height={150}>
+            <AreaChart data={combinedByDay} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="cust-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#9b7cf8" stopOpacity={0.18} />
-                  <stop offset="95%" stopColor="#9b7cf8" stopOpacity={0}    />
+                  <stop offset="5%"  stopColor={COLOR_TOKENS.purple} stopOpacity={0.1} />
+                  <stop offset="95%" stopColor={COLOR_TOKENS.purple} stopOpacity={0}    />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--ag-border)" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "var(--ag-text3)", fontSize: 10, fontFamily: "'DM Mono', monospace" }} interval="preserveStartEnd" />
-              <YAxis tickLine={false} axisLine={false} tick={{ fill: "var(--ag-text3)", fontSize: 10, fontFamily: "'DM Mono', monospace" }} allowDecimals={false} />
-              <RechartsTooltip content={<AgTooltip formatter={(p: any) => `${p.value} signups`} />} />
-              <Area type="monotone" dataKey="newCustomers" stroke="#9b7cf8" strokeWidth={2} fill="url(#cust-fill)" dot={false} />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.5} />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} interval="preserveStartEnd" />
+              <YAxis tickLine={false} axisLine={false} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} allowDecimals={false} />
+              <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${p.value} signups`} />} />
+              <Area type="monotone" dataKey="newCustomers" stroke={COLOR_TOKENS.purple} strokeWidth={3} fill="url(#cust-fill)" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
         {/* Sales Heatmap — full width */}
-        <div style={{ ...card, gridColumn: "span 4" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div className={cn(cardStyles, "lg:col-span-4")}>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
             <div>
-              <div style={sectionTitle}>Sales Activity — {calendarYear}</div>
-              <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--ag-text3)", marginTop: -8 }}>GitHub-style calendar of daily revenue</p>
+              <div className={sectionTitleStyles}>Sales Activity · {calendarYear}</div>
+              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest -mt-3">Daily revenue intensity calendar</p>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ display: "flex", gap: 3, background: "var(--ag-bg3)", border: "0.5 solid var(--ag-border)", borderRadius: 8, padding: 3 }}>
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1 bg-muted/50 border border-border p-1 rounded-xl">
                 {(["year","month"] as const).map((v) => (
-                  <button key={v} type="button" onClick={() => setCalendarView(v)} style={pillTab(calendarView === v)}>
-                    {v === "year" ? "Year" : "Month"}
-                  </button>
+                  <Button 
+                    key={v} 
+                    variant={calendarView === v ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setCalendarView(v)}
+                    className={cn(
+                      "h-8 px-3 text-[10px] font-black uppercase tracking-widest rounded-lg",
+                      calendarView === v && "shadow-sm bg-background"
+                    )}
+                  >
+                    {v}
+                  </Button>
                 ))}
               </div>
-              <Input type="number" value={calendarYear} onChange={(e) => setCalendarYear(toSafeNum(e.target.value) || new Date().getFullYear())} className="h-8 w-20 text-xs" min={2020} max={new Date().getFullYear() + 1} />
+              <Input type="number" value={calendarYear} onChange={(e) => setCalendarYear(toSafeNum(e.target.value) || new Date().getFullYear())} className="h-9 w-24 text-xs font-black rounded-xl" min={2020} max={new Date().getFullYear() + 1} />
               {calendarView === "month" && (
                 <Select value={String(calendarMonth)} onValueChange={(v) => setCalendarMonth(toSafeNum(v))}>
-                  <SelectTrigger className="h-8 w-24 text-xs"><SelectValue placeholder="Month" /></SelectTrigger>
-                  <SelectContent>
+                  <SelectTrigger className="h-9 w-32 text-xs font-black rounded-xl"><SelectValue placeholder="Month" /></SelectTrigger>
+                  <SelectContent className="admin-font">
                     {Array.from({ length: 12 }).map((_, i) => (
-                      <SelectItem key={i} value={String(i)}>{new Date(calendarYear, i, 1).toLocaleString("default", { month: "short" })}</SelectItem>
+                      <SelectItem key={i} value={String(i)} className="text-[11px] font-bold uppercase tracking-widest">{new Date(calendarYear, i, 1).toLocaleString("default", { month: "long" })}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -699,33 +670,34 @@ export default function AdminAnalytics() {
           </div>
 
           {isCalendarLoading || !calendarLayout ? (
-            <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--ag-text3)" }}>Loading calendar…</div>
+            <div className="h-40 flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground animate-pulse">Loading dataset…</div>
           ) : (
-            <>
-              <div style={{ overflowX: "auto" }}>
+            <div className="space-y-8">
+              <div className="overflow-x-auto pb-4 scrollbar-hide">
                 {calendarView === "year" ? (
-                  <div style={{ display: "inline-flex", gap: 16 }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "space-between", paddingTop: 20, paddingRight: 6, fontFamily: "'DM Mono', monospace", fontSize: 9, color: "var(--ag-text3)", gap: 2 }}>
-                      {["M","T","W","T","F","S","S"].map((d, i) => (
-                        <span key={i} style={{ height: 13, lineHeight: "13px", opacity: [0,2,4].includes(i) ? 1 : 0 }}>{d}</span>
-                      ))}
+                  <div className="inline-flex gap-4">
+                    <div className="flex flex-col justify-between pt-8 pb-1 pr-4 text-[9px] font-black uppercase tracking-tighter text-muted-foreground h-[115px]">
+                      <span>Mon</span>
+                      <span>Wed</span>
+                      <span>Fri</span>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      <div style={{ display: "flex", fontSize: 9, fontFamily: "'DM Mono', monospace", color: "var(--ag-text3)", marginBottom: 2 }}>
+                    <div className="flex flex-col gap-2.5">
+                      <div className="flex text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-1">
                         {Array.from({ length: calendarLayout.weeksCount }).map((_, wi) => {
                           const m = calendarLayout.monthLabels.find((ml) => ml.weekIndex === wi);
-                          return <div key={wi} style={{ width: 13, height: 13, display: "flex", alignItems: "center", justifyContent: "center", marginRight: 2 }}>{m?.label ?? ""}</div>;
+                          return <div key={wi} className="w-[14px] mr-1 flex justify-center">{m?.label ?? ""}</div>;
                         })}
                       </div>
-                      <div style={{ display: "flex", gap: 2 }}>
+                      <div className="flex gap-1">
                         {Array.from({ length: calendarLayout.weeksCount }, (_, wi) => (
-                          <div key={wi} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <div key={wi} className="flex flex-col gap-1">
                             {Array.from({ length: 7 }, (_, wd) => {
                               const cell = calendarLayout.cells.find((c) => c.weekIndex === wi && c.weekday === wd);
-                              if (!cell) return <div key={wd} style={{ width: 13, height: 13, borderRadius: 3, background: "transparent" }} />;
+                              if (!cell) return <div key={wd} className="w-3.5 h-3.5 rounded-sm bg-transparent" />;
                               return (
                                 <div key={wd} title={cell.revenue > 0 ? `${cell.date} · ${formatPrice(cell.revenue)}` : `${cell.date} · No sales`}
-                                  style={{ width: 13, height: 13, borderRadius: 3, background: heatColor(cell.revenue, calendarLayout.maxRevenue, cell.isHoliday), border: "0.5px solid var(--ag-border)", cursor: "default" }}
+                                  className="w-3.5 h-3.5 rounded-sm border border-border/50 transition-all hover:scale-125 hover:z-10 cursor-pointer"
+                                  style={{ background: heatColor(cell.revenue, calendarLayout.maxRevenue, cell.isHoliday) }}
                                 />
                               );
                             })}
@@ -735,15 +707,15 @@ export default function AdminAnalytics() {
                     </div>
                   </div>
                 ) : (
-                  <div style={{ display: "inline-flex", gap: 16 }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", paddingTop: 20, paddingRight: 6, fontFamily: "'DM Mono', monospace", fontSize: 9, color: "var(--ag-text3)", gap: 2 }}>
-                      {["M","T","W","T","F","S","S"].map((d, i) => (
-                        <span key={i} style={{ height: 13, lineHeight: "13px", opacity: [0,2,4].includes(i) ? 1 : 0 }}>{d}</span>
-                      ))}
+                  <div className="inline-flex gap-4 pt-4">
+                    <div className="flex flex-col justify-between py-2 pr-4 text-[9px] font-black uppercase tracking-tighter text-muted-foreground h-[105px]">
+                      <span>Mon</span>
+                      <span>Wed</span>
+                      <span>Fri</span>
                     </div>
-                    <div style={{ display: "flex", gap: 2, paddingTop: 20 }}>
+                    <div className="flex gap-1.5">
                       {Array.from({ length: monthLayout?.weeksCount ?? 0 }).map((_, wi) => (
-                        <div key={wi} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <div key={wi} className="flex flex-col gap-1.5">
                           {Array.from({ length: 7 }, (_, wd) => {
                             const idx = wi * 7 + wd;
                             const entry = monthLayout?.dates[idx];
@@ -751,7 +723,11 @@ export default function AdminAnalytics() {
                             const inMonth = entry && new Date(entry.date).getFullYear() === calendarYear && new Date(entry.date).getMonth() === calendarMonth;
                             return (
                               <div key={wd} title={cell?.revenue && cell.revenue > 0 ? `${entry?.date} · ${formatPrice(cell.revenue)}` : `${entry?.date ?? ""} · No sales`}
-                                style={{ width: 13, height: 13, borderRadius: 3, background: heatColor(cell?.revenue ?? 0, monthLayout?.maxRevenue ?? 0, cell?.isHoliday ?? false), border: "0.5px solid var(--ag-border)", opacity: inMonth ? 1 : 0.35, cursor: "default" }}
+                                className="w-4 h-4 rounded-[4px] border border-border/50 transition-all hover:scale-125 hover:z-10 cursor-pointer"
+                                style={{ 
+                                  background: heatColor(cell?.revenue ?? 0, monthLayout?.maxRevenue ?? 0, cell?.isHoliday ?? false),
+                                  opacity: inMonth ? 1 : 0.1
+                                }}
                               />
                             );
                           })}
@@ -761,18 +737,26 @@ export default function AdminAnalytics() {
                   </div>
                 )}
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 12, fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--ag-text3)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  {[{ label: "No sales", bg: "var(--ag-bg4)" },{ label: "Low", bg: "var(--ag-green-l)" },{ label: "Medium", bg: "#4db885" },{ label: "High", bg: "var(--ag-green-m)" },{ label: "Peak", bg: "var(--ag-green)" }].map((s) => (
-                    <span key={s.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <span style={{ width: 13, height: 13, borderRadius: 3, background: s.bg, border: "0.5px solid var(--ag-border)", display: "inline-block" }} />
+              <div className="flex items-center justify-between pt-4 border-t border-border/50 text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                <div className="flex items-center gap-6">
+                  {[{ label: "No sales", bg: "hsl(var(--muted)/0.1)" },{ label: "Low", bg: COLOR_TOKENS.heatLow },{ label: "Medium", bg: COLOR_TOKENS.heatMedium },{ label: "High", bg: COLOR_TOKENS.heatHigh },{ label: "Peak", bg: COLOR_TOKENS.heatPeak }].map((s) => (
+                    <span key={s.label} className="flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 rounded-sm border border-border/50" style={{ background: s.bg }} />
                       {s.label}
                     </span>
                   ))}
                 </div>
-                <span>Less ← → More</span>
+                <div className="flex items-center gap-2">
+                  <span>Less intensity</span>
+                  <div className="flex gap-0.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-border" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-border" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-border" />
+                  </div>
+                  <span>More intensity</span>
+                </div>
               </div>
-            </>
+            </div>
           )}
         </div>
 
@@ -783,44 +767,55 @@ export default function AdminAnalytics() {
 
 // ─── Top Products Section ─────────────────────────────────────────────────────
 
-function TopProductsSection({ analytics, isLoading, style }: { analytics: AdminAnalytics | undefined; isLoading: boolean; style?: React.CSSProperties }) {
+function TopProductsSection({ analytics, isLoading, className }: { analytics: AdminAnalytics | undefined; isLoading: boolean; className?: string }) {
   const products = analytics?.topProducts ?? [];
   const top3 = useMemo(() => products.slice(0, 3).map(p=>({...p, revenue: toSafeNum(p.revenue)})), [products]);
-  const pieColors = ["#39e88e","#5b8def","#9b7cf8","#f5a623","#ff4d4d"];
+  const pieColors = [COLOR_TOKENS.emerald, COLOR_TOKENS.blue, COLOR_TOKENS.purple, COLOR_TOKENS.amber, COLOR_TOKENS.red];
 
   const totalRevenue = useMemo(() => products.reduce((sum, pr) => sum + toSafeNum(pr.revenue), 0), [products]);
 
   return (
-    <div style={{ background: "var(--ag-bg2)", border: "0.5px solid var(--ag-border)", borderRadius: 14, padding: 16, ...style }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-        <div style={sectionTitle}>Top Products</div>
-        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "var(--ag-text3)" }}>Ranked by revenue, top 10</span>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+    <div className={cn(cardStyles, className)}>
+      <div className="flex justify-between items-start mb-8">
         <div>
+          <div className={sectionTitleStyles}>Top Products</div>
+          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest -mt-3">Best performing items</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-10">
+        <div className="xl:col-span-3">
           {isLoading ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{Array.from({ length: 5 }).map((_, i) => <Skel key={i} h={40} />)}</div>
+            <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skel key={i} h={48} />)}</div>
           ) : products.length === 0 ? (
-            <p style={{ fontSize: 12, color: "var(--ag-text3)", fontFamily: "'DM Mono', monospace" }}>No products in this period.</p>
+            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest py-10 text-center bg-muted/20 rounded-2xl border border-dashed border-border">No sales records found.</p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column" }}>
+            <div className="divide-y divide-border/50">
               {products.slice(0, 10).map((p, idx) => {
                 const calcPct = totalRevenue > 0 ? (toSafeNum(p.revenue) / totalRevenue * 100) : 0;
                 return (
-                  <div key={`${p.name}-${idx}`} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "0.5px solid var(--ag-border)" }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 7, background: "var(--ag-bg3)", border: "0.5px solid var(--ag-border)", flexShrink: 0, overflow: "hidden" }}>
-                      {p.imageUrl ? <img src={p.imageUrl} alt={p.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} loading="lazy" /> : null}
+                  <div key={`${p.name}-${idx}`} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
+                    <div className="w-12 h-12 rounded-xl bg-muted/50 border border-border flex-shrink-0 overflow-hidden shadow-sm">
+                      {p.imageUrl ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" /> : null}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--ag-text3)" }}>#{idx + 1}</div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ag-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-end mb-1.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-0.5 flex items-center gap-2">
+                             <span className="text-emerald-500">#{idx + 1}</span>
+                             <span>·</span>
+                             <span>{p.units || 0} units</span>
+                          </div>
+                          <div className="text-sm font-black text-foreground truncate uppercase tracking-wider">{p.name}</div>
                         </div>
-                        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "var(--ag-green)", flexShrink: 0, marginLeft: 8 }}>{formatPrice(p.revenue)}</div>
+                        <div className="text-[13px] font-black text-emerald-500 tabular-nums ml-4">{formatPrice(p.revenue)}</div>
                       </div>
-                      <div style={{ height: 3, background: "var(--ag-bg4)", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${Math.min(calcPct, 100)}%`, background: "var(--ag-green-m)", borderRadius: 2 }} />
+                      <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(calcPct, 100)}%` }}
+                          transition={{ duration: 1, ease: "easeOut" }}
+                          className="h-full bg-emerald-500 rounded-full shadow-sm" 
+                        />
                       </div>
                     </div>
                   </div>
@@ -829,37 +824,40 @@ function TopProductsSection({ analytics, isLoading, style }: { analytics: AdminA
             </div>
           )}
         </div>
-        <div style={{ background: "var(--ag-bg3)", borderRadius: 10, border: "0.5px solid var(--ag-border)", padding: 12 }}>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--ag-text3)", marginBottom: 4 }}>Top 3 share</div>
-          <div style={{ display: "flex", justifyContent: "center", minHeight: 160 }}>
+        <div className="xl:col-span-2 bg-muted/20 rounded-2xl border border-border/50 p-6 flex flex-col items-center justify-center">
+          <div className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground mb-8">Revenue Distribution</div>
+          <div className="w-full aspect-square max-w-[200px] mb-8">
             {top3.length > 0 && (
-              <PieChart width={160} height={160}>
-                <Pie
-                  data={top3}
-                  dataKey="revenue"
-                  isAnimationActive={false}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={40}
-                  outerRadius={75}
-                  stroke="none"
-                >
-                  {top3.map((_, i) => <Cell key={i} fill={pieColors[i % pieColors.length]} />)}
-                </Pie>
-                <RechartsTooltip content={<AgTooltip formatter={(p: any) => `${p.payload?.name}: ${formatPrice(p.value)}`} />} />
-              </PieChart>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={top3}
+                    dataKey="revenue"
+                    isAnimationActive={false}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={6}
+                    stroke="none"
+                  >
+                    {top3.map((_, i) => <Cell key={i} fill={pieColors[i % pieColors.length]} className="hover:opacity-80 transition-opacity" />)}
+                  </Pie>
+                  <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${p.payload?.name}: ${formatPrice(p.value)}`} />} />
+                </PieChart>
+              </ResponsiveContainer>
             )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
+          <div className="w-full space-y-3">
             {top3.map((p, i) => {
               const displayPct = totalRevenue > 0 ? (toSafeNum(p.revenue) / totalRevenue * 100).toFixed(1) : "0.0";
               return (
-                <div key={p.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: 2, background: pieColors[i], flexShrink: 0, display: "inline-block" }} />
-                    <span style={{ color: "var(--ag-text2)", fontFamily: "'DM Mono', monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 100 }}>{p.name}</span>
+                <div key={p.name} className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest">
+                  <span className="flex items-center gap-3 min-w-0">
+                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: pieColors[i] }} />
+                    <span className="text-muted-foreground truncate">{p.name}</span>
                   </span>
-                  <span style={{ fontFamily: "'DM Mono', monospace", color: "var(--ag-text)" }}>{displayPct}%</span>
+                  <span className="text-foreground shrink-0">{displayPct}%</span>
                 </div>
               );
             })}

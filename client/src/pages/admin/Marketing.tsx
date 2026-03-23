@@ -12,7 +12,6 @@ import {
   importNewsletterEmails,
   deleteNewsletterEmail,
   deleteAllNewsletterEmails,
-  type AdminCustomer,
 } from "@/lib/adminApi";
 import { format } from "date-fns";
 import {
@@ -144,6 +143,8 @@ export default function AdminMarketingPage() {
   const { toast, success, error, warning } = useToast();
   const queryClient = useQueryClient();
 
+  type MarketingCustomerEmail = { email: string };
+
   const [marketingSubject, setMarketingSubject] = useState("New Seasonal Collection — RARE ATELIER");
   const [marketingBody, setMarketingBody] = useState("");
   const [subscriberSearch, setSubscriberSearch] = useState("");
@@ -176,10 +177,12 @@ export default function AdminMarketingPage() {
     },
   });
 
-  const customersQuery = useQuery<AdminCustomer[]>({
-    queryKey: ["admin", "customers"],
+  const customersQuery = useQuery<MarketingCustomerEmail[]>({
+    queryKey: ["admin", "customers", "emails"],
+    enabled: includeCustomers,
+    staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/admin/customers");
+      const res = await apiRequest("GET", "/api/admin/customers/emails");
       const json = await res.json();
       return json.data;
     },
@@ -208,6 +211,16 @@ export default function AdminMarketingPage() {
   const filteredSubscribers = useMemo(() => 
     allSubscribers.filter(s => s.email.toLowerCase().includes(subscriberSearch.toLowerCase())),
     [allSubscribers, subscriberSearch]
+  );
+
+  const newsletterEmailsInView = useMemo(
+    () => filteredSubscribers.filter((s) => s.source === "newsletter").map((s) => s.email),
+    [filteredSubscribers],
+  );
+
+  const totalRecipients = useMemo(
+    () => allSubscribers.length,
+    [allSubscribers.length],
   );
 
   const stats = useMemo(() => [
@@ -263,6 +276,22 @@ export default function AdminMarketingPage() {
     },
   });
 
+  const deleteAllMutation = useMutation({
+    mutationFn: async () => {
+      const result = await deleteAllNewsletterEmails();
+      if (!result.success) throw new Error(result.message || "Failed to delete all subscribers");
+      return result;
+    },
+    onSuccess: () => {
+      toast({ title: "All newsletter subscribers removed" });
+      setSelectedEmails(new Set());
+      queryClient.invalidateQueries({ queryKey: ["admin", "newsletter", "subscribers"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Delete all failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   const broadcastMutation = useMutation({
     mutationFn: async (payload: { subject: string; html: string; selectedEmails?: string[]; sendToAll?: boolean }) => {
       const res = await apiRequest("POST", "/api/admin/marketing/broadcast", payload);
@@ -315,7 +344,7 @@ export default function AdminMarketingPage() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
@@ -354,7 +383,7 @@ export default function AdminMarketingPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
+          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6 transition-all duration-200">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
                 Subscribers
@@ -392,31 +421,74 @@ export default function AdminMarketingPage() {
             </div>
 
             <div className="flex items-center justify-between gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 text-[10px]"
-                onClick={() => exportSubscribersCSV()}
-              >
-                <Download className="h-3 w-3 mr-1.5" />
-                Export CSV
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[10px]"
+                  onClick={() => exportSubscribersCSV()}
+                >
+                  <Download className="h-3 w-3 mr-1.5" />
+                  Export CSV
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[10px]"
+                  onClick={() => {
+                    setSelectedEmails((prev) => {
+                      const next = new Set(prev);
+                      newsletterEmailsInView.forEach((email) => next.add(email));
+                      return next;
+                    });
+                  }}
+                  disabled={newsletterEmailsInView.length === 0}
+                >
+                  Select visible
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[10px]"
+                  onClick={() => setSelectedEmails(new Set())}
+                  disabled={selectedEmails.size === 0}
+                >
+                  Clear
+                </Button>
+              </div>
 
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                className="h-8 text-[10px]"
-                disabled={
-                  bulkDeleteMutation.isPending ||
-                  Array.from(selectedEmails).length === 0
-                }
-                onClick={() => bulkDeleteMutation.mutate(Array.from(selectedEmails))}
-              >
-                <Trash2 className="h-3 w-3 mr-1.5" />
-                Delete selected ({Array.from(selectedEmails).length})
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="h-8 text-[10px]"
+                  disabled={
+                    bulkDeleteMutation.isPending ||
+                    selectedEmails.size === 0
+                  }
+                  onClick={() => bulkDeleteMutation.mutate(Array.from(selectedEmails))}
+                >
+                  <Trash2 className="h-3 w-3 mr-1.5" />
+                  Delete selected ({selectedEmails.size})
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[10px] border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                  disabled={deleteAllMutation.isPending || subscribers.length === 0}
+                  onClick={() => {
+                    const ok = window.confirm("Delete all newsletter subscribers?");
+                    if (ok) deleteAllMutation.mutate();
+                  }}
+                >
+                  Delete all
+                </Button>
+              </div>
             </div>
 
             <div className="max-h-[400px] overflow-y-auto border border-[#E5E5E0] dark:border-border rounded-xl">
@@ -438,6 +510,7 @@ export default function AdminMarketingPage() {
                               });
                             }}
                             className="h-3 w-3 rounded border-border"
+                            aria-label={`Select ${s.email} for deletion`}
                           />
                         ) : (
                           <input
@@ -474,7 +547,7 @@ export default function AdminMarketingPage() {
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
+          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6 transition-all duration-200">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
                 Email Composer
@@ -541,14 +614,13 @@ export default function AdminMarketingPage() {
 
             <div className="flex justify-between items-center">
               <p className="text-[11px] text-muted-foreground">
-                {Array.from(selectedEmails).length > 0
-                  ? `Selected ${Array.from(selectedEmails).length} subscriber${Array.from(selectedEmails).length > 1 ? "s" : ""}`
-                  : "Select at least one subscriber to send this broadcast."}
+                Broadcast will be sent to all emails listed in Subscribers
+                {includeCustomers ? " (newsletter + customers)." : " (newsletter only)."}
               </p>
               <Button 
                 className="bg-[#2C3E2D] hover:bg-[#2C3E2D]/90"
                 onClick={() => {
-                  if (Array.from(selectedEmails).length === 0) {
+                  if (totalRecipients === 0) {
                     warning("No recipients selected", "Please select at least one subscriber.");
                     return;
                   }
@@ -557,12 +629,11 @@ export default function AdminMarketingPage() {
                 disabled={
                   !marketingSubject.trim() ||
                   !marketingBody.trim() ||
-                  subscribers.length === 0 ||
-                  Array.from(selectedEmails).length === 0
+                  totalRecipients === 0
                 }
               >
                 <Send className="h-4 w-4 mr-2" />
-                Broadcast to {Array.from(selectedEmails).length || allSubscribers.length}
+                Broadcast to {totalRecipients}
               </Button>
             </div>
           </div>
@@ -574,8 +645,8 @@ export default function AdminMarketingPage() {
           <DialogHeader>
             <DialogTitle>Send Broadcast?</DialogTitle>
             <DialogDescription>
-              This will send the email to {Array.from(selectedEmails).length} selected subscriber
-              {Array.from(selectedEmails).length === 1 ? "" : "s"} immediately.
+              This will send the email to {totalRecipients} recipient
+              {totalRecipients === 1 ? "" : "s"} immediately.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -586,9 +657,8 @@ export default function AdminMarketingPage() {
                 broadcastMutation.mutate({
                   subject: marketingSubject,
                   html: marketingBody,
-                  selectedEmails: Array.from(selectedEmails),
-                  sendToAll:
-                    Array.from(selectedEmails).length === allSubscribers.length,
+                  selectedEmails: includeCustomers ? allSubscribers.map((s) => s.email) : undefined,
+                  sendToAll: !includeCustomers,
                 })
               }
               loading={broadcastMutation.isPending}

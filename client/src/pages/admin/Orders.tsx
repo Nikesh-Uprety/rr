@@ -484,7 +484,7 @@ export default function AdminOrders() {
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-right font-medium">
-                          {formatPrice(order.total)}
+                          {formatPrice((order.total ?? 0) - (order.discountAmount ?? 0))}
                         </td>
                       </tr>
                     );
@@ -717,30 +717,23 @@ export default function AdminOrders() {
                       <span className="font-medium capitalize">{selectedOrder.paymentMethod?.replace(/_/g, " ") ?? "—"}</span>
                     </div>
                     <div className="pt-2 border-t border-dashed border-border/50 space-y-2">
-                      <div className="flex justify-between items-center text-sm">
+                      <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Subtotal</span>
-                        <span className="font-medium">{formatPrice(orderItemsSubtotal)}</span>
+                        <span>{formatPrice(selectedOrder.total ?? 0)}</span>
                       </div>
-                      {discountAmount > 0 && (
-                        <div className="flex justify-between items-center text-sm">
+
+                      {(selectedOrder.discountAmount ?? 0) > 0 && (
+                        <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Discount</span>
-                          <span className="font-medium text-green-700 dark:text-green-300">- {formatPrice(discountAmount)}</span>
+                          <span className="text-green-500">
+                            - {formatPrice(selectedOrder.discountAmount ?? 0)}
+                          </span>
                         </div>
                       )}
-                      {selectedOrder.promoCode ? (
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-muted-foreground">Promo Code Used</span>
-                          <Badge
-                            variant="outline"
-                            className="bg-orange-50 text-orange-600 border-orange-200 uppercase"
-                          >
-                            {selectedOrder.promoCode}
-                          </Badge>
-                        </div>
-                      ) : null}
-                      <div className="flex justify-between items-center text-sm pt-1">
-                        <span className="text-muted-foreground">Total in NPR</span>
-                        <span className="font-bold text-lg">{formatPrice(selectedOrder.total)}</span>
+
+                      <div className="flex justify-between text-sm font-semibold border-t pt-2 mt-1">
+                        <span>Total Paid</span>
+                        <span>{formatPrice((selectedOrder.total ?? 0) - (selectedOrder.discountAmount ?? 0))}</span>
                       </div>
                     </div>
 

@@ -13,6 +13,7 @@ import {
   LogOut,
   Megaphone,
   Images,
+  ChevronsLeftRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -23,8 +24,7 @@ import { NotificationBadge } from "@/components/admin/NotificationBadge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Suspense, useEffect, useState } from "react";
-import { useIsFetching } from "@tanstack/react-query";
-import { TopLoadingBar } from "@/components/layout/TopLoadingBar";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   SidebarProvider,
   Sidebar,
@@ -32,7 +32,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -74,13 +73,10 @@ export default function AdminLayout({
     if (typeof window === "undefined") return false;
     return localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_KEY) === "true";
   });
-  const isFetching = useIsFetching();
-  const [isRouteChanging, setIsRouteChanging] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    setIsRouteChanging(true);
-    const timeout = setTimeout(() => setIsRouteChanging(false), 400);
-    return () => clearTimeout(timeout);
+    setMobileMenuOpen(false); // Close mobile menu on route change
   }, [pathname]);
 
   useEffect(() => {
@@ -89,8 +85,6 @@ export default function AdminLayout({
       sidebarCollapsed ? "true" : "false",
     );
   }, [sidebarCollapsed]);
-
-  const isLoading = isRouteChanging || isFetching > 0;
 
   const handleLogout = async () => {
     try {
@@ -132,29 +126,155 @@ export default function AdminLayout({
           "--sidebar-width-icon": "56px",
         } as React.CSSProperties
       }
-      className="min-h-screen bg-[#F5F5F3] dark:bg-neutral-900 text-[#2C3E2D] dark:text-foreground font-sans overflow-hidden transition-colors duration-200 ease-in-out"
+      className="min-h-screen bg-muted dark:bg-neutral-900 text-foreground admin-font overflow-hidden transition-colors duration-200 ease-in-out"
     >
-      <TopLoadingBar isLoading={isLoading} />
-      <Sidebar
-        collapsible="icon"
-        className="border-r border-sidebar-border/50"
+      {/* Mobile Drawer Backdrop */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Drawer Content */}
+      <div
+        className={cn(
+          "fixed top-0 left-0 bottom-0 w-[280px] bg-background/95 z-[70] lg:hidden transform transition-transform duration-300 ease-[cubic-bezier(.23,1,.32,1)] shadow-2xl flex flex-col backdrop-blur-xl border-r border-border",
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        )}
       >
-        <SidebarHeader className="border-b border-sidebar-border/60 p-3">
-          <Link href="/" className="flex items-center gap-2 overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-card/50">
+          <Link href="/" className="flex items-center">
             <img
               src="/images/logo.webp"
-              alt="Rare Logo"
-              className="h-8 w-8 object-contain shrink-0"
+              alt="RARE.NP Logo"
+              className="h-9 sm:h-10 w-auto object-contain dark:brightness-0 dark:invert"
             />
-            <span className="font-black uppercase tracking-widest text-sm group-data-[collapsible=icon]:hidden">
-              RARE.NP
-            </span>
           </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileMenuOpen(false)}
+            className="h-8 w-8 rounded-full hover:bg-muted"
+          >
+            <span className="sr-only">Close</span>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          <Link
+            href="/admin/profile"
+            className="mb-6 flex items-center gap-3 rounded-xl border border-border bg-card/60 p-3 shadow-sm hover:bg-muted/60 transition-colors"
+          >
+            <div className="h-11 w-11 rounded-full border border-border overflow-hidden shrink-0">
+              {user?.profileImageUrl ? (
+                <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-card flex items-center justify-center text-sm font-bold text-foreground">
+                  {initials}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-foreground truncate">
+                {displayName}
+              </h3>
+              <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">{roleLabel}</p>
+              <p className="text-[9px] text-muted-foreground/80 uppercase font-bold tracking-[0.14em] mt-1">
+                Account Settings
+              </p>
+            </div>
+          </Link>
+
+          <nav className="space-y-1">
+            {ADMIN_NAV.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-colors",
+                    isActive 
+                      ? "bg-primary text-primary-foreground" 
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div className="p-4 border-t border-border">
+           <Button
+            variant="ghost"
+            className="w-full justify-start gap-3 h-12 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10 font-black uppercase tracking-widest text-[11px]"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </Button>
+        </div>
+      </div>
+
+      <Sidebar
+        collapsible="icon"
+        className="border-r border-sidebar-border/50 hidden lg:flex"
+      >
+        <SidebarHeader className="border-b border-sidebar-border/60 px-4 py-4">
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center w-full rounded-lg p-2 hover:bg-muted/40 transition-colors"
+            title="Open Home Page"
+          >
+            <img
+              src="/images/logo.webp"
+              alt="RARE.NP"
+              className="h-10 w-auto object-contain dark:brightness-0 dark:invert group-data-[collapsible=icon]:hidden"
+            />
+            <span className="hidden group-data-[collapsible=icon]:inline-flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-neutral-900 to-neutral-700 dark:from-neutral-100 dark:to-neutral-300 text-white dark:text-neutral-900 text-[16px] font-black tracking-[0.06em] shadow-[0_10px_24px_-14px_rgba(0,0,0,0.75)]">
+              R
+            </span>
+          </a>
         </SidebarHeader>
 
-        <SidebarContent className="sidebar-scrollbar">
-          <SidebarGroup>
-            <SidebarGroupLabel>Admin</SidebarGroupLabel>
+        <SidebarContent className="sidebar-scrollbar p-4">
+          <Link
+            href="/admin/profile"
+            className="flex items-center gap-3 p-3 rounded-xl border border-sidebar-border/60 bg-card/50 hover:bg-muted/50 transition-colors mb-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:border-transparent"
+          >
+            <div className="w-10 h-10 rounded-full border border-sidebar-border overflow-hidden shrink-0 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:border-transparent">
+              {user?.profileImageUrl ? (
+                <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-neutral-100 dark:bg-neutral-800 group-data-[collapsible=icon]:bg-transparent flex items-center justify-center text-xs font-bold">
+                  {initials}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+              <p className="text-[11px] font-bold truncate uppercase tracking-wider">{displayName}</p>
+              <p className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.2em]">{roleLabel}</p>
+              <p className="text-[9px] text-muted-foreground/80 uppercase font-bold tracking-[0.14em] mt-1">
+                Account Settings
+              </p>
+            </div>
+          </Link>
+
+          <SidebarGroup className="p-0">
             <SidebarMenu>
               {ADMIN_NAV.map((item) => {
                 const isActive = pathname === item.href;
@@ -166,7 +286,7 @@ export default function AdminLayout({
                       isActive={isActive}
                       tooltip={item.label}
                       className={cn(
-                        "h-11 rounded-xl font-black uppercase tracking-wider",
+                        "h-9 rounded-lg text-[10px] font-black uppercase tracking-[0.16em]",
                         isActive &&
                           "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
                       )}
@@ -178,7 +298,7 @@ export default function AdminLayout({
                         }}
                         data-testid={`link-admin-nav-${item.label.toLowerCase()}`}
                       >
-                        <item.icon className="h-5 w-5 shrink-0" />
+                        <item.icon className="h-4 w-4 shrink-0" />
                         <span>{item.label}</span>
                         {count > 0 && (
                           <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] font-black px-1 group-data-[collapsible=icon]:hidden">
@@ -190,25 +310,19 @@ export default function AdminLayout({
                   </SidebarMenuItem>
                 );
               })}
-            </SidebarMenu>
-          </SidebarGroup>
-
-          <SidebarGroup>
-            <SidebarGroupLabel>Storefront</SidebarGroupLabel>
-            <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
                   isActive={pathname === "/admin/landing-page"}
                   tooltip="Landing Page"
                   className={cn(
-                    "h-11 rounded-xl font-black uppercase tracking-wider",
+                    "h-9 rounded-lg text-[10px] font-black uppercase tracking-[0.16em]",
                     pathname === "/admin/landing-page" &&
                       "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
                   )}
                 >
                   <Link href="/admin/landing-page">
-                    <Images className="h-5 w-5 shrink-0" />
+                    <Images className="h-4 w-4 shrink-0" />
                     <span>Landing Page</span>
                   </Link>
                 </SidebarMenuButton>
@@ -217,68 +331,52 @@ export default function AdminLayout({
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter className="border-t border-sidebar-border/60 p-3">
-          <Link
-            href="/admin/profile"
-            className="flex items-center gap-2 rounded-xl border border-sidebar-border/60 p-2"
-          >
-            <div className="w-8 h-8 rounded-full border border-sidebar-border overflow-hidden">
-              {user?.profileImageUrl ? (
-                <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-sidebar-accent text-sidebar-accent-foreground flex items-center justify-center text-[10px] font-bold">
-                  {initials}
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <p className="text-[11px] font-bold truncate uppercase tracking-wider">{displayName}</p>
-              <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">{roleLabel}</p>
-            </div>
-          </Link>
-          <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-            <ThemeToggle />
-            <NotificationBadge />
+        <SidebarFooter className="border-t border-sidebar-border/60 p-4">
+          <div>
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-3 h-10 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-[10px] font-black uppercase tracking-[0.18em]"
+              onClick={handleLogout}
+              title="Sign Out"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="group-data-[collapsible=icon]:hidden">Sign Out</span>
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-center gap-2 text-red-500 border-red-500/30 hover:bg-red-500 hover:text-white font-black uppercase tracking-widest text-[10px]"
-            onClick={handleLogout}
-            title="Sign Out"
-          >
-            <LogOut className="h-4 w-4" />
-            <span className="group-data-[collapsible=icon]:hidden">Sign Out</span>
-          </Button>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset className="flex min-w-0 h-screen overflow-hidden bg-[#F5F5F3] dark:bg-neutral-900 transition-colors duration-200 ease-in-out">
-        <header className="h-20 bg-neutral-950 dark:bg-white border-b border-white/10 dark:border-black/5 flex items-center justify-between px-6 transition-colors duration-200 ease-in-out">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="text-white dark:text-black hover:bg-white/10 dark:hover:bg-black/10" />
-            {(user?.role === "admin" || user?.role === "staff") && (
-              <Link
-                href="/admin/pos"
-                className="inline-flex items-center gap-2 rounded-full bg-[#2C3E2D] text-white px-3 py-1.5 shadow-sm hover:bg-[#1A251B] transition-colors"
-              >
-                <CreditCard className="h-3.5 w-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-widest">POS</span>
-              </Link>
-            )}
+      <SidebarInset className="flex min-w-0 h-screen overflow-hidden bg-muted dark:bg-neutral-900 transition-colors duration-200 ease-in-out">
+        <header className="sticky top-0 z-20 h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5 transition-colors duration-200 ease-in-out">
+          <div className="flex items-center gap-2.5">
+            <SidebarTrigger className="text-foreground hover:bg-background/50 hidden lg:flex" />
+            <div className="hidden lg:flex items-center gap-1.5 rounded-full border border-border/70 bg-card/55 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-muted-foreground animate-pulse">
+              <ChevronsLeftRight className="h-3 w-3" />
+              Collapse sidebar
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileMenuOpen(true)}
+              className="text-foreground lg:hidden"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </Button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <ThemeToggle />
             <NotificationBadge />
             <Link
               href="/admin/profile"
-              className="w-8 h-8 rounded-full border border-white/20 dark:border-black/20 overflow-hidden"
+              className="w-8 h-8 rounded-full border border-border/70 bg-card/40 overflow-hidden"
             >
               {user?.profileImageUrl ? (
                 <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-white/5 dark:bg-black/5 flex items-center justify-center text-white dark:text-black text-[10px] font-bold">
+                <div className="w-full h-full bg-background/60 flex items-center justify-center text-foreground text-[10px] font-bold">
                   {initials}
                 </div>
               )}

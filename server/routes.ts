@@ -19,6 +19,7 @@ import { and, desc, eq, gte, sql, inArray } from "drizzle-orm";
 
 import {
     bills,
+    customers,
     emailTemplates,
     insertNewsletterSubscriberSchema,
     insertProductAttributeSchema,
@@ -2027,6 +2028,30 @@ export async function registerRoutes(
     },
   );
 
+  // Lightweight customer emails for Marketing page (avoids expensive customer stats computation).
+  app.get(
+    "/api/admin/customers/emails",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const rows = await db
+          .select({
+            email: customers.email,
+          })
+          .from(customers)
+          .where(sql`${customers.email} is not null and ${customers.email} != ''`)
+          .orderBy(desc(customers.createdAt));
+
+        return res.json({ success: true, data: rows });
+      } catch (err) {
+        console.error("Error in GET /api/admin/customers/emails", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load customer emails" });
+      }
+    },
+  );
+
   app.post(
     "/api/admin/customers",
     requireAdmin,
@@ -3307,6 +3332,7 @@ export async function registerRoutes(
         isPaid: z.boolean().optional(),
         deliveryRequired: z.boolean().optional(),
         deliveryProvider: z.string().optional().nullable(),
+        deliveryLocation: z.string().optional().nullable(),
         deliveryAddress: z.string().optional().nullable(),
         cashReceived: z.number().optional().nullable(),
         discountAmount: z.number().optional(),
@@ -3323,15 +3349,29 @@ export async function registerRoutes(
         customerEmail,
         customerPhone,
         items,
+        source,
         paymentMethod,
         isPaid,
         deliveryRequired,
         deliveryProvider,
+        deliveryLocation,
         deliveryAddress,
         cashReceived,
         discountAmount,
         notes,
       } = parsed.data;
+
+      const normalizedSource = (source || "pos").toLowerCase();
+      const isSocialSource = !["pos", "website", "store"].includes(normalizedSource);
+
+      if (isSocialSource) {
+        if (!customerName?.trim() || !customerPhone?.trim() || !deliveryProvider?.trim() || !deliveryLocation?.trim()) {
+          return res.status(400).json({
+            success: false,
+            error: "Customer name, phone, delivery partner and delivery location are required for social orders.",
+          });
+        }
+      }
 
       const subtotal = items.reduce((s: number, i: any) => s + i.lineTotal, 0);
       const taxAmount = Math.round(subtotal * 0.13);
@@ -3356,17 +3396,18 @@ export async function registerRoutes(
       const createdOrder = await storage.createOrder({
         email: effectiveCustomerEmail,
         fullName: effectiveCustomerName,
-        addressLine1: deliveryAddress || "POS Counter",
+        addressLine1: deliveryAddress || deliveryLocation || "POS Counter",
         addressLine2: null,
-        city: "POS",
-        region: "POS",
+        city: deliveryLocation || "POS",
+        region: deliveryLocation || "POS",
         postalCode: "00000",
         country: "Nepal",
         total,
         paymentMethod,
-        source: "pos",
-        deliveryRequired: deliveryRequired ?? false,
+        source: normalizedSource,
+        deliveryRequired: isSocialSource ? true : (deliveryRequired ?? false),
         deliveryProvider: deliveryProvider ?? null,
+        deliveryLocation: deliveryLocation ?? null,
         deliveryAddress: deliveryAddress ?? null,
         items: items.map((item: any) => ({
           productId: String(item.productId),
@@ -3395,11 +3436,13 @@ export async function registerRoutes(
         discountAmount: String(discount),
         totalAmount: String(total),
         paymentMethod,
-        source: "pos",
+        source: normalizedSource,
         isPaid: isPaid ?? true,
-        deliveryRequired: deliveryRequired ?? false,
+        deliveryRequired: isSocialSource ? true : (deliveryRequired ?? false),
         deliveryProvider: deliveryProvider ?? null,
-        deliveryAddress: deliveryAddress ?? null,
+        deliveryAddress: deliveryLocation
+          ? [deliveryLocation, deliveryAddress].filter(Boolean).join(" — ")
+          : (deliveryAddress ?? null),
         cashReceived: cashReceived ? String(cashReceived) : null,
         changeGiven: change > 0 ? String(change) : null,
         processedBy: user?.name ?? user?.email ?? "Admin",

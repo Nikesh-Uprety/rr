@@ -103,6 +103,7 @@ export default function AdminPOS() {
   const [isPaid, setIsPaid] = useState(true);
   const [deliveryRequired, setDeliveryRequired] = useState(false);
   const [deliveryProvider, setDeliveryProvider] = useState<string>("");
+  const [deliveryLocation, setDeliveryLocation] = useState<string>("");
   const [deliveryAddress, setDeliveryAddress] = useState<string>("");
   const [cashReceived, setCashReceived] = useState<string>("");
   const [discount, setDiscount] = useState<string>("0");
@@ -132,9 +133,14 @@ export default function AdminPOS() {
   const [cashRollTick, setCashRollTick] = useState(0);
   const [showPaidCashIcon, setShowPaidCashIcon] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [isCustomersOpen, setIsCustomersOpen] = useState(false);
   const [customerViewMode, setCustomerViewMode] = useState<"grid" | "list">("list");
+  const [showSocialCustomerDialog, setShowSocialCustomerDialog] = useState(false);
+  const [socialCustomerName, setSocialCustomerName] = useState("");
+  const [socialCustomerPhone, setSocialCustomerPhone] = useState("");
+  const [socialCustomerEmail, setSocialCustomerEmail] = useState("");
+  const [socialDeliveryLocation, setSocialDeliveryLocation] = useState("");
   const lastProductClickAtRef = useRef<Record<string, number>>({});
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -165,18 +171,25 @@ export default function AdminPOS() {
 
   // Extract unique categories
   const categories = useMemo(() => {
-    if (!products) return ["All"];
+    if (!products) return [];
     const cats = Array.from(new Set(products.map((p) => p.category || "General").filter(Boolean)));
-    return ["All", ...cats.sort()];
+    return cats.sort();
   }, [products]);
   const visibleCategories = categories.slice(0, 8);
   const moreCategories = categories.slice(8);
+
+  useEffect(() => {
+    if (!categories.length) return;
+    if (!selectedCategory || !categories.includes(selectedCategory)) {
+      setSelectedCategory(categories[0]);
+    }
+  }, [categories, selectedCategory]);
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     let result = products;
     // Category filter
-    if (selectedCategory !== "All") {
+    if (selectedCategory) {
       result = result.filter((p) => (p.category || "General") === selectedCategory);
     }
     // Multi-word search: ALL words must match product name or category
@@ -388,6 +401,7 @@ export default function AdminPOS() {
         setNotes("");
         setDeliveryRequired(false);
         setDeliveryProvider("");
+        setDeliveryLocation("");
         setDeliveryAddress("");
       setCustomerSearch("");
 
@@ -418,11 +432,17 @@ export default function AdminPOS() {
   const chargeMutation = useMutation({
     mutationFn: () =>
       createPosBill({
-        customerName: selectedCustomer 
-          ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` 
-          : (customerName || "Walk-in Customer"),
-        customerEmail: selectedCustomer?.email || undefined,
-        customerPhone: "phoneNumber" in (selectedCustomer || {}) ? (selectedCustomer as any).phoneNumber : customerPhone || undefined,
+        customerName: isSocialDeliverySource
+          ? socialCustomerName.trim()
+          : selectedCustomer
+            ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
+            : (customerName || "Walk-in Customer"),
+        customerEmail: isSocialDeliverySource
+          ? (socialCustomerEmail.trim() || undefined)
+          : selectedCustomer?.email || undefined,
+        customerPhone: isSocialDeliverySource
+          ? socialCustomerPhone.trim()
+          : "phoneNumber" in (selectedCustomer || {}) ? (selectedCustomer as any).phoneNumber : customerPhone || undefined,
         items: cart.map((i) => ({
           productId: i.productId,
           productName: i.productName,
@@ -436,9 +456,12 @@ export default function AdminPOS() {
         paymentMethod,
         source: platformSource,
         isPaid,
-        deliveryRequired,
-        deliveryProvider: deliveryRequired ? (deliveryProvider || null) : null,
-        deliveryAddress: deliveryRequired ? (deliveryAddress || null) : null,
+        deliveryRequired: isSocialDeliverySource ? true : deliveryRequired,
+        deliveryProvider: (isSocialDeliverySource || deliveryRequired) ? (deliveryProvider || null) : null,
+        deliveryLocation: isSocialDeliverySource
+          ? socialDeliveryLocation.trim()
+          : (deliveryLocation || null),
+        deliveryAddress: (isSocialDeliverySource || deliveryRequired) ? (deliveryAddress || null) : null,
         cashReceived: paymentMethod === "cash" ? cashReceivedNum : null,
         discountAmount: discountAmount,
         notes: notes || undefined,
@@ -456,8 +479,14 @@ export default function AdminPOS() {
       setIsPaid(true);
       setDeliveryRequired(false);
       setDeliveryProvider("");
+      setDeliveryLocation("");
       setDeliveryAddress("");
       setSelectedCustomer(null);
+      setSocialCustomerName("");
+      setSocialCustomerPhone("");
+      setSocialCustomerEmail("");
+      setSocialDeliveryLocation("");
+      setShowSocialCustomerDialog(false);
       toast({ title: "Checkout successful" });
     },
 
@@ -470,6 +499,19 @@ export default function AdminPOS() {
       // Deliberately NOT clearing cart/customer state here so user can retry
     }
   });
+
+  const handleCheckout = () => {
+    if (isSocialDeliverySource && !hasValidSocialDetails()) {
+      setShowSocialCustomerDialog(true);
+      toast({
+        title: "Social delivery details required",
+        description: "Fill customer name, phone, delivery partner and delivery location.",
+        variant: "destructive",
+      });
+      return;
+    }
+    chargeMutation.mutate();
+  };
 
   const handleCloseSession = async () => {
     if (!session) return;
@@ -533,6 +575,44 @@ export default function AdminPOS() {
     for (const d of [...defaults, ...custom]) merged.set(d.key, d.label);
     return Array.from(merged.entries()).map(([key, label]) => ({ key, label }));
   }, [platforms]);
+
+  const isSocialDeliverySource = useMemo(
+    () => !["pos", "website", "store"].includes((platformSource || "").toLowerCase()),
+    [platformSource],
+  );
+
+  useEffect(() => {
+    if (!isSocialDeliverySource) return;
+    setDeliveryRequired(true);
+    if (!socialCustomerName) {
+      setSocialCustomerName(
+        selectedCustomer
+          ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
+          : customerName || "",
+      );
+    }
+    if (!socialCustomerPhone) {
+      setSocialCustomerPhone(
+        selectedCustomer && "phoneNumber" in selectedCustomer
+          ? (selectedCustomer as any).phoneNumber || ""
+          : customerPhone || "",
+      );
+    }
+    if (!socialCustomerEmail) {
+      setSocialCustomerEmail(selectedCustomer?.email || "");
+    }
+    setShowSocialCustomerDialog(true);
+  }, [isSocialDeliverySource]);
+
+  const hasValidSocialDetails = () => {
+    if (!isSocialDeliverySource) return true;
+    return Boolean(
+      socialCustomerName.trim() &&
+      socialCustomerPhone.trim() &&
+      socialDeliveryLocation.trim() &&
+      deliveryProvider.trim(),
+    );
+  };
 
   // ── Loading session? Show skeleton ──────────────────
   if (sessionLoading) {
@@ -623,7 +703,7 @@ export default function AdminPOS() {
   return (
     <div className="animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-center mb-6">
         <div>
           <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
             Point of Sale
@@ -651,7 +731,7 @@ export default function AdminPOS() {
             )}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <Button
             variant="outline"
             className="border-[#E5E5E0] dark:border-border text-[#2C3E2D] dark:text-foreground hidden sm:flex"
@@ -684,7 +764,7 @@ export default function AdminPOS() {
           </div>
           <Button
             variant="outline"
-            className="border-red-300 text-red-600 hover:bg-red-50 ml-2"
+            className="border-red-300 text-red-600 hover:bg-red-50"
             onClick={() => setShowEndOfDay(true)}
           >
             End Session
@@ -1031,6 +1111,7 @@ export default function AdminPOS() {
                   setNotes("");
                   setDeliveryRequired(false);
                   setDeliveryProvider("");
+                  setDeliveryLocation("");
                   setDeliveryAddress("");
                 }}
               >
@@ -1185,11 +1266,15 @@ export default function AdminPOS() {
                     Platform
                   </div>
                   <select
-                    value="pos"
-                    disabled
+                    value={platformSource}
+                    onChange={(e) => setPlatformSource(e.target.value)}
                     className="h-10 w-full rounded-full border border-[#E5E5E0] dark:border-border bg-background px-4 text-sm"
                   >
-                    <option value="pos">POS</option>
+                    {platformOptions.map((platform) => (
+                      <option key={platform.key} value={platform.key}>
+                        {platform.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -1222,9 +1307,12 @@ export default function AdminPOS() {
                         ? "bg-[#2C3E2D] text-white border-[#2C3E2D]"
                         : "bg-background border-muted/50 text-muted-foreground hover:text-foreground",
                     )}
-                    onClick={() => setDeliveryRequired((v) => !v)}
+                    onClick={() => {
+                      if (isSocialDeliverySource) return;
+                      setDeliveryRequired((v) => !v);
+                    }}
                   >
-                    {deliveryRequired ? "Required" : "Not required"}
+                    {isSocialDeliverySource ? "Required (Social)" : deliveryRequired ? "Required" : "Not required"}
                   </button>
                 </div>
                 {deliveryRequired && (
@@ -1244,6 +1332,21 @@ export default function AdminPOS() {
                       </select>
                     </div>
                     <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">
+                        Delivery Location {isSocialDeliverySource ? "*" : ""}
+                      </div>
+                      <Input
+                        value={isSocialDeliverySource ? socialDeliveryLocation : deliveryLocation}
+                        onChange={(e) =>
+                          isSocialDeliverySource
+                            ? setSocialDeliveryLocation(e.target.value)
+                            : setDeliveryLocation(e.target.value)
+                        }
+                        placeholder="Area / landmark / locality"
+                        className="h-10 bg-background border-[#E5E5E0] dark:border-border rounded-full"
+                      />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
                       <div className="text-xs text-muted-foreground">Address</div>
                       <Input
                         value={deliveryAddress}
@@ -1413,9 +1516,10 @@ export default function AdminPOS() {
                 loadingText="Processing..."
                 disabled={
                   cart.length === 0 ||
-                  (paymentMethod === "cash" && cashReceivedNum < total)
+                  (paymentMethod === "cash" && cashReceivedNum < total) ||
+                  (isSocialDeliverySource && !hasValidSocialDetails())
                 }
-                onClick={() => chargeMutation.mutate()}
+                onClick={handleCheckout}
               >
                 <CheckCircle2 className="mr-2 h-5 w-5" />
                 Charge {formatPrice(total)}
@@ -1556,6 +1660,92 @@ export default function AdminPOS() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={showSocialCustomerDialog} onOpenChange={setShowSocialCustomerDialog}>
+        <DialogContent className="sm:max-w-[480px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-xl">Social Order Details</DialogTitle>
+            <DialogDescription>
+              Required for Instagram/TikTok and other delivery platform orders.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Customer Name *</Label>
+              <Input
+                value={socialCustomerName}
+                onChange={(e) => setSocialCustomerName(e.target.value)}
+                placeholder="Full name"
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Phone Number *</Label>
+              <Input
+                value={socialCustomerPhone}
+                onChange={(e) => setSocialCustomerPhone(e.target.value)}
+                placeholder="98XXXXXXXX"
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Delivery Partner *</Label>
+              <select
+                value={deliveryProvider}
+                onChange={(e) => setDeliveryProvider(e.target.value)}
+                className="h-11 w-full rounded-xl border border-[#E5E5E0] dark:border-border bg-background px-4 text-sm"
+              >
+                <option value="">Select delivery partner…</option>
+                <option value="pathao">Pathao Parcel</option>
+                <option value="nepal_can_move">Nepal Can Move</option>
+                <option value="yango">Yango</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Delivery Location *</Label>
+              <Input
+                value={socialDeliveryLocation}
+                onChange={(e) => setSocialDeliveryLocation(e.target.value)}
+                placeholder="Area / landmark / locality"
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Email (Optional)</Label>
+              <Input
+                type="email"
+                value={socialCustomerEmail}
+                onChange={(e) => setSocialCustomerEmail(e.target.value)}
+                placeholder="customer@example.com"
+                className="h-11 rounded-xl"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              className="w-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white h-11 rounded-xl"
+              onClick={() => {
+                if (!hasValidSocialDetails()) {
+                  toast({
+                    title: "Missing required fields",
+                    description: "Name, phone, delivery partner and delivery location are required.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                setCustomerName(socialCustomerName.trim());
+                setCustomerPhone(socialCustomerPhone.trim());
+                setDeliveryRequired(true);
+                setDeliveryLocation(socialDeliveryLocation.trim());
+                setShowSocialCustomerDialog(false);
+              }}
+            >
+              Save Details
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Customer Selection Modal */}
       <Dialog open={isCustomersOpen} onOpenChange={setIsCustomersOpen}>
         <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl">
@@ -1652,6 +1842,7 @@ export default function AdminPOS() {
                                 setNotes("");
                                 setDeliveryRequired(false);
                                 setDeliveryProvider("");
+                                setDeliveryLocation("");
                                 setDeliveryAddress("");
                                 setIsCustomersOpen(false);
                               }}
@@ -1687,6 +1878,7 @@ export default function AdminPOS() {
                         setNotes("");
                         setDeliveryRequired(false);
                         setDeliveryProvider("");
+                        setDeliveryLocation("");
                         setDeliveryAddress("");
                         setIsCustomersOpen(false);
                       }}

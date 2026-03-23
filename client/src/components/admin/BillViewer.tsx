@@ -19,6 +19,10 @@ interface BillViewerProps {
     customerName: string;
     customerEmail?: string | null;
     customerPhone?: string | null;
+    source?: string;
+    deliveryRequired?: boolean;
+    deliveryProvider?: string | null;
+    deliveryAddress?: string | null;
     items: BillItem[];
     subtotal: number | string;
     taxRate: number | string;
@@ -186,6 +190,18 @@ export function BillViewer({ bill, onClose }: BillViewerProps) {
           <strong>Customer:</strong> {bill.customerName}
           {bill.customerPhone && <span> · {bill.customerPhone}</span>}
         </div>
+        {bill.customerEmail && (
+          <div className="bill-customer">
+            <strong>Email:</strong> {bill.customerEmail}
+          </div>
+        )}
+        {bill.deliveryRequired && (
+          <div className="bill-customer">
+            <strong>Delivery:</strong>{" "}
+            {bill.deliveryProvider ? `${bill.deliveryProvider}` : "Assigned"}
+            {bill.deliveryAddress ? ` · ${bill.deliveryAddress}` : ""}
+          </div>
+        )}
         <div className="bill-divider">━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
 
         {/* Items */}

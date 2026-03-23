@@ -45,11 +45,13 @@ function objectContainPointToImagePercent(
   return { x: (clampedU / iw) * 100, y: (clampedV / ih) * 100 };
 }
 
-/** Client coords relative to main image content box (inside border); used for hit-test and object-cover mapping. */
-function pointerInMainContentBox(
+/** Client coords relative to main image content box (inside border); hit-tests object-contain rendered image bounds. */
+function pointerInMainImageArea(
   el: HTMLElement,
   clientX: number,
   clientY: number,
+  iw: number,
+  ih: number,
 ): { inside: boolean; x: number; y: number; cw: number; ch: number } {
   // Small tolerance prevents flicker when pointer sits exactly on an edge pixel.
   const EDGE_TOLERANCE_PX = 1.5;
@@ -61,11 +63,24 @@ function pointerInMainContentBox(
   const ch = el.clientHeight;
   const x = clientX - rect.left - bl;
   const y = clientY - rect.top - bt;
+  const insideBox =
+    x >= -EDGE_TOLERANCE_PX && y >= -EDGE_TOLERANCE_PX && x <= cw + EDGE_TOLERANCE_PX && y <= ch + EDGE_TOLERANCE_PX;
+  if (!insideBox) return { inside: false, x, y, cw, ch };
+
+  if (!(iw > 0 && ih > 0 && cw > 0 && ch > 0)) {
+    return { inside: insideBox, x, y, cw, ch };
+  }
+
+  const scale = Math.min(cw / iw, ch / ih);
+  const rw = iw * scale;
+  const rh = ih * scale;
+  const ox = (cw - rw) / 2;
+  const oy = (ch - rh) / 2;
   const inside =
-    x >= -EDGE_TOLERANCE_PX &&
-    y >= -EDGE_TOLERANCE_PX &&
-    x <= cw + EDGE_TOLERANCE_PX &&
-    y <= ch + EDGE_TOLERANCE_PX;
+    x >= ox - EDGE_TOLERANCE_PX &&
+    y >= oy - EDGE_TOLERANCE_PX &&
+    x <= ox + rw + EDGE_TOLERANCE_PX &&
+    y <= oy + rh + EDGE_TOLERANCE_PX;
   return { inside, x, y, cw, ch };
 }
 
@@ -207,11 +222,11 @@ export default function ProductDetail() {
     if (!panelZoomEnabled || !hoverMedia) return;
     const el = mainImageRef.current;
     if (!el) return;
-    const { inside, x, y, cw, ch } = pointerInMainContentBox(el, clientX, clientY);
+    const { w: iw, h: ih } = activeImageNaturalRef.current;
+    const { inside, x, y, cw, ch } = pointerInMainImageArea(el, clientX, clientY, iw, ih);
     if (inside) {
       setPointerOnMain(true);
       setLensPos({ x: x - lensHalf, y: y - lensHalf });
-      const { w: iw, h: ih } = activeImageNaturalRef.current;
       const { x: zx, y: zy } = objectContainPointToImagePercent(x, y, cw, ch, iw, ih);
       setZoomPos({ x: Number(zx.toFixed(2)), y: Number(zy.toFixed(2)) });
     } else {
@@ -375,7 +390,8 @@ export default function ProductDetail() {
     if (!panelZoomEnabled) return;
     const el = mainImageRef.current;
     if (!el) return;
-    const { inside } = pointerInMainContentBox(el, event.clientX, event.clientY);
+    const { w: iw, h: ih } = activeImageNaturalRef.current;
+    const { inside } = pointerInMainImageArea(el, event.clientX, event.clientY, iw, ih);
     if (!inside) return;
     setHoverMedia(true);
     applyMainPointerFromClient(event.clientX, event.clientY);
@@ -386,7 +402,8 @@ export default function ProductDetail() {
     if (event.pointerType === "touch") return;
     const el = mainImageRef.current;
     if (!el) return;
-    const { inside } = pointerInMainContentBox(el, event.clientX, event.clientY);
+    const { w: iw, h: ih } = activeImageNaturalRef.current;
+    const { inside } = pointerInMainImageArea(el, event.clientX, event.clientY, iw, ih);
     if (!inside) {
       setHoverMedia(false);
       setPointerOnMain(false);
@@ -542,15 +559,15 @@ export default function ProductDetail() {
                 ) : null}
 
                 <div
-                  className={`pointer-events-none absolute inset-y-4 right-4 z-20 hidden w-[42%] overflow-hidden rounded-sm border border-border/80 bg-muted/90 shadow-lg transition-all duration-150 ease-out lg:block ${
-                    panelZoomEnabled && hoverMedia ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2"
+                  className={`pointer-events-none absolute left-1/2 top-1/2 z-20 hidden aspect-square w-[44%] min-w-[170px] max-w-[330px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-md border border-border/90 bg-muted/95 shadow-xl transition-all duration-150 ease-out lg:block ${
+                    panelZoomEnabled && pointerOnMain ? "opacity-100 scale-100" : "opacity-0 scale-95"
                   }`}
                   aria-hidden
                 >
                   <div
                     className="h-full w-full"
                     style={
-                      hoverMedia && currentImageSrc
+                      pointerOnMain && currentImageSrc
                         ? {
                             backgroundImage: `url("${currentImageSrc}")`,
                             backgroundSize: `${zoomLevel * 100}%`,

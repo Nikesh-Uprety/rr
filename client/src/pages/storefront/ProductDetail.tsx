@@ -51,6 +51,8 @@ function pointerInMainContentBox(
   clientX: number,
   clientY: number,
 ): { inside: boolean; x: number; y: number; cw: number; ch: number } {
+  // Small tolerance prevents flicker when pointer sits exactly on an edge pixel.
+  const EDGE_TOLERANCE_PX = 1.5;
   const rect = el.getBoundingClientRect();
   const cs = window.getComputedStyle(el);
   const bl = parseFloat(cs.borderLeftWidth) || 0;
@@ -59,7 +61,11 @@ function pointerInMainContentBox(
   const ch = el.clientHeight;
   const x = clientX - rect.left - bl;
   const y = clientY - rect.top - bt;
-  const inside = x >= 0 && y >= 0 && x <= cw && y <= ch;
+  const inside =
+    x >= -EDGE_TOLERANCE_PX &&
+    y >= -EDGE_TOLERANCE_PX &&
+    x <= cw + EDGE_TOLERANCE_PX &&
+    y <= ch + EDGE_TOLERANCE_PX;
   return { inside, x, y, cw, ch };
 }
 
@@ -377,6 +383,14 @@ export default function ProductDetail() {
   const handleMainImagePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!panelZoomEnabled) return;
     if (event.pointerType === "touch") return;
+    const el = mainImageRef.current;
+    if (!el) return;
+    const { inside } = pointerInMainContentBox(el, event.clientX, event.clientY);
+    if (!inside) {
+      setHoverMedia(false);
+      setPointerOnMain(false);
+      return;
+    }
     if (!hoverMedia) setHoverMedia(true);
     applyMainPointerFromClient(event.clientX, event.clientY);
   };

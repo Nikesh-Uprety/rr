@@ -573,7 +573,7 @@ export async function voidBill(id: string): Promise<AdminBill> {
 }
 
 export function exportPosBillsCSV(): void {
-  window.location.href = "/api/admin/bills/export";
+  window.location.href = "/api/admin/bills/export?source=pos";
 }
 
 // ── POS Session API helpers ──────────────────────────

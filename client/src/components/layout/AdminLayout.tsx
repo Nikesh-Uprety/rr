@@ -366,49 +366,29 @@ export default function AdminLayout({
         </SidebarHeader>
 
         <SidebarContent className="sidebar-scrollbar p-4">
-          <Link
-            href="/admin/profile"
-            className={cn(
-              "mb-4 flex items-center gap-3 rounded-xl transition-all duration-300 ease-out",
-              isVisuallyExpanded
-                ? "border border-sidebar-border/60 bg-card/50 p-3 hover:bg-muted/50"
-                : "justify-center border-transparent bg-transparent p-2 hover:bg-muted/30",
-            )}
-          >
-            <div
-              className={cn(
-                "overflow-hidden rounded-full shrink-0 transition-all duration-300 ease-out",
-                isVisuallyExpanded
-                  ? "h-10 w-10 border border-sidebar-border"
-                  : "h-8 w-8 border border-transparent",
-              )}
+          {isVisuallyExpanded ? (
+            <Link
+              href="/admin/profile"
+              className="mb-4 flex items-center gap-3 rounded-xl border border-sidebar-border/60 bg-card/50 p-3 hover:bg-muted/50 transition-all duration-300 ease-out"
             >
-              {user?.profileImageUrl ? (
-                <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
-              ) : (
-                <div
-                  className={cn(
-                    "flex h-full w-full items-center justify-center text-xs font-bold transition-colors duration-300",
-                    isVisuallyExpanded ? "bg-neutral-100 dark:bg-neutral-800" : "bg-transparent",
-                  )}
-                >
-                  {initials}
-                </div>
-              )}
-            </div>
-            <div
-              className={cn(
-                "min-w-0 overflow-hidden transition-all duration-300 ease-out",
-                isVisuallyExpanded ? "max-w-[220px] opacity-100" : "max-w-0 opacity-0",
-              )}
-            >
-              <p className="text-[11px] font-bold truncate uppercase tracking-wider">{displayName}</p>
-              <p className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.2em]">{roleLabel}</p>
-              <p className="text-[9px] text-muted-foreground/80 uppercase font-bold tracking-[0.14em] mt-1">
-                Account Settings
-              </p>
-            </div>
-          </Link>
+              <div className="h-10 w-10 overflow-hidden rounded-full border border-sidebar-border shrink-0">
+                {user?.profileImageUrl ? (
+                  <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-neutral-100 dark:bg-neutral-800 text-xs font-bold">
+                    {initials}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <p className="truncate text-[11px] font-bold uppercase tracking-wider">{displayName}</p>
+                <p className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.2em]">{roleLabel}</p>
+                <p className="mt-1 text-[9px] text-muted-foreground/80 uppercase font-bold tracking-[0.14em]">
+                  Account Settings
+                </p>
+              </div>
+            </Link>
+          ) : null}
 
           <SidebarGroup className="p-0">
             <SidebarMenu>
@@ -439,7 +419,7 @@ export default function AdminLayout({
                         <span
                           className={cn(
                             "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
-                            isVisuallyExpanded ? "max-w-[180px] opacity-100" : "max-w-0 opacity-0",
+                            isVisuallyExpanded ? "min-w-0 flex-1 opacity-100" : "max-w-0 opacity-0",
                           )}
                         >
                           {item.label}
@@ -476,7 +456,7 @@ export default function AdminLayout({
                     <span
                       className={cn(
                         "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
-                        isVisuallyExpanded ? "max-w-[180px] opacity-100" : "max-w-0 opacity-0",
+                        isVisuallyExpanded ? "min-w-0 flex-1 opacity-100" : "max-w-0 opacity-0",
                       )}
                     >
                       Landing Page
@@ -503,7 +483,7 @@ export default function AdminLayout({
               <span
                 className={cn(
                   "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
-                  isVisuallyExpanded ? "max-w-[120px] opacity-100" : "max-w-0 opacity-0",
+                  isVisuallyExpanded ? "min-w-0 opacity-100" : "max-w-0 opacity-0",
                 )}
               >
                 Sign Out

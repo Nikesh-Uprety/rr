@@ -52,6 +52,7 @@ const ADMIN_SIDEBAR_MIN_WIDTH = 220;
 const ADMIN_SIDEBAR_DEFAULT_WIDTH = 288;
 const ADMIN_SIDEBAR_COLLAPSED_MIN_WIDTH = 56;
 const ADMIN_SIDEBAR_COLLAPSED_DEFAULT_WIDTH = 72;
+const ADMIN_SIDEBAR_VISUAL_EXPAND_THRESHOLD = 170;
 
 const ADMIN_NAV = [
   { href: "/admin", icon: LayoutGrid, label: "Dashboard", type: "system" },
@@ -213,6 +214,8 @@ export default function AdminLayout({
       .toUpperCase() || (user?.email?.[0] || "U").toUpperCase();
 
   const displayName = user?.name || user?.email || "User";
+  const isVisuallyExpanded =
+    !sidebarCollapsed || collapsedSidebarWidth >= ADMIN_SIDEBAR_VISUAL_EXPAND_THRESHOLD;
   const roleLabel =
     user?.role === "admin"
       ? "Admin"
@@ -341,7 +344,12 @@ export default function AdminLayout({
         collapsible="icon"
         className="relative border-r border-sidebar-border/50 hidden lg:flex"
       >
-        <SidebarHeader className="border-b border-sidebar-border/60 px-4 py-4 group-data-[collapsible=icon]:hidden">
+        <SidebarHeader
+          className={cn(
+            "border-b border-sidebar-border/60 px-4 py-4 transition-all duration-300 ease-out",
+            isVisuallyExpanded ? "opacity-100 max-h-24" : "max-h-0 overflow-hidden border-transparent px-0 py-0 opacity-0",
+          )}
+        >
           <a
             href="/"
             target="_blank"
@@ -360,18 +368,40 @@ export default function AdminLayout({
         <SidebarContent className="sidebar-scrollbar p-4">
           <Link
             href="/admin/profile"
-            className="flex items-center gap-3 p-3 rounded-xl border border-sidebar-border/60 bg-card/50 hover:bg-muted/50 transition-colors mb-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:border-transparent"
+            className={cn(
+              "mb-4 flex items-center gap-3 rounded-xl transition-all duration-300 ease-out",
+              isVisuallyExpanded
+                ? "border border-sidebar-border/60 bg-card/50 p-3 hover:bg-muted/50"
+                : "justify-center border-transparent bg-transparent p-2 hover:bg-muted/30",
+            )}
           >
-            <div className="w-10 h-10 rounded-full border border-sidebar-border overflow-hidden shrink-0 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:border-transparent">
+            <div
+              className={cn(
+                "overflow-hidden rounded-full shrink-0 transition-all duration-300 ease-out",
+                isVisuallyExpanded
+                  ? "h-10 w-10 border border-sidebar-border"
+                  : "h-8 w-8 border border-transparent",
+              )}
+            >
               {user?.profileImageUrl ? (
                 <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-neutral-100 dark:bg-neutral-800 group-data-[collapsible=icon]:bg-transparent flex items-center justify-center text-xs font-bold">
+                <div
+                  className={cn(
+                    "flex h-full w-full items-center justify-center text-xs font-bold transition-colors duration-300",
+                    isVisuallyExpanded ? "bg-neutral-100 dark:bg-neutral-800" : "bg-transparent",
+                  )}
+                >
                   {initials}
                 </div>
               )}
             </div>
-            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+            <div
+              className={cn(
+                "min-w-0 overflow-hidden transition-all duration-300 ease-out",
+                isVisuallyExpanded ? "max-w-[220px] opacity-100" : "max-w-0 opacity-0",
+              )}
+            >
               <p className="text-[11px] font-bold truncate uppercase tracking-wider">{displayName}</p>
               <p className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.2em]">{roleLabel}</p>
               <p className="text-[9px] text-muted-foreground/80 uppercase font-bold tracking-[0.14em] mt-1">
@@ -390,9 +420,10 @@ export default function AdminLayout({
                     <SidebarMenuButton
                       asChild
                       isActive={isActive}
-                      tooltip={item.label}
+                      tooltip={isVisuallyExpanded ? undefined : item.label}
                       className={cn(
-                        "h-10 rounded-lg text-[11px] font-extrabold uppercase tracking-[0.22em]",
+                        "h-10 rounded-lg text-[11px] font-extrabold uppercase tracking-[0.22em] transition-all duration-300 ease-out",
+                        isVisuallyExpanded ? "px-3" : "justify-center px-2",
                         isActive &&
                           "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
                       )}
@@ -405,9 +436,21 @@ export default function AdminLayout({
                         data-testid={`link-admin-nav-${item.label.toLowerCase()}`}
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
-                        <span>{item.label}</span>
+                        <span
+                          className={cn(
+                            "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
+                            isVisuallyExpanded ? "max-w-[180px] opacity-100" : "max-w-0 opacity-0",
+                          )}
+                        >
+                          {item.label}
+                        </span>
                         {count > 0 && (
-                          <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] font-black px-1 group-data-[collapsible=icon]:hidden">
+                          <span
+                            className={cn(
+                              "min-w-[18px] h-[18px] rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] font-black px-1 transition-all duration-300 ease-out",
+                              isVisuallyExpanded ? "ml-auto opacity-100" : "ml-0 opacity-0 scale-75 pointer-events-none",
+                            )}
+                          >
                             {count > 99 ? "99+" : count}
                           </span>
                         )}
@@ -420,16 +463,24 @@ export default function AdminLayout({
                 <SidebarMenuButton
                   asChild
                   isActive={pathname === "/admin/landing-page"}
-                  tooltip="Landing Page"
+                  tooltip={isVisuallyExpanded ? undefined : "Landing Page"}
                   className={cn(
-                    "h-10 rounded-lg text-[11px] font-extrabold uppercase tracking-[0.22em]",
+                    "h-10 rounded-lg text-[11px] font-extrabold uppercase tracking-[0.22em] transition-all duration-300 ease-out",
+                    isVisuallyExpanded ? "px-3" : "justify-center px-2",
                     pathname === "/admin/landing-page" &&
                       "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
                   )}
                 >
                   <Link href="/admin/landing-page">
                     <Images className="h-4 w-4 shrink-0" />
-                    <span>Landing Page</span>
+                    <span
+                      className={cn(
+                        "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
+                        isVisuallyExpanded ? "max-w-[180px] opacity-100" : "max-w-0 opacity-0",
+                      )}
+                    >
+                      Landing Page
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -441,12 +492,22 @@ export default function AdminLayout({
           <div>
             <Button
               variant="ghost"
-              className="w-full justify-start gap-3 h-10 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-[10px] font-black uppercase tracking-[0.18em]"
+              className={cn(
+                "h-10 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-[10px] font-black uppercase tracking-[0.18em] transition-all duration-300 ease-out",
+                isVisuallyExpanded ? "w-full justify-start gap-3" : "w-full justify-center gap-0 px-0",
+              )}
               onClick={handleLogout}
               title="Sign Out"
             >
               <LogOut className="h-4 w-4" />
-              <span className="group-data-[collapsible=icon]:hidden">Sign Out</span>
+              <span
+                className={cn(
+                  "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
+                  isVisuallyExpanded ? "max-w-[120px] opacity-100" : "max-w-0 opacity-0",
+                )}
+              >
+                Sign Out
+              </span>
             </Button>
           </div>
         </SidebarFooter>

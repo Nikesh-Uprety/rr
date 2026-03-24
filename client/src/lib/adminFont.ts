@@ -3,7 +3,8 @@ export type AdminFontMode =
   | "roboto-slab"
   | "inter"
   | "space-grotesk"
-  | "ibm-plex-sans";
+  | "ibm-plex-sans"
+  | "avenir-like";
 export type AdminFontScale = "comfortable" | "large";
 
 export const ADMIN_FONT_MODE_KEY = "admin-font-mode";
@@ -44,6 +45,11 @@ export const ADMIN_FONT_OPTIONS: Array<{
     mode: "ibm-plex-sans",
     label: "IBM Plex Sans",
     description: "Structured system-style font for dashboards.",
+  },
+  {
+    mode: "avenir-like",
+    label: "Avenir Style",
+    description: "Uses Avenir locally when available, with Montserrat fallback.",
   },
 ];
 

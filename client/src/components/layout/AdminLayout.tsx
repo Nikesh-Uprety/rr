@@ -223,7 +223,12 @@ export default function AdminLayout({
   return (
     <SidebarProvider
       open={!sidebarCollapsed}
-      onOpenChange={(open) => setSidebarCollapsed(!open)}
+      onOpenChange={(open) => {
+        setSidebarCollapsed(!open);
+        if (!open) {
+          setCollapsedSidebarWidth(ADMIN_SIDEBAR_COLLAPSED_DEFAULT_WIDTH);
+        }
+      }}
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,

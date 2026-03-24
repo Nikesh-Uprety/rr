@@ -11,6 +11,13 @@ import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import {
+  DEFAULT_ADMIN_FONT_SETTINGS,
+  type AdminFontMode,
+  type AdminFontScale,
+  persistAdminFontSettings,
+  readAdminFontSettings,
+} from "@/lib/adminFont";
+import {
   Camera,
   Trash2,
   AlertTriangle,
@@ -19,6 +26,7 @@ import {
   Expand,
   Clock3,
   Check,
+  Type,
 } from "lucide-react";
 import {
   Dialog,
@@ -59,6 +67,8 @@ export default function AdminProfilePage() {
   const [passwordCurrent, setPasswordCurrent] = useState("");
   const [passwordNew, setPasswordNew] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [adminFontMode, setAdminFontMode] = useState<AdminFontMode>(() => readAdminFontSettings().mode);
+  const [adminFontScale, setAdminFontScale] = useState<AdminFontScale>(() => readAdminFontSettings().scale);
 
   const [profileImage, setProfileImage] = useState<string | null>(user?.profileImageUrl || null);
   const [editEmail, setEditEmail] = useState(user?.email ?? "");
@@ -252,6 +262,20 @@ export default function AdminProfilePage() {
       avatarMutation.mutate(base64);
     };
     reader.readAsDataURL(file);
+  };
+
+  const applyDevFontSettings = (next: { mode?: AdminFontMode; scale?: AdminFontScale }) => {
+    const settings = {
+      mode: next.mode ?? adminFontMode,
+      scale: next.scale ?? adminFontScale,
+    };
+    setAdminFontMode(settings.mode);
+    setAdminFontScale(settings.scale);
+    persistAdminFontSettings(settings);
+    toast({
+      title: "Admin font updated",
+      description: `${settings.mode === "iosevka" ? "Iosevka Charon Mono" : "Roboto Slab"} • ${settings.scale === "large" ? "Large" : "Comfortable"} size`,
+    });
   };
 
   const applyAvatarMutation = useMutation({
@@ -558,6 +582,89 @@ export default function AdminProfilePage() {
               >
                 Update Password
               </Button>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <h2 className="flex items-center gap-2 text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                  <Type className="h-4 w-4" />
+                  Dev Font Switch
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Dev-only font controls for verifying admin readability across the panel and login page.
+                </p>
+              </div>
+              <Badge variant="outline" className="text-[10px] uppercase tracking-[0.2em]">
+                Dev Only
+              </Badge>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                  Font Family
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={adminFontMode === "iosevka" ? "default" : "outline"}
+                    className="h-10"
+                    onClick={() => applyDevFontSettings({ mode: "iosevka" })}
+                  >
+                    Iosevka Charon Mono
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={adminFontMode === "roboto-slab" ? "default" : "outline"}
+                    className="h-10"
+                    onClick={() => applyDevFontSettings({ mode: "roboto-slab" })}
+                  >
+                    Roboto Slab
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                  Font Size
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={adminFontScale === "comfortable" ? "default" : "outline"}
+                    className="h-10"
+                    onClick={() => applyDevFontSettings({ scale: "comfortable" })}
+                  >
+                    Comfortable
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={adminFontScale === "large" ? "default" : "outline"}
+                    className="h-10"
+                    onClick={() => applyDevFontSettings({ scale: "large" })}
+                  >
+                    Large
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-10"
+                    onClick={() => {
+                      setAdminFontMode(DEFAULT_ADMIN_FONT_SETTINGS.mode);
+                      setAdminFontScale(DEFAULT_ADMIN_FONT_SETTINGS.scale);
+                      persistAdminFontSettings(DEFAULT_ADMIN_FONT_SETTINGS);
+                      toast({
+                        title: "Admin font reset",
+                        description: "Default admin font settings restored.",
+                      });
+                    }}
+                  >
+                    Reset
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
 

@@ -23,8 +23,13 @@ import { ThemeToggle } from "@/components/admin/ThemeToggle";
 import { NotificationBadge } from "@/components/admin/NotificationBadge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  ADMIN_FONT_EVENT,
+  applyAdminFontSettings,
+  readAdminFontSettings,
+} from "@/lib/adminFont";
 import {
   SidebarProvider,
   Sidebar,
@@ -35,13 +40,18 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarRail,
   SidebarTrigger,
   SidebarInset,
 } from "@/components/animate-ui/sidebar";
 import { cn } from "@/lib/utils";
 
 const ADMIN_SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
+const ADMIN_SIDEBAR_EXPANDED_WIDTH_KEY = "sidebar-width-expanded";
+const ADMIN_SIDEBAR_COLLAPSED_WIDTH_KEY = "sidebar-width-collapsed";
+const ADMIN_SIDEBAR_MIN_WIDTH = 220;
+const ADMIN_SIDEBAR_DEFAULT_WIDTH = 288;
+const ADMIN_SIDEBAR_COLLAPSED_MIN_WIDTH = 56;
+const ADMIN_SIDEBAR_COLLAPSED_DEFAULT_WIDTH = 72;
 
 const ADMIN_NAV = [
   { href: "/admin", icon: LayoutGrid, label: "Dashboard", type: "system" },
@@ -63,6 +73,11 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const getSidebarMaxWidth = () => {
+    if (typeof window === "undefined") return 480;
+    return Math.max(240, Math.floor(window.innerWidth / 2));
+  };
+
   const [location] = useLocation();
   const pathname = location.split("?")[0];
   const { user } = useCurrentUser();
@@ -74,10 +89,43 @@ export default function AdminLayout({
     return localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_KEY) === "true";
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window === "undefined") return ADMIN_SIDEBAR_DEFAULT_WIDTH;
+    const saved = Number(localStorage.getItem(ADMIN_SIDEBAR_EXPANDED_WIDTH_KEY));
+    if (!Number.isFinite(saved)) return ADMIN_SIDEBAR_DEFAULT_WIDTH;
+    return Math.min(getSidebarMaxWidth(), Math.max(ADMIN_SIDEBAR_MIN_WIDTH, saved));
+  });
+  const [collapsedSidebarWidth, setCollapsedSidebarWidth] = useState(() => {
+    if (typeof window === "undefined") return ADMIN_SIDEBAR_COLLAPSED_DEFAULT_WIDTH;
+    const saved = Number(localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_WIDTH_KEY));
+    if (!Number.isFinite(saved)) return ADMIN_SIDEBAR_COLLAPSED_DEFAULT_WIDTH;
+    return Math.min(getSidebarMaxWidth(), Math.max(ADMIN_SIDEBAR_COLLAPSED_MIN_WIDTH, saved));
+  });
+  const resizeStateRef = useRef<{
+    startX: number;
+    startWidth: number;
+    collapsed: boolean;
+  } | null>(null);
 
   useEffect(() => {
     setMobileMenuOpen(false); // Close mobile menu on route change
   }, [pathname]);
+
+  useEffect(() => {
+    applyAdminFontSettings(readAdminFontSettings());
+
+    const syncAdminFont = () => {
+      applyAdminFontSettings(readAdminFontSettings());
+    };
+
+    window.addEventListener(ADMIN_FONT_EVENT, syncAdminFont);
+    window.addEventListener("storage", syncAdminFont);
+
+    return () => {
+      window.removeEventListener(ADMIN_FONT_EVENT, syncAdminFont);
+      window.removeEventListener("storage", syncAdminFont);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(
@@ -85,6 +133,62 @@ export default function AdminLayout({
       sidebarCollapsed ? "true" : "false",
     );
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem(ADMIN_SIDEBAR_EXPANDED_WIDTH_KEY, String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    localStorage.setItem(ADMIN_SIDEBAR_COLLAPSED_WIDTH_KEY, String(collapsedSidebarWidth));
+  }, [collapsedSidebarWidth]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!resizeStateRef.current) return;
+      const nextWidth =
+        resizeStateRef.current.startWidth + (event.clientX - resizeStateRef.current.startX);
+      const maxWidth = getSidebarMaxWidth();
+
+      if (resizeStateRef.current.collapsed) {
+        setCollapsedSidebarWidth(
+          Math.min(maxWidth, Math.max(ADMIN_SIDEBAR_COLLAPSED_MIN_WIDTH, nextWidth)),
+        );
+      } else {
+        setSidebarWidth(
+          Math.min(maxWidth, Math.max(ADMIN_SIDEBAR_MIN_WIDTH, nextWidth)),
+        );
+      }
+    };
+
+    const stopResizing = () => {
+      resizeStateRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+    window.addEventListener("pointercancel", stopResizing);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+      window.removeEventListener("pointercancel", stopResizing);
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncWidthsToViewport = () => {
+      const maxWidth = getSidebarMaxWidth();
+      setSidebarWidth((current) => Math.min(maxWidth, Math.max(ADMIN_SIDEBAR_MIN_WIDTH, current)));
+      setCollapsedSidebarWidth((current) =>
+        Math.min(maxWidth, Math.max(ADMIN_SIDEBAR_COLLAPSED_MIN_WIDTH, current)),
+      );
+    };
+
+    window.addEventListener("resize", syncWidthsToViewport);
+    return () => window.removeEventListener("resize", syncWidthsToViewport);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -122,8 +226,8 @@ export default function AdminLayout({
       onOpenChange={(open) => setSidebarCollapsed(!open)}
       style={
         {
-          "--sidebar-width": "18rem",
-          "--sidebar-width-icon": "56px",
+          "--sidebar-width": `${sidebarWidth}px`,
+          "--sidebar-width-icon": `${collapsedSidebarWidth}px`,
         } as React.CSSProperties
       }
       className="min-h-screen bg-muted dark:bg-neutral-900 text-foreground admin-font overflow-hidden transition-colors duration-200 ease-in-out"
@@ -144,7 +248,7 @@ export default function AdminLayout({
       {/* Mobile Drawer Content */}
       <div
         className={cn(
-          "fixed top-0 left-0 bottom-0 w-[280px] bg-background/95 z-[70] lg:hidden transform transition-transform duration-300 ease-[cubic-bezier(.23,1,.32,1)] shadow-2xl flex flex-col backdrop-blur-xl border-r border-border",
+          "fixed top-0 left-0 bottom-0 w-[min(84vw,320px)] sm:w-[320px] bg-background/95 z-[70] lg:hidden transform transition-transform duration-300 ease-[cubic-bezier(.23,1,.32,1)] shadow-2xl flex flex-col backdrop-blur-xl border-r border-border",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -202,7 +306,7 @@ export default function AdminLayout({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-colors",
+                    "flex items-center gap-3 px-4 py-3 rounded-xl text-[12px] font-extrabold uppercase tracking-[0.22em] transition-colors",
                     isActive 
                       ? "bg-primary text-primary-foreground" 
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -230,9 +334,9 @@ export default function AdminLayout({
 
       <Sidebar
         collapsible="icon"
-        className="border-r border-sidebar-border/50 hidden lg:flex"
+        className="relative border-r border-sidebar-border/50 hidden lg:flex"
       >
-        <SidebarHeader className="border-b border-sidebar-border/60 px-4 py-4">
+        <SidebarHeader className="border-b border-sidebar-border/60 px-4 py-4 group-data-[collapsible=icon]:hidden">
           <a
             href="/"
             target="_blank"
@@ -243,11 +347,8 @@ export default function AdminLayout({
             <img
               src="/images/logo.webp"
               alt="RARE.NP"
-              className="h-10 w-auto object-contain dark:brightness-0 dark:invert group-data-[collapsible=icon]:hidden"
+              className="h-10 w-auto object-contain dark:brightness-0 dark:invert"
             />
-            <span className="hidden group-data-[collapsible=icon]:inline-flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-neutral-900 to-neutral-700 dark:from-neutral-100 dark:to-neutral-300 text-white dark:text-neutral-900 text-[16px] font-black tracking-[0.06em] shadow-[0_10px_24px_-14px_rgba(0,0,0,0.75)]">
-              R
-            </span>
           </a>
         </SidebarHeader>
 
@@ -286,7 +387,7 @@ export default function AdminLayout({
                       isActive={isActive}
                       tooltip={item.label}
                       className={cn(
-                        "h-9 rounded-lg text-[10px] font-black uppercase tracking-[0.16em]",
+                        "h-10 rounded-lg text-[11px] font-extrabold uppercase tracking-[0.22em]",
                         isActive &&
                           "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
                       )}
@@ -316,7 +417,7 @@ export default function AdminLayout({
                   isActive={pathname === "/admin/landing-page"}
                   tooltip="Landing Page"
                   className={cn(
-                    "h-9 rounded-lg text-[10px] font-black uppercase tracking-[0.16em]",
+                    "h-10 rounded-lg text-[11px] font-extrabold uppercase tracking-[0.22em]",
                     pathname === "/admin/landing-page" &&
                       "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
                   )}
@@ -344,7 +445,23 @@ export default function AdminLayout({
             </Button>
           </div>
         </SidebarFooter>
-        <SidebarRail />
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          onPointerDown={(event) => {
+            resizeStateRef.current = {
+              startX: event.clientX,
+              startWidth: sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth,
+              collapsed: sidebarCollapsed,
+            };
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+          }}
+          className="absolute inset-y-0 -right-2 hidden w-4 cursor-col-resize lg:block"
+        >
+          <div className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 rounded-full bg-sidebar-border/60 transition-colors hover:bg-primary/60" />
+        </div>
       </Sidebar>
 
       <SidebarInset className="flex min-w-0 h-screen overflow-hidden bg-muted dark:bg-neutral-900 transition-colors duration-200 ease-in-out">

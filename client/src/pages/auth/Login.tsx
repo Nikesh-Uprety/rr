@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -12,6 +12,11 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { canAccessAdminPanel } from "@shared/auth-policy";
+import {
+  ADMIN_FONT_EVENT,
+  applyAdminFontSettings,
+  readAdminFontSettings,
+} from "@/lib/adminFont";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -32,6 +37,22 @@ export default function LoginPage() {
   const [tempToken, setTempToken] = useState<string | null>(null);
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [canResend, setCanResend] = useState(false);
+
+  useEffect(() => {
+    applyAdminFontSettings(readAdminFontSettings());
+
+    const syncAdminFont = () => {
+      applyAdminFontSettings(readAdminFontSettings());
+    };
+
+    window.addEventListener(ADMIN_FONT_EVENT, syncAdminFont);
+    window.addEventListener("storage", syncAdminFont);
+
+    return () => {
+      window.removeEventListener(ADMIN_FONT_EVENT, syncAdminFont);
+      window.removeEventListener("storage", syncAdminFont);
+    };
+  }, []);
 
   const {
     register,

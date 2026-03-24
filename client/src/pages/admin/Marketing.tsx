@@ -25,6 +25,7 @@ import {
   PlusCircle,
   Upload,
   Eye,
+  Loader2,
 } from "lucide-react";
 import {
   Dialog,
@@ -156,6 +157,7 @@ export default function AdminMarketingPage() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isBroadcastConfirmOpen, setIsBroadcastConfirmOpen] = useState(false);
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
+  const [isExportingSubscribers, setIsExportingSubscribers] = useState(false);
 
   const [includeCustomers, setIncludeCustomers] = useState(false);
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(
@@ -344,6 +346,23 @@ export default function AdminMarketingPage() {
     reader.readAsText(file);
   };
 
+  const handleExportSubscribers = async () => {
+    if (isExportingSubscribers) return;
+    setIsExportingSubscribers(true);
+    try {
+      await exportSubscribersCSV();
+      toast({ title: "Subscribers CSV downloaded" });
+    } catch (err: any) {
+      toast({
+        title: "Export failed",
+        description: err?.message || "Failed to export subscribers",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExportingSubscribers(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -360,9 +379,19 @@ export default function AdminMarketingPage() {
             <Upload className="h-4 w-4 mr-2" />
             Import CSV
           </Button>
-          <Button variant="outline" size="sm" onClick={() => exportSubscribersCSV()} className="h-9">
-            <Download className="h-4 w-4 mr-2" />
-            Export
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportSubscribers}
+            className="h-9"
+            disabled={isExportingSubscribers}
+          >
+            {isExportingSubscribers ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 mr-2" />
+            )}
+            {isExportingSubscribers ? "Exporting..." : "Export"}
           </Button>
         </div>
       </div>
@@ -428,10 +457,15 @@ export default function AdminMarketingPage() {
                   variant="outline"
                   size="sm"
                   className="h-8 text-[10px]"
-                  onClick={() => exportSubscribersCSV()}
+                  onClick={handleExportSubscribers}
+                  disabled={isExportingSubscribers}
                 >
-                  <Download className="h-3 w-3 mr-1.5" />
-                  Export CSV
+                  {isExportingSubscribers ? (
+                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3 w-3 mr-1.5" />
+                  )}
+                  {isExportingSubscribers ? "Exporting..." : "Export CSV"}
                 </Button>
                 <Button
                   type="button"

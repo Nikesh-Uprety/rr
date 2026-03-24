@@ -101,6 +101,31 @@ export interface AdminPlatform {
   createdAt: string;
 }
 
+async function downloadAdminCsv(url: string, fallbackFilename: string): Promise<void> {
+  const res = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Failed to export ${fallbackFilename}`);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  const filename = match?.[1] || fallbackFilename;
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(downloadUrl);
+}
+
 export async function fetchPlatforms(): Promise<AdminPlatform[]> {
   const res = await apiRequest("GET", "/api/admin/platforms");
   const json = (await res.json()) as { success: boolean; data: AdminPlatform[] };
@@ -391,20 +416,23 @@ export async function verifyOrderPayment(
   return json.data;
 }
 
-export function exportOrdersCSV(): void {
-  window.location.href = "/api/admin/orders/export";
+export function exportOrdersCSV(): Promise<void> {
+  return downloadAdminCsv("/api/admin/orders/export", "orders.csv");
 }
 
-export function exportAnalyticsCSV(range: string): void {
-  window.location.href = `/api/admin/analytics/export?range=${encodeURIComponent(range)}`;
+export function exportAnalyticsCSV(range: string): Promise<void> {
+  return downloadAdminCsv(
+    `/api/admin/analytics/export?range=${encodeURIComponent(range)}`,
+    `analytics-${range}.csv`,
+  );
 }
 
-export function exportSubscribersCSV(): void {
-  window.location.href = "/api/admin/subscribers/export";
+export function exportSubscribersCSV(): Promise<void> {
+  return downloadAdminCsv("/api/admin/subscribers/export", "subscribers.csv");
 }
 
-export function exportCustomersCSV(): void {
-  window.location.href = "/api/admin/customers/export";
+export function exportCustomersCSV(): Promise<void> {
+  return downloadAdminCsv("/api/admin/customers/export", "customers.csv");
 }
 
 export async function fetchAdminCustomers(
@@ -573,28 +601,7 @@ export async function voidBill(id: string): Promise<AdminBill> {
 }
 
 export async function exportPosBillsCSV(): Promise<void> {
-  const res = await fetch("/api/admin/bills/export?source=pos", {
-    method: "GET",
-    credentials: "include",
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to export POS bills");
-  }
-
-  const blob = await res.blob();
-  const disposition = res.headers.get("Content-Disposition") || "";
-  const match = disposition.match(/filename="?([^"]+)"?/i);
-  const filename = match?.[1] || "pos-bills.csv";
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
+  return downloadAdminCsv("/api/admin/bills/export?source=pos", "pos-bills.csv");
 }
 
 // ── POS Session API helpers ──────────────────────────

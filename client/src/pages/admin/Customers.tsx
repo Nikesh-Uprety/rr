@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Mail, Phone, MapPin, ShoppingBag, Calendar, User as UserIcon, MoreVertical, ExternalLink } from "lucide-react";
+import { Search, Plus, Mail, Phone, MapPin, ShoppingBag, Calendar, User as UserIcon, MoreVertical, ExternalLink, Download, Loader2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -69,6 +69,7 @@ export default function AdminCustomers() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<AdminCustomer | null>(null);
   const [deletingCustomer, setDeletingCustomer] = useState<AdminCustomer | null>(null);
+  const [isExportingCustomers, setIsExportingCustomers] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -178,6 +179,23 @@ export default function AdminCustomers() {
     });
   };
 
+  const handleExportCustomers = async () => {
+    if (isExportingCustomers) return;
+    setIsExportingCustomers(true);
+    try {
+      await exportCustomersCSV();
+      toast({ title: "Customers CSV downloaded" });
+    } catch (error: any) {
+      toast({
+        title: "Export failed",
+        description: error?.message || "Failed to export customers",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExportingCustomers(false);
+    }
+  };
+
   const bgGradients = [
     "bg-gradient-to-br from-[#2C5234] to-[#1A3320]",
     "bg-gradient-to-br from-[#1E40AF] to-[#112361]",
@@ -204,9 +222,15 @@ export default function AdminCustomers() {
           <Button
             variant="outline"
             className="flex-1 sm:flex-none bg-white dark:bg-card border-[#E5E5E0] dark:border-border text-[#2C3E2D] dark:text-foreground"
-            onClick={() => exportCustomersCSV()}
+            onClick={handleExportCustomers}
+            disabled={isExportingCustomers}
           >
-            Export CSV
+            {isExportingCustomers ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            {isExportingCustomers ? "Exporting..." : "Export CSV"}
           </Button>
           <Button className="flex-1 sm:flex-none bg-[#2C3E2D] hover:bg-[#1A251B] text-white" onClick={() => setIsAddOpen(true)}>
             <Plus className="w-4 h-4 mr-2" /> Add Customer

@@ -12,6 +12,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { canAccessAdminPanel } from "@shared/auth-policy";
+import { getDefaultAdminPath } from "@/lib/adminAccess";
 import {
   ADMIN_FONT_EVENT,
   applyAdminFontSettings,
@@ -98,7 +99,8 @@ export default function LoginPage() {
   }
 
   if (user && canAccessAdminPanel(user.role)) {
-    if (location !== "/admin") setLocation("/admin");
+    const nextPath = getDefaultAdminPath(user.role);
+    if (location !== nextPath) setLocation(nextPath);
     return null;
   }
   if (user) {
@@ -130,13 +132,13 @@ export default function LoginPage() {
       toast({
         title: "Admin panel access only",
         description:
-          "Only admin, owner, manager, and staff accounts can access the admin panel.",
+          "Only admin portal roles can access the admin panel.",
         variant: "default",
       });
       setLocation("/");
       return;
     }
-    setLocation("/admin");
+    setLocation(getDefaultAdminPath(result.data.role));
   };
 
   const otpValue = otpDigits.join("");
@@ -185,7 +187,7 @@ export default function LoginPage() {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setStep("credentials");
       setTempToken(null);
-      setLocation("/admin");
+      setLocation(getDefaultAdminPath(result.data?.role));
     },
     onError: (err: Error) => {
       toast({

@@ -1,4 +1,5 @@
 export type AdminFontMode =
+  | "geist-mono"
   | "iosevka"
   | "roboto-slab"
   | "inter"
@@ -21,6 +22,11 @@ export const ADMIN_FONT_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
+  {
+    mode: "geist-mono",
+    label: "Geist Mono",
+    description: "Crisp modern monospace with cleaner spacing for admin UI.",
+  },
   {
     mode: "iosevka",
     label: "Iosevka Charon Mono",

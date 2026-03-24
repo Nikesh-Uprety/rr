@@ -18,6 +18,7 @@ import {
   persistAdminFontSettings,
   readAdminFontSettings,
 } from "@/lib/adminFont";
+import { canAccessAdminPage } from "@shared/auth-policy";
 import {
   Camera,
   Trash2,
@@ -85,7 +86,7 @@ export default function AdminProfilePage() {
   const [avatarToDelete, setAvatarToDelete] = useState<AvatarHistoryItem | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
-  const isAdmin = user?.role === "admin";
+  const canManageAdminUsers = canAccessAdminPage(user?.role, "store-users");
 
   const {
     data: adminUsers = [],
@@ -100,7 +101,7 @@ export default function AdminProfilePage() {
       };
       return json.data ?? [];
     },
-    enabled: activeTab === "users",
+    enabled: activeTab === "users" && canManageAdminUsers,
   });
 
   const { data: avatarHistory = [], isLoading: avatarHistoryLoading } = useQuery<AvatarHistoryItem[]>({
@@ -391,9 +392,9 @@ export default function AdminProfilePage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-3" : "grid-cols-2")}>
+        <TabsList className={cn("grid w-full", canManageAdminUsers ? "grid-cols-3" : "grid-cols-2")}>
           <TabsTrigger value="account">Account</TabsTrigger>
-          {isAdmin && <TabsTrigger value="users">All Admin Users</TabsTrigger>}
+          {canManageAdminUsers && <TabsTrigger value="users">All Admin Users</TabsTrigger>}
           <TabsTrigger value="messages">Messages</TabsTrigger>
         </TabsList>
 
@@ -691,7 +692,7 @@ export default function AdminProfilePage() {
         </TabsContent>
 
         {/* Admin Management */}
-        {isAdmin && (
+        {canManageAdminUsers && (
           <TabsContent value="users" className="mt-4">
             <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
               <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">

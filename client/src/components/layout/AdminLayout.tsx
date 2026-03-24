@@ -1,19 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
-  LayoutGrid,
-  User,
-  Users,
-  BarChart,
-  Package,
-  CreditCard,
-  ShoppingBag,
-  Receipt,
-  Tags,
-  Settings,
-  LogOut,
-  Megaphone,
-  Images,
   ChevronsLeftRight,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -30,6 +18,7 @@ import {
   applyAdminFontSettings,
   readAdminFontSettings,
 } from "@/lib/adminFont";
+import { getAdminNavigation, getRoleLabel } from "@/lib/adminAccess";
 import {
   SidebarProvider,
   Sidebar,
@@ -53,21 +42,6 @@ const ADMIN_SIDEBAR_DEFAULT_WIDTH = 288;
 const ADMIN_SIDEBAR_COLLAPSED_MIN_WIDTH = 56;
 const ADMIN_SIDEBAR_COLLAPSED_DEFAULT_WIDTH = 72;
 const ADMIN_SIDEBAR_VISUAL_EXPAND_THRESHOLD = 170;
-
-const ADMIN_NAV = [
-  { href: "/admin", icon: LayoutGrid, label: "Dashboard", type: "system" },
-  { href: "/admin/analytics", icon: BarChart, label: "Analytics", type: "analytics" },
-  { href: "/admin/products", icon: Package, label: "Products", type: "product" },
-  { href: "/admin/orders", icon: ShoppingBag, label: "Orders", type: "order" },
-  { href: "/admin/pos", icon: CreditCard, label: "Point of Sale", type: "pos" },
-  { href: "/admin/bills", icon: Receipt, label: "Bills", type: "bill" },
-  { href: "/admin/customers", icon: User, label: "Customers", type: "customer" },
-  { href: "/admin/store-users", icon: Users, label: "Store Users", type: "team" },
-  { href: "/admin/promo-codes", icon: Tags, label: "Promo Codes", type: "promo" },
-  { href: "/admin/marketing", icon: Megaphone, label: "Marketing", type: "marketing" },
-  { href: "/admin/images", icon: Images, label: "Images", type: "media" },
-  { href: "/admin/storefront-images", icon: Settings, label: "Storefront Images", type: "system" },
-];
 
 export default function AdminLayout({
   children,
@@ -216,12 +190,8 @@ export default function AdminLayout({
   const displayName = user?.name || user?.email || "User";
   const isVisuallyExpanded =
     !sidebarCollapsed || collapsedSidebarWidth >= ADMIN_SIDEBAR_VISUAL_EXPAND_THRESHOLD;
-  const roleLabel =
-    user?.role === "admin"
-      ? "Admin"
-      : user?.role === "staff"
-        ? "Staff"
-        : "Customer";
+  const roleLabel = getRoleLabel(user?.role);
+  const adminNav = getAdminNavigation(user?.role);
 
   return (
     <SidebarProvider
@@ -307,7 +277,7 @@ export default function AdminLayout({
           </Link>
 
           <nav className="space-y-1">
-            {ADMIN_NAV.map((item) => {
+            {adminNav.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
@@ -392,7 +362,7 @@ export default function AdminLayout({
 
           <SidebarGroup className="p-0">
             <SidebarMenu>
-              {ADMIN_NAV.map((item) => {
+              {adminNav.map((item) => {
                 const isActive = pathname === item.href;
                 const count = getUnreadCountByType(item.type);
                 return (
@@ -439,31 +409,6 @@ export default function AdminLayout({
                   </SidebarMenuItem>
                 );
               })}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === "/admin/landing-page"}
-                  tooltip={isVisuallyExpanded ? undefined : "Landing Page"}
-                  className={cn(
-                    "h-10 rounded-lg text-[11px] font-extrabold uppercase tracking-[0.22em] transition-all duration-300 ease-out",
-                    isVisuallyExpanded ? "px-3" : "justify-center px-2",
-                    pathname === "/admin/landing-page" &&
-                      "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
-                  )}
-                >
-                  <Link href="/admin/landing-page">
-                    <Images className="h-4 w-4 shrink-0" />
-                    <span
-                      className={cn(
-                        "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
-                        isVisuallyExpanded ? "min-w-0 flex-1 opacity-100" : "max-w-0 opacity-0",
-                      )}
-                    >
-                      Landing Page
-                    </span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>

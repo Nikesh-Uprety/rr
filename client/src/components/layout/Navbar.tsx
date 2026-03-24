@@ -15,6 +15,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
 import SearchBar from "./SearchBar";
+import { canAccessAdminPanel } from "@shared/auth-policy";
+import { getDefaultAdminPath } from "@/lib/adminAccess";
 
 export default function Navbar() {
   const { theme, setTheme } = useThemeStore();
@@ -124,11 +126,11 @@ export default function Navbar() {
 
 
 
-            {isAuthenticated && user && (user.role === "admin" || user.role === "staff") && (
+            {isAuthenticated && user && canAccessAdminPanel(user.role) && (
               <button
                 type="button"
                 title="Admin Dashboard"
-                onClick={() => setLocation("/admin")}
+                onClick={() => setLocation(getDefaultAdminPath(user.role))}
                 className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors"
               >
                 <LayoutDashboard className="w-5 h-5 text-emerald-500" />
@@ -250,9 +252,9 @@ export default function Navbar() {
                             </span>
                           </div>
                         </div>
-                        {(user?.role === "admin" || user?.role === "staff") && (
+                        {canAccessAdminPanel(user?.role) && (
                           <button
-                            onClick={() => setLocation("/admin")}
+                            onClick={() => setLocation(getDefaultAdminPath(user?.role))}
                             className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white dark:bg-neutral-800 shadow-sm border border-gray-100 dark:border-neutral-700 hover:scale-105 active:scale-95 transition-transform"
                             title="Admin Dashboard"
                           >

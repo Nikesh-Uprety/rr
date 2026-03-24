@@ -9,6 +9,8 @@ import Navbar from "@/components/layout/Navbar";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getDefaultAdminPath } from "@/lib/adminAccess";
+import { canAccessAdminPanel } from "@shared/auth-policy";
 
 import React, { lazy, Suspense, useCallback, useEffect, useState, startTransition } from "react";
 import Home from "@/pages/storefront/Home";
@@ -205,8 +207,8 @@ function LoginRoute() {
     return <BrandedLoader fullScreen />;
   }
 
-  if (user && (user.role === "admin" || user.role === "staff")) {
-    return <Redirect to="/admin" />;
+  if (user && canAccessAdminPanel(user.role)) {
+    return <Redirect to={getDefaultAdminPath(user.role)} />;
   }
 
   if (user) {
@@ -221,112 +223,112 @@ function AppRoutes() {
     <Switch>
       {/* Admin Routes */}
       <Route path="/admin">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="dashboard">
           <AdminLayout>
             <AdminDashboard />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/profile">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="profile">
           <AdminLayout>
             <AdminProfilePage />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/analytics">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="analytics">
           <AdminLayout>
             <AdminAnalytics />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/marketing">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="marketing">
           <AdminLayout>
             <AdminMarketing />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/logs">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="logs">
           <AdminLayout>
             <AdminLogs />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/promo-codes">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="promo-codes">
           <AdminLayout>
             <AdminPromoCodes />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/products">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="products">
           <AdminLayout>
             <AdminProducts />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/orders">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="orders">
           <AdminLayout>
             <AdminOrders />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/customers">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="customers">
           <AdminLayout>
             <AdminCustomers />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/store-users">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="store-users">
           <AdminLayout>
             <AdminStoreUsers />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/bills">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="bills">
           <AdminLayout>
             <AdminBills />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/pos">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="pos">
           <AdminLayout>
             <AdminPOS />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/images">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="images">
           <AdminLayout>
             <AdminImages />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/storefront-images">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="storefront-images">
           <AdminLayout>
             <AdminStorefrontImages />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/notifications">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="notifications">
           <AdminLayout>
             <AdminNotifications />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
       <Route path="/admin/landing-page">
-        <ProtectedRoute requireAdmin>
+        <ProtectedRoute requiredAdminPage="landing-page">
           <AdminLayout>
             <AdminLandingPageManager />
           </AdminLayout>

@@ -1,16 +1,24 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { canAccessAdminPanel } from "@shared/auth-policy";
+import { canAccessAdminPage, canAccessAdminPanel, type AdminPageKey } from "@shared/auth-policy";
+import { getAdminRedirectPath } from "@/lib/adminAccess";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAdmin?: boolean;
+  requiredAdminPage?: AdminPageKey;
 }
 
-export function ProtectedRoute({ children, requireAdmin }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requireAdmin, requiredAdminPage }: ProtectedRouteProps) {
   const { user, isLoading, isAuthenticated } = useCurrentUser();
   const [location, setLocation] = useLocation();
+  const needsAdminAccess = requireAdmin || !!requiredAdminPage;
+  const isAllowedAdminRoute = user
+    ? requiredAdminPage
+      ? canAccessAdminPage(user.role, requiredAdminPage)
+      : canAccessAdminPanel(user.role)
+    : false;
 
   // Finish the pre-loader when authentication check is complete
   useEffect(() => {
@@ -30,12 +38,13 @@ export function ProtectedRoute({ children, requireAdmin }: ProtectedRouteProps) 
       }
       return;
     }
-    if (requireAdmin && user && !canAccessAdminPanel(user.role)) {
-      if (location !== "/") {
-        setLocation("/");
+    if (needsAdminAccess && user && !isAllowedAdminRoute) {
+      const redirectPath = getAdminRedirectPath(user.role, requiredAdminPage);
+      if (location !== redirectPath) {
+        setLocation(redirectPath);
       }
     }
-  }, [isLoading, isAuthenticated, requireAdmin, user, location, setLocation]);
+  }, [isLoading, isAuthenticated, needsAdminAccess, user, location, setLocation, isAllowedAdminRoute, requiredAdminPage]);
 
   if (isLoading) {
     return (
@@ -49,7 +58,7 @@ export function ProtectedRoute({ children, requireAdmin }: ProtectedRouteProps) 
     return null;
   }
 
-  if (requireAdmin && user && !canAccessAdminPanel(user.role)) {
+  if (needsAdminAccess && user && !isAllowedAdminRoute) {
     return null;
   }
 

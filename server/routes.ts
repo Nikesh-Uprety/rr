@@ -51,7 +51,7 @@ import {
     sendStoreUserWelcomeEmail,
 } from "./email";
 import { getQueryParam, handleApiError, sendError } from "./errorHandler";
-import { requireAdmin } from "./middleware/requireAdmin";
+import { requireAdmin, requireAdminPageAccess } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
 import { rateLimit } from "./middleware/security";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
@@ -251,6 +251,31 @@ export async function registerRoutes(
       handleApiError(res, err, "auth/register", 500);
     }
   });
+
+  // Feature-level RBAC for admin APIs.
+  app.use("/api/admin/categories", requireAdminPageAccess("products"));
+  app.use("/api/admin/upload-product-image", requireAdminPageAccess("products"));
+  app.use("/api/admin/products", requireAdminPageAccess("products"));
+  app.use("/api/admin/attributes", requireAdminPageAccess("products"));
+  app.use("/api/admin/site-assets", requireAdminPageAccess("landing-page"));
+  app.use("/api/admin/orders", requireAdminPageAccess("orders"));
+  app.use("/api/admin/analytics", requireAdminPageAccess("analytics"));
+  app.use("/api/admin/customers", requireAdminPageAccess("customers"));
+  app.use("/api/admin/users", requireAdminPageAccess("store-users"));
+  app.use("/api/admin/store-users", requireAdminPageAccess("store-users"));
+  app.use("/api/admin/notifications", requireAdminPageAccess("notifications"));
+  app.use("/api/admin/messages", requireAdminPageAccess("profile"));
+  app.use("/api/admin/marketing", requireAdminPageAccess("marketing"));
+  app.use("/api/admin/newsletter", requireAdminPageAccess("marketing"));
+  app.use("/api/admin/templates", requireAdminPageAccess("marketing"));
+  app.use("/api/admin/test-email", requireAdminPageAccess("marketing"));
+  app.use("/api/admin/bills", requireAdminPageAccess("bills"));
+  app.use("/api/admin/pos/session", requireAdminPageAccess("pos"));
+  app.use("/api/admin/logs", requireAdminPageAccess("logs"));
+  app.use("/api/admin/promo-codes", requireAdminPageAccess("promo-codes"));
+  app.use("/api/admin/images", requireAdminPageAccess("images"));
+  app.use("/api/admin/media", requireAdminPageAccess("images"));
+  app.use("/api/admin/storefront-image-library", requireAdminPageAccess("storefront-images"));
 
   app.post(
     "/api/auth/login",
@@ -1896,7 +1921,7 @@ export async function registerRoutes(
   // Lightweight customer emails for Marketing page (avoids expensive customer stats computation).
   app.get(
     "/api/admin/customers/emails",
-    requireAdmin,
+    requireAdminPageAccess("marketing"),
     async (_req: Request, res: Response) => {
       try {
         const rows = await db
@@ -2620,7 +2645,10 @@ export async function registerRoutes(
   );
 
   // Admin platforms (dynamic order sources)
-  app.get("/api/admin/platforms", requireAdmin, async (_req: Request, res: Response) => {
+  app.get(
+    "/api/admin/platforms",
+    requireAdminPageAccess(["analytics", "pos"]),
+    async (_req: Request, res: Response) => {
     try {
       const rows = await db
         .select()
@@ -2631,9 +2659,13 @@ export async function registerRoutes(
       console.error("Error in GET /api/admin/platforms", err);
       return res.status(500).json({ success: false, error: "Failed to load platforms" });
     }
-  });
+    },
+  );
 
-  app.post("/api/admin/platforms", requireAdmin, async (req: Request, res: Response) => {
+  app.post(
+    "/api/admin/platforms",
+    requireAdminPageAccess("analytics"),
+    async (req: Request, res: Response) => {
     const schema = z.object({
       key: z
         .string()
@@ -2666,9 +2698,13 @@ export async function registerRoutes(
       console.error("Error in POST /api/admin/platforms", err);
       return res.status(500).json({ success: false, error: "Failed to save platform" });
     }
-  });
+    },
+  );
 
-  app.delete("/api/admin/platforms/:key", requireAdmin, async (req: Request, res: Response) => {
+  app.delete(
+    "/api/admin/platforms/:key",
+    requireAdminPageAccess("analytics"),
+    async (req: Request, res: Response) => {
     try {
       const key = req.params.key as string;
       if (!key) return res.status(400).json({ success: false, error: "Invalid key" });
@@ -2678,7 +2714,8 @@ export async function registerRoutes(
       console.error("Error in DELETE /api/admin/platforms/:key", err);
       return res.status(500).json({ success: false, error: "Failed to delete platform" });
     }
-  });
+    },
+  );
 
   // Admin notifications
   app.get(

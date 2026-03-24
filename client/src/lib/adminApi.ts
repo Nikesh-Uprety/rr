@@ -165,6 +165,12 @@ export async function fetchAdminStorefrontImageLibrary(): Promise<AdminStorefron
   return json.data ?? [];
 }
 
+export async function deleteAdminStorefrontImage(relPath: string): Promise<void> {
+  const res = await apiRequest("DELETE", "/api/admin/storefront-image-library", { relPath });
+  const json = (await res.json()) as { success: boolean; error?: string };
+  if (!json.success) throw new Error(json.error || "Delete failed");
+}
+
 export async function uploadAdminImage(input: {
   file: File;
   category: string;

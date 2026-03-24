@@ -71,6 +71,7 @@ export default function AdminProfilePage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(user?.profileImageUrl || null);
+  const [avatarToDelete, setAvatarToDelete] = useState<AvatarHistoryItem | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAdmin = user?.role === "admin";
@@ -271,6 +272,41 @@ export default function AdminProfilePage() {
     },
     onError: (err: Error) => {
       toast({ title: "Profile not updated", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteAvatarMutation = useMutation({
+    mutationFn: async (avatarUrl: string) => {
+      const res = await apiRequest("DELETE", "/api/admin/profile/avatar", { url: avatarUrl });
+      return (await res.json()) as { success: boolean; error?: string; removedCurrentImage?: boolean };
+    },
+    onSuccess: (result, avatarUrl) => {
+      if (!result.success) {
+        toast({ title: "Image not removed", description: result.error, variant: "destructive" });
+        return;
+      }
+
+      if (selectedAvatarUrl === avatarUrl) {
+        setSelectedAvatarUrl(result.removedCurrentImage ? null : profileImage);
+      }
+
+      if (result.removedCurrentImage) {
+        setProfileImage(null);
+        setSelectedAvatarUrl(null);
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      }
+
+      setAvatarToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "avatar-history"] });
+      toast({
+        title: "Image removed",
+        description: result.removedCurrentImage
+          ? "The current profile image was removed."
+          : "The uploaded image was deleted.",
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Image not removed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -722,6 +758,21 @@ export default function AdminProfilePage() {
                   <PencilLine className="h-4 w-4" />
                   Use This Image
                 </Button>
+                {selectedAvatarUrl && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 rounded-full border-red-400/20 bg-transparent text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                    onClick={() => {
+                      const selectedItem = avatarHistory.find((item) => item.url === selectedAvatarUrl);
+                      if (selectedItem) setAvatarToDelete(selectedItem);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Image
+                  </Button>
+                )}
               </div>
 
               <div className="mt-6">
@@ -771,6 +822,18 @@ export default function AdminProfilePage() {
                               {isCurrent ? " • Current image" : ""}
                             </p>
                           </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-9 w-9 shrink-0 rounded-full p-0 text-red-200 hover:bg-red-500/15 hover:text-red-100"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setAvatarToDelete(item);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </button>
                       );
                     })
@@ -779,6 +842,58 @@ export default function AdminProfilePage() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!avatarToDelete} onOpenChange={(open) => !open && setAvatarToDelete(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Delete Image
+            </DialogTitle>
+            <DialogDescription>
+              This removes the uploaded image from your admin avatar history.
+            </DialogDescription>
+          </DialogHeader>
+          {avatarToDelete && (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 p-3">
+                <div className="h-16 w-14 overflow-hidden rounded-xl border border-border bg-background">
+                  <img src={avatarToDelete.url} alt="Avatar to delete" className="h-full w-full object-cover" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">
+                    {new Date(avatarToDelete.uploadedAt).toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {(avatarToDelete.size / 1024 / 1024).toFixed(2)} MB
+                    {profileImage === avatarToDelete.url ? " • Current image" : ""}
+                  </p>
+                </div>
+              </div>
+              {profileImage === avatarToDelete.url && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+                  This is your current profile image. Deleting it will clear the profile photo until you choose another image.
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAvatarToDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              loading={deleteAvatarMutation.isPending}
+              loadingText="Deleting..."
+              onClick={() => {
+                if (avatarToDelete) deleteAvatarMutation.mutate(avatarToDelete.url);
+              }}
+            >
+              Delete Image
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

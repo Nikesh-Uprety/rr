@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { Image as ImageIcon, Loader2, RefreshCcw } from "lucide-react";
+import { deleteAdminStorefrontImage } from "@/lib/adminApi";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Image as ImageIcon, Loader2, RefreshCcw, Trash2, Eye, CheckCircle2 } from "lucide-react";
 
 type StorefrontImageEntry = {
   filename: string;
@@ -33,6 +35,7 @@ function safeParseJson(value: string | null) {
 
 export default function StorefrontImagePicker() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [activeSlot, setActiveSlot] = useState<SlotKey>("feature1");
   const [featureImages, setFeatureImages] = useState<string[]>(
@@ -40,6 +43,7 @@ export default function StorefrontImagePicker() {
   );
   const [exploreImage, setExploreImage] = useState<string>(EXPLORE_COLLECTION_IMAGE_DEFAULT);
   const [search, setSearch] = useState("");
+  const [imageToDelete, setImageToDelete] = useState<StorefrontImageEntry | null>(null);
 
   useEffect(() => {
     const parsedFeatures = safeParseJson(localStorage.getItem("storefront_feature_images"));
@@ -64,6 +68,42 @@ export default function StorefrontImagePicker() {
       return (json.data as StorefrontImageEntry[]) ?? [];
     },
     staleTime: 60 * 1000,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (relPath: string) => deleteAdminStorefrontImage(relPath),
+    onSuccess: (_, relPath) => {
+      const deletedEntry = (imagesQuery.data ?? []).find((item) => item.relPath === relPath);
+      const deletedUrl = deletedEntry?.url;
+
+      if (deletedUrl) {
+        setFeatureImages((prev) =>
+          prev.map((url, index) => {
+            if (url !== deletedUrl) return url;
+            return FEATURE_COLLECTION_IMAGE_SLOTS_DEFAULT[index] ?? "";
+          }),
+        );
+        setExploreImage((prev) =>
+          prev === deletedUrl ? EXPLORE_COLLECTION_IMAGE_DEFAULT : prev,
+        );
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["admin", "storefront-image-library"] });
+      setImageToDelete(null);
+      toast({
+        title: "Storefront image deleted",
+        description: deletedUrl
+          ? "Any slot using that image was reset to its default visual."
+          : "The local storefront image was removed.",
+      });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Delete failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const filtered = useMemo(() => {
@@ -184,6 +224,10 @@ export default function StorefrontImagePicker() {
               <div className="mt-2 w-full max-w-2xl rounded-xl overflow-hidden border border-border/60 bg-muted">
                 <img src={slotPreview} alt="Active slot preview" className="w-full h-56 object-cover" />
               </div>
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+                Local delete flow:
+                remove an uploaded image from the server, automatically reset any storefront slot using it back to the default image, then save again if you want to keep the updated slot mapping in this browser.
+              </div>
             </div>
           </div>
 
@@ -209,7 +253,7 @@ export default function StorefrontImagePicker() {
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <div>
             <h2 className="text-base font-black uppercase tracking-wider">Available uploads</h2>
-            <p className="text-muted-foreground mt-1 text-sm">Filtered by extension (.webp/.png/.jpg/.jpeg).</p>
+            <p className="text-muted-foreground mt-1 text-sm">Pick, preview, or delete local uploads used by the storefront.</p>
           </div>
           <div className="flex items-center gap-2">
             <Input
@@ -233,21 +277,42 @@ export default function StorefrontImagePicker() {
             {filtered.slice(0, 120).map((img) => {
               const isSelected = currentlySelectedUrls.has(img.url);
               return (
-                <button
+                <div
                   key={img.relPath}
-                  type="button"
-                  onClick={() => handlePick(img.url)}
                   className={cn(
-                    "relative group rounded-xl overflow-hidden border border-border/60 bg-muted hover:border-black/40 dark:hover:border-white/20 transition-colors",
-                    isSelected ? "ring-2 ring-black/20 dark:ring-white/20" : "",
+                    "group overflow-hidden rounded-2xl border border-border/60 bg-muted/40 transition-colors",
+                    isSelected ? "ring-2 ring-emerald-500/30 border-emerald-400/50" : "hover:border-black/30 dark:hover:border-white/20",
                   )}
-                  aria-label={`Pick ${img.filename}`}
                 >
-                  <img src={img.url} alt={img.filename} className="w-full h-28 object-cover transition-transform duration-200 group-hover:scale-105" />
-                  <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-2 py-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
-                    {img.filename}
+                  <button
+                    type="button"
+                    onClick={() => handlePick(img.url)}
+                    className="relative block w-full"
+                    aria-label={`Pick ${img.filename}`}
+                  >
+                    <img src={img.url} alt={img.filename} className="h-32 w-full object-cover transition-transform duration-200 group-hover:scale-105" />
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent px-3 py-2 text-left text-white">
+                      <div className="truncate text-[11px] font-semibold">{img.filename}</div>
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-white/80">
+                        {isSelected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        {isSelected ? "Assigned to a storefront slot" : "Click to assign to active slot"}
+                      </div>
+                    </div>
+                  </button>
+                  <div className="flex items-center justify-between gap-2 border-t border-border/50 bg-background/90 px-3 py-2">
+                    <span className="truncate text-[11px] text-muted-foreground">{img.relPath}</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1.5 rounded-full px-2.5 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
+                      onClick={() => setImageToDelete(img)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </Button>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -257,7 +322,48 @@ export default function StorefrontImagePicker() {
           <div className="text-xs text-muted-foreground">Showing first 120 results. Narrow your search to pick a specific image.</div>
         ) : null}
       </section>
+
+      <Dialog open={!!imageToDelete} onOpenChange={(open) => !open && setImageToDelete(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Storefront Image</DialogTitle>
+            <DialogDescription>
+              This removes the file from the local uploads folder used by the storefront image picker.
+            </DialogDescription>
+          </DialogHeader>
+          {imageToDelete ? (
+            <div className="space-y-4 py-2">
+              <div className="overflow-hidden rounded-2xl border border-border bg-muted/30">
+                <img src={imageToDelete.url} alt={imageToDelete.filename} className="h-48 w-full object-cover" />
+              </div>
+              <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm">
+                <p className="font-medium">{imageToDelete.filename}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{imageToDelete.relPath}</p>
+              </div>
+              {currentlySelectedUrls.has(imageToDelete.url) && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
+                  This image is currently assigned to a storefront slot. Deleting it will reset that slot to the default image.
+                </div>
+              )}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImageToDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              loading={deleteMutation.isPending}
+              loadingText="Deleting..."
+              onClick={() => {
+                if (imageToDelete) deleteMutation.mutate(imageToDelete.relPath);
+              }}
+            >
+              Delete Image
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-

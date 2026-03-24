@@ -2279,6 +2279,61 @@ export async function registerRoutes(
     },
   );
 
+  app.delete(
+    "/api/admin/profile/avatar",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const user = req.user as Express.User | undefined;
+        if (!user) {
+          return res.status(401).json({ success: false, error: "Not authenticated" });
+        }
+
+        const avatarUrl = typeof req.body?.url === "string" ? req.body.url : "";
+        if (!avatarUrl.startsWith("/uploads/avatars/")) {
+          return res.status(400).json({ success: false, error: "Invalid avatar path" });
+        }
+
+        const path = await import("path");
+        const fs = await import("fs");
+        const filename = path.basename(avatarUrl);
+        const allowedPrefix = `avatar-${user.id}-`;
+
+        if (!filename.startsWith(allowedPrefix)) {
+          return res.status(403).json({ success: false, error: "You can only delete your own uploaded images" });
+        }
+
+        const avatarDir = path.join(UPLOADS_DIR, "avatars");
+        const filepath = path.join(avatarDir, filename);
+        const normalizedDir = path.resolve(avatarDir);
+        const normalizedFile = path.resolve(filepath);
+
+        if (!normalizedFile.startsWith(normalizedDir)) {
+          return res.status(400).json({ success: false, error: "Invalid avatar path" });
+        }
+
+        if (!fs.existsSync(normalizedFile)) {
+          return res.status(404).json({ success: false, error: "Image not found" });
+        }
+
+        const currentProfileImageUrl = user.profileImageUrl || null;
+        fs.unlinkSync(normalizedFile);
+
+        if (currentProfileImageUrl === avatarUrl) {
+          await storage.updateUserProfile(user.id, { profileImageUrl: "" });
+        }
+
+        return res.json({
+          success: true,
+          removedCurrentImage: currentProfileImageUrl === avatarUrl,
+        });
+      } catch (err) {
+        console.error("Error in DELETE /api/admin/profile/avatar", err);
+        return res.status(500).json({ success: false, error: "Failed to delete avatar" });
+      }
+    },
+  );
+
   // Initiate email change — sends OTP to the new email
   const updateEmailSchema = z.object({
     newEmail: z.string().email(),
@@ -3762,6 +3817,34 @@ export async function registerRoutes(
       });
     } catch (err) {
       handleApiError(res, err, "GET /api/admin/storefront-image-library");
+    }
+  });
+
+  app.delete("/api/admin/storefront-image-library", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const relPath = typeof req.body?.relPath === "string" ? req.body.relPath : "";
+      if (!relPath) {
+        return sendError(res, "Missing relPath", undefined, 400);
+      }
+
+      const normalizedRelPath = relPath.replace(/^\/+/, "");
+      const path = await import("path");
+      const fs = await import("fs");
+      const resolvedUploadsDir = path.resolve(UPLOADS_DIR);
+      const targetPath = path.resolve(UPLOADS_DIR, normalizedRelPath);
+
+      if (!targetPath.startsWith(resolvedUploadsDir)) {
+        return sendError(res, "Invalid image path", undefined, 400);
+      }
+
+      if (!fs.existsSync(targetPath)) {
+        return res.status(404).json({ success: false, error: "Image not found" });
+      }
+
+      fs.unlinkSync(targetPath);
+      return res.json({ success: true });
+    } catch (err) {
+      handleApiError(res, err, "DELETE /api/admin/storefront-image-library");
     }
   });
 

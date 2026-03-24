@@ -2,6 +2,14 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   deleteAdminImage,
@@ -9,7 +17,7 @@ import {
   uploadAdminImage,
   type AdminImageAsset,
 } from "@/lib/adminApi";
-import { Trash2, Upload, Images as ImagesIcon, Copy } from "lucide-react";
+import { Trash2, Upload, Images as ImagesIcon, Copy, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type ImageCategory =
@@ -52,6 +60,8 @@ export default function AdminImagesPage() {
   const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
   const [totalBatches, setTotalBatches] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
+  const [previewAsset, setPreviewAsset] = useState<AdminImageAsset | null>(null);
+  const [assetToDelete, setAssetToDelete] = useState<AdminImageAsset | null>(null);
 
   const imagesQuery = useQuery<AdminImageAsset[]>({
     queryKey: ["admin", "images", { provider, category }],
@@ -92,6 +102,8 @@ export default function AdminImagesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
+      setAssetToDelete(null);
+      setPreviewAsset(null);
       toast({ title: "Image deleted successfully" });
     },
   });
@@ -438,6 +450,14 @@ export default function AdminImagesPage() {
                 <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
+                    onClick={() => setPreviewAsset(item)}
+                    className="h-8 w-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                    aria-label="Preview image"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => {
                         navigator.clipboard.writeText(url);
                         toast({ title: "URL copied to clipboard" });
@@ -449,7 +469,7 @@ export default function AdminImagesPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => deleteMutation.mutate(id)}
+                    onClick={() => setAssetToDelete(item)}
                     disabled={deleteMutation.isPending}
                     className="h-8 w-8 rounded-full bg-red-500/80 text-white flex items-center justify-center hover:bg-red-600"
                     aria-label="Delete image"
@@ -462,6 +482,112 @@ export default function AdminImagesPage() {
           </div>
         )}
       </section>
+
+      <Dialog open={!!previewAsset} onOpenChange={(open) => !open && setPreviewAsset(null)}>
+        <DialogContent className="max-w-4xl overflow-hidden p-0">
+          {previewAsset ? (
+            <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="flex min-h-[420px] items-center justify-center bg-black p-6">
+                <img
+                  src={previewAsset.url}
+                  alt={previewAsset.filename ?? "Preview"}
+                  className="max-h-[75vh] w-auto max-w-full rounded-xl object-contain"
+                />
+              </div>
+              <div className="space-y-5 p-6">
+                <DialogHeader>
+                  <DialogTitle>{previewAsset.filename ?? "Image preview"}</DialogTitle>
+                  <DialogDescription>
+                    Review the uploaded asset, copy its URL, or remove it from the media library.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-4 text-sm">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Provider</div>
+                    <div className="mt-1 font-medium capitalize">{previewAsset.provider}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Category</div>
+                    <div className="mt-1 font-medium">{CATEGORY_LABELS[previewAsset.category as ImageCategory] ?? previewAsset.category}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">URL</div>
+                    <div className="mt-1 break-all text-xs">{previewAsset.url}</div>
+                  </div>
+                </div>
+
+                <DialogFooter className="flex-col gap-2 sm:flex-col">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      navigator.clipboard.writeText(previewAsset.url);
+                      toast({ title: "URL copied to clipboard" });
+                    }}
+                  >
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copy URL
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="w-full"
+                    onClick={() => setAssetToDelete(previewAsset)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Image
+                  </Button>
+                </DialogFooter>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!assetToDelete} onOpenChange={(open) => !open && setAssetToDelete(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Image</DialogTitle>
+            <DialogDescription>
+              This will remove the image from the admin media library.
+            </DialogDescription>
+          </DialogHeader>
+          {assetToDelete ? (
+            <div className="space-y-4 py-2">
+              <div className="overflow-hidden rounded-2xl border border-border bg-muted/20">
+                <img
+                  src={assetToDelete.url}
+                  alt={assetToDelete.filename ?? "Delete image"}
+                  className="h-48 w-full object-cover"
+                />
+              </div>
+              <div className="rounded-2xl border border-border bg-muted/10 px-4 py-3 text-sm">
+                <p className="font-medium">{assetToDelete.filename ?? assetToDelete.url.split("/").pop()}</p>
+                <p className="mt-1 text-xs text-muted-foreground capitalize">
+                  {assetToDelete.provider} • {CATEGORY_LABELS[assetToDelete.category as ImageCategory] ?? assetToDelete.category}
+                </p>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssetToDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              loading={deleteMutation.isPending}
+              loadingText="Deleting..."
+              onClick={() => {
+                if (assetToDelete) deleteMutation.mutate(assetToDelete.id);
+              }}
+            >
+              Delete Image
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

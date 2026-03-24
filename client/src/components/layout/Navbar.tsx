@@ -29,6 +29,11 @@ export default function Navbar() {
   const queryClient = useQueryClient();
 
   const isStorefront = !location.startsWith("/admin");
+  const dashboardPath = user
+    ? canAccessAdminPanel(user.role)
+      ? getDefaultAdminPath(user.role)
+      : "/admin"
+    : "/admin";
 
   const { mutate: logout } = useMutation({
     mutationFn: async () => {
@@ -126,11 +131,11 @@ export default function Navbar() {
 
 
 
-            {isAuthenticated && user && canAccessAdminPanel(user.role) && (
+            {isAuthenticated && user && (
               <button
                 type="button"
                 title="Admin Dashboard"
-                onClick={() => setLocation(getDefaultAdminPath(user.role))}
+                onClick={() => setLocation(dashboardPath)}
                 className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors"
               >
                 <LayoutDashboard className="w-5 h-5 text-emerald-500" />
@@ -252,9 +257,9 @@ export default function Navbar() {
                             </span>
                           </div>
                         </div>
-                        {canAccessAdminPanel(user?.role) && (
+                        {user && (
                           <button
-                            onClick={() => setLocation(getDefaultAdminPath(user?.role))}
+                            onClick={() => setLocation(dashboardPath)}
                             className="h-12 w-12 flex items-center justify-center rounded-2xl bg-white dark:bg-neutral-800 shadow-sm border border-gray-100 dark:border-neutral-700 hover:scale-105 active:scale-95 transition-transform"
                             title="Admin Dashboard"
                           >

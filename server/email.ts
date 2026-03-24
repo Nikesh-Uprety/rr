@@ -36,6 +36,8 @@ if (isSMTPConfigured) {
 const SENDER_EMAIL = process.env.SENDER_EMAIL || "upretynikesh021@gmail.com";
 const SENDER_NAME = process.env.SENDER_NAME || "RARE Nepal";
 const isE2ETestMode = process.env.E2E_TEST_MODE === "1";
+const shouldLogOtpCodes =
+  process.env.NODE_ENV !== "production" || process.env.LOG_OTP_CODES === "1";
 
 function skipEmailInE2EMode(kind: string, meta: Record<string, unknown> = {}) {
   if (!isE2ETestMode) return false;
@@ -46,6 +48,10 @@ function skipEmailInE2EMode(kind: string, meta: Record<string, unknown> = {}) {
 export async function sendOTPEmail(to: string, code: string, name: string) {
   if (skipEmailInE2EMode("otp", { to, code, name })) {
     return;
+  }
+
+  if (shouldLogOtpCodes) {
+    console.log(`[DEV OTP] ${to} -> ${code}`);
   }
 
   if (!isSMTPConfigured || !transporter) {

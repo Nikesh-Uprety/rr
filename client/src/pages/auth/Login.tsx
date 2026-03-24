@@ -19,6 +19,12 @@ import {
   readAdminFontSettings,
 } from "@/lib/adminFont";
 
+const OTP_RESEND_COOLDOWN_SECONDS = 50;
+
+function getOtpCooldownStorageKey(tempToken: string) {
+  return `otp-resend-available-at:${tempToken}`;
+}
+
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(1, "Password is required"),
@@ -37,7 +43,7 @@ export default function LoginPage() {
   const [step, setStep] = useState<LoginStep>("credentials");
   const [tempToken, setTempToken] = useState<string | null>(null);
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
-  const [canResend, setCanResend] = useState(false);
+  const [resendSecondsLeft, setResendSecondsLeft] = useState(0);
 
   useEffect(() => {
     applyAdminFontSettings(readAdminFontSettings());
@@ -54,6 +60,41 @@ export default function LoginPage() {
       window.removeEventListener("storage", syncAdminFont);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || step !== "otp" || !tempToken) {
+      setResendSecondsLeft(0);
+      return;
+    }
+
+    const storageKey = getOtpCooldownStorageKey(tempToken);
+
+    const syncCountdown = () => {
+      const stored = Number(window.localStorage.getItem(storageKey) ?? "0");
+      if (!Number.isFinite(stored) || stored <= 0) {
+        setResendSecondsLeft(0);
+        return;
+      }
+
+      const secondsLeft = Math.max(0, Math.ceil((stored - Date.now()) / 1000));
+      setResendSecondsLeft(secondsLeft);
+
+      if (secondsLeft === 0) {
+        window.localStorage.removeItem(storageKey);
+      }
+    };
+
+    syncCountdown();
+    const timer = window.setInterval(syncCountdown, 1000);
+    return () => window.clearInterval(timer);
+  }, [step, tempToken]);
+
+  const startResendCooldown = (token: string) => {
+    if (typeof window === "undefined") return;
+    const availableAt = Date.now() + OTP_RESEND_COOLDOWN_SECONDS * 1000;
+    window.localStorage.setItem(getOtpCooldownStorageKey(token), String(availableAt));
+    setResendSecondsLeft(OTP_RESEND_COOLDOWN_SECONDS);
+  };
 
   const {
     register,
@@ -117,8 +158,7 @@ export default function LoginPage() {
       setTempToken(result.tempToken);
       setStep("otp");
       setOtpDigits(["", "", "", "", "", ""]);
-      setCanResend(false);
-      setTimeout(() => setCanResend(true), 60000);
+      startResendCooldown(result.tempToken);
       toast({
         title: "Check your email",
         description: "We sent a 6-digit code to your email address.",
@@ -187,6 +227,8 @@ export default function LoginPage() {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setStep("credentials");
       setTempToken(null);
+      setOtpDigits(["", "", "", "", "", ""]);
+      setResendSecondsLeft(0);
       setLocation(getDefaultAdminPath(result.data?.role));
     },
     onError: (err: Error) => {
@@ -204,11 +246,16 @@ export default function LoginPage() {
       const res = await apiRequest("POST", "/api/auth/resend-otp", {
         tempToken,
       });
-      return (await res.json()) as { success: boolean; error?: string };
+      const json = (await res.json()) as { success: boolean; error?: string };
+      if (!json.success) {
+        throw new Error(json.error ?? "Unable to resend the verification code.");
+      }
+      return json;
     },
     onSuccess: (result) => {
-      setCanResend(false);
-      setTimeout(() => setCanResend(true), 60000);
+      if (tempToken) {
+        startResendCooldown(tempToken);
+      }
       toast({
         title: "Code resent",
         description: "Check your email for a new verification code.",
@@ -222,6 +269,12 @@ export default function LoginPage() {
       });
     },
   });
+
+  const canResend = resendSecondsLeft === 0 && !resendMutation.isPending;
+  const resendLabel =
+    resendSecondsLeft > 0
+      ? `Didn't receive it? Resend code in ${resendSecondsLeft}s`
+      : "Didn't receive it? Resend code";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950 px-4 py-12 admin-font">
@@ -432,11 +485,11 @@ export default function LoginPage() {
 
             <button
               type="button"
-              disabled={!canResend || resendMutation.isPending}
+              disabled={!canResend}
               onClick={() => resendMutation.mutate()}
               className="w-full text-xs text-muted-foreground hover:text-foreground text-center mt-3 disabled:opacity-50"
             >
-              Didn&apos;t receive it? Resend code
+              {resendLabel}
             </button>
           </>
         )}

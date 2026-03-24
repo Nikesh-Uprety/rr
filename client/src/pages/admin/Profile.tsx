@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useRef, useState, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,11 @@ import {
   Camera,
   Trash2,
   AlertTriangle,
+  ImagePlus,
+  PencilLine,
+  Expand,
+  Clock3,
+  Check,
 } from "lucide-react";
 import {
   Dialog,
@@ -37,6 +42,13 @@ interface AdminUser {
   profileImageUrl?: string | null;
 }
 
+interface AvatarHistoryItem {
+  filename: string;
+  url: string;
+  uploadedAt: string;
+  size: number;
+}
+
 export default function AdminProfilePage() {
   const { user } = useCurrentUser();
   const { toast } = useToast();
@@ -57,6 +69,9 @@ export default function AdminProfilePage() {
 
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
+  const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(user?.profileImageUrl || null);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAdmin = user?.role === "admin";
 
@@ -74,6 +89,16 @@ export default function AdminProfilePage() {
       return json.data ?? [];
     },
     enabled: activeTab === "users",
+  });
+
+  const { data: avatarHistory = [], isLoading: avatarHistoryLoading } = useQuery<AvatarHistoryItem[]>({
+    queryKey: ["admin", "profile", "avatar-history"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/profile/avatar-history");
+      const json = (await res.json()) as { success: boolean; data?: AvatarHistoryItem[] };
+      return json.data ?? [];
+    },
+    enabled: activeTab === "account" && !!user,
   });
 
   const passwordMutation = useMutation({
@@ -208,11 +233,44 @@ export default function AdminProfilePage() {
         return;
       }
       setProfileImage(result.url);
+      setSelectedAvatarUrl(result.url);
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "avatar-history"] });
       toast({ title: "Profile picture updated" });
     },
     onError: (err: Error) => {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleAvatarSelect = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      avatarMutation.mutate(base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const applyAvatarMutation = useMutation({
+    mutationFn: async (profileImageUrl: string) => {
+      const res = await apiRequest("PUT", "/api/admin/profile/update", { profileImageUrl });
+      return (await res.json()) as { success: boolean; error?: string };
+    },
+    onSuccess: (result, profileImageUrl) => {
+      if (!result.success) {
+        toast({ title: "Profile not updated", description: result.error, variant: "destructive" });
+        return;
+      }
+      setProfileImage(profileImageUrl);
+      setSelectedAvatarUrl(profileImageUrl);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "avatar-history"] });
+      toast({ title: "Profile picture applied" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Profile not updated", description: err.message, variant: "destructive" });
     },
   });
 
@@ -279,41 +337,82 @@ export default function AdminProfilePage() {
 
         <TabsContent value="account" className="mt-4 space-y-6">
           {/* Basic Profile */}
-          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 flex flex-col sm:flex-row gap-6 items-center sm:items-start">
-            <div className="flex flex-col items-center gap-3">
-              <div
-                className="relative w-20 h-20 rounded-full bg-[#2D4A35] text-white flex items-center justify-center text-2xl font-semibold overflow-hidden cursor-pointer group"
-                onClick={() => document.getElementById('avatar-upload')?.click()}
-              >
+          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 flex flex-col lg:flex-row gap-8 items-stretch">
+            <div className="w-full sm:w-[260px] shrink-0">
+              <div className="rounded-[28px] border border-[#E5E5E0] dark:border-border bg-gradient-to-br from-[#F6F3EC] via-white to-[#EEF5F0] dark:from-[#1B241C] dark:via-[#161C17] dark:to-[#202A22] p-4 shadow-sm">
+                <div
+                  className="group relative aspect-[4/5] overflow-hidden rounded-[22px] border border-black/5 dark:border-white/10 bg-[#D9E4DA] dark:bg-[#263328] cursor-pointer"
+                  onClick={() => {
+                    setSelectedAvatarUrl(profileImage);
+                    setIsAvatarPreviewOpen(true);
+                  }}
+                >
                 {profileImage ? (
                   <img
                     src={profileImage}
                     alt="Profile"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain bg-white/80 dark:bg-black/10"
                   />
                 ) : (
-                  (user?.name || user?.email || "U")
-                    .slice(0, 2)
-                    .toUpperCase()
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-[#2D4A35] dark:text-[#DCE7DD]">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#2D4A35] text-2xl font-semibold text-white shadow-lg">
+                      {(user?.name || user?.email || "U")
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em]">
+                      Add profile photo
+                    </p>
+                  </div>
                 )}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Camera className="h-5 w-5 text-white" />
+                <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/70 via-black/20 to-transparent px-4 py-4 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  <div className="rounded-full bg-white/15 p-2 text-white backdrop-blur">
+                    <Camera className="h-4 w-4" />
+                  </div>
+                  <div className="rounded-full bg-white/15 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur">
+                    Change photo
+                  </div>
                 </div>
+              </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="gap-2 rounded-full"
+                    loading={avatarMutation.isPending}
+                    loadingText="Uploading..."
+                    onClick={() => avatarInputRef.current?.click()}
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    {profileImage ? "Replace Image" : "Upload Image"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 rounded-full"
+                    onClick={() => {
+                      setSelectedAvatarUrl(profileImage);
+                      setIsAvatarPreviewOpen(true);
+                    }}
+                  >
+                    <Expand className="h-4 w-4" />
+                    View Photo
+                  </Button>
+                </div>
+                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+                  Portrait images now keep their original orientation and display without forced horizontal cropping.
+                </p>
               </div>
               <input
                 id="avatar-upload"
+                ref={avatarInputRef}
                 type="file"
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    const base64 = reader.result as string;
-                    avatarMutation.mutate(base64);
-                  };
-                  reader.readAsDataURL(file);
+                  handleAvatarSelect(e.target.files?.[0]);
+                  e.currentTarget.value = "";
                 }}
               />
               <Badge variant="outline" className="text-[11px]">
@@ -566,6 +665,120 @@ export default function AdminProfilePage() {
               Verify & Update
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAvatarPreviewOpen} onOpenChange={setIsAvatarPreviewOpen}>
+        <DialogContent className="max-w-5xl overflow-hidden border-0 bg-transparent p-0 shadow-none">
+          <div className="grid overflow-hidden rounded-[28px] border border-white/10 bg-[#0F140F]/95 backdrop-blur-xl lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="relative flex min-h-[420px] items-center justify-center bg-[radial-gradient(circle_at_top,#24412d,transparent_45%),linear-gradient(180deg,#121a13,#0b0f0c)] p-6 sm:p-8">
+              {selectedAvatarUrl ? (
+                <img
+                  src={selectedAvatarUrl}
+                  alt="Profile preview"
+                  className="max-h-[75vh] w-auto max-w-full rounded-[22px] border border-white/10 bg-black/10 object-contain shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+                />
+              ) : (
+                <div className="flex h-[320px] w-full max-w-[360px] items-center justify-center rounded-[22px] border border-dashed border-white/15 bg-white/5 text-sm text-white/70">
+                  No profile image selected
+                </div>
+              )}
+            </div>
+            <div className="border-t border-white/10 bg-black/25 p-5 text-white lg:border-l lg:border-t-0">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-base font-semibold text-white">
+                  <Camera className="h-4 w-4" />
+                  Profile Image
+                </DialogTitle>
+                <DialogDescription className="text-sm text-white/65">
+                  Preview the current photo, choose a recent upload, or replace it with a new one.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="gap-2 rounded-full bg-white text-black hover:bg-white/90"
+                  loading={avatarMutation.isPending}
+                  loadingText="Uploading..."
+                  onClick={() => avatarInputRef.current?.click()}
+                >
+                  <ImagePlus className="h-4 w-4" />
+                  Upload New
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-2 rounded-full border-white/15 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                  disabled={!selectedAvatarUrl || selectedAvatarUrl === profileImage || applyAvatarMutation.isPending}
+                  loading={applyAvatarMutation.isPending}
+                  loadingText="Applying..."
+                  onClick={() => {
+                    if (selectedAvatarUrl) applyAvatarMutation.mutate(selectedAvatarUrl);
+                  }}
+                >
+                  <PencilLine className="h-4 w-4" />
+                  Use This Image
+                </Button>
+              </div>
+
+              <div className="mt-6">
+                <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/55">
+                  <Clock3 className="h-4 w-4" />
+                  Recent Uploads
+                </div>
+                <div className="grid max-h-[420px] gap-3 overflow-y-auto pr-1">
+                  {avatarHistoryLoading ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-white/60">
+                      Loading recent uploads...
+                    </div>
+                  ) : avatarHistory.length === 0 ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-white/60">
+                      Your recent profile uploads will appear here.
+                    </div>
+                  ) : (
+                    avatarHistory.map((item) => {
+                      const isActive = selectedAvatarUrl === item.url;
+                      const isCurrent = profileImage === item.url;
+                      return (
+                        <button
+                          key={item.filename}
+                          type="button"
+                          className={cn(
+                            "flex items-center gap-3 rounded-2xl border p-2 text-left transition-all",
+                            isActive
+                              ? "border-emerald-400/70 bg-emerald-400/10"
+                              : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10",
+                          )}
+                          onClick={() => setSelectedAvatarUrl(item.url)}
+                        >
+                          <div className="relative h-16 w-14 overflow-hidden rounded-xl border border-white/10 bg-white/10">
+                            <img src={item.url} alt="Recent upload" className="h-full w-full object-cover" />
+                            {isCurrent && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                <Check className="h-4 w-4 text-white" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-white">
+                              {new Date(item.uploadedAt).toLocaleString()}
+                            </p>
+                            <p className="mt-1 text-xs text-white/55">
+                              {(item.size / 1024 / 1024).toFixed(2)} MB
+                              {isCurrent ? " • Current image" : ""}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

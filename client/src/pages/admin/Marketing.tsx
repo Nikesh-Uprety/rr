@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { AdvancedEmailEditor } from "@/components/admin/AdvancedEmailEditor";
 import {
   exportSubscribersCSV,
@@ -420,8 +421,8 @@ export default function AdminMarketingPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -460,12 +461,12 @@ export default function AdminMarketingPage() {
                 </Button>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                 <Button
                   type="button"
                   variant="destructive"
                   size="sm"
-                  className="h-8 text-[10px]"
+                  className="h-8 text-[10px] max-sm:flex-1"
                   disabled={
                     bulkDeleteMutation.isPending ||
                     selectedEmails.size === 0
@@ -479,7 +480,7 @@ export default function AdminMarketingPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-8 text-[10px] border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                  className="h-8 text-[10px] border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30 max-sm:flex-1"
                   disabled={deleteAllMutation.isPending || subscribers.length === 0}
                   onClick={() => {
                     const ok = window.confirm("Delete all newsletter subscribers?");
@@ -494,13 +495,32 @@ export default function AdminMarketingPage() {
             <div className="max-h-[400px] overflow-y-auto border border-[#E5E5E0] dark:border-border rounded-xl">
               <table className="w-full text-xs">
                 <tbody className="divide-y divide-[#E5E5E0] dark:divide-border">
-                  {filteredSubscribers.map((s) => (
-                    <tr key={s.email} className="hover:bg-muted/10 transition-colors">
+                  {filteredSubscribers.map((s) => {
+                    const isNewsletterSubscriber = s.source === "newsletter";
+                    const isSelected = selectedEmails.has(s.email);
+                    return (
+                    <tr
+                      key={s.email}
+                      className={cn(
+                        "transition-colors",
+                        isNewsletterSubscriber && "cursor-pointer hover:bg-muted/10",
+                        isSelected && "bg-emerald-50/70 dark:bg-emerald-950/20",
+                      )}
+                      onClick={() => {
+                        if (!isNewsletterSubscriber) return;
+                        setSelectedEmails((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(s.email)) next.delete(s.email);
+                          else next.add(s.email);
+                          return next;
+                        });
+                      }}
+                    >
                       <td className="pl-3 pr-1 py-2 w-8">
-                        {s.source === "newsletter" ? (
+                        {isNewsletterSubscriber ? (
                           <input
                             type="checkbox"
-                            checked={selectedEmails.has(s.email)}
+                            checked={isSelected}
                             onChange={(e) => {
                               setSelectedEmails((prev) => {
                                 const next = new Set(prev);
@@ -509,6 +529,7 @@ export default function AdminMarketingPage() {
                                 return next;
                               });
                             }}
+                            onClick={(e) => e.stopPropagation()}
                             className="h-3 w-3 rounded border-border"
                             aria-label={`Select ${s.email} for deletion`}
                           />
@@ -527,19 +548,22 @@ export default function AdminMarketingPage() {
                         </div>
                       </td>
                       <td className="px-4 py-2 text-right">
-                        {s.source === "newsletter" && (
+                        {isNewsletterSubscriber && (
                           <Button 
                             variant="ghost" 
                             size="sm" 
                             className="h-6 w-6 p-0 text-red-500"
-                            onClick={() => deleteEmailMutation.mutate(s.email)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteEmailMutation.mutate(s.email);
+                            }}
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         )}
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>

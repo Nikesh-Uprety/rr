@@ -2199,20 +2199,22 @@ export async function registerRoutes(
           return res.status(400).json({ success: false, error: "Invalid image format" });
         }
 
-        const ext = matches[1];
         const buffer = Buffer.from(matches[2], "base64");
 
-        // Resize image to 100x100 using sharp if available, otherwise save as-is
+        // Preserve the original orientation and aspect ratio while keeping the result crisp enough
+        // for profile cards, popovers, and larger admin surfaces.
         let finalBuffer = buffer;
+        let fileExtension = "webp";
         try {
           const sharp = (await import("sharp")).default;
-          // We use 100x100 since it's only shown as a small circular icon
           finalBuffer = await sharp(buffer)
-            .resize(100, 100, { fit: "cover" })
-            .webp({ quality: 60 }) // High compression for small icons
+            .rotate()
+            .resize(1440, 1800, { fit: "inside", withoutEnlargement: true })
+            .webp({ quality: 96, effort: 6, smartSubsample: true })
             .toBuffer();
         } catch (error) {
           console.warn("Avatar resize failed (using original):", error);
+          fileExtension = matches[1] === "jpeg" ? "jpg" : matches[1];
         }
 
         const fs = await import("fs");
@@ -2220,7 +2222,7 @@ export async function registerRoutes(
         const avatarDir = path.join(UPLOADS_DIR, "avatars");
         fs.mkdirSync(avatarDir, { recursive: true });
 
-        const filename = `avatar-${user.id}-${Date.now()}.webp`;
+        const filename = `avatar-${user.id}-${Date.now()}.${fileExtension}`;
         const filepath = path.join(avatarDir, filename);
         fs.writeFileSync(filepath, finalBuffer);
 
@@ -2231,6 +2233,48 @@ export async function registerRoutes(
       } catch (err) {
         console.error("Error in POST /api/admin/profile/upload-avatar", err);
         return res.status(500).json({ success: false, error: "Failed to upload avatar" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/profile/avatar-history",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const user = req.user as Express.User | undefined;
+        if (!user) {
+          return res.status(401).json({ success: false, error: "Not authenticated" });
+        }
+
+        const fs = await import("fs");
+        const path = await import("path");
+        const avatarDir = path.join(UPLOADS_DIR, "avatars");
+
+        if (!fs.existsSync(avatarDir)) {
+          return res.json({ success: true, data: [] });
+        }
+
+        const data = fs
+          .readdirSync(avatarDir)
+          .filter((file) => file.startsWith(`avatar-${user.id}-`))
+          .map((file) => {
+            const filepath = path.join(avatarDir, file);
+            const stats = fs.statSync(filepath);
+            return {
+              filename: file,
+              url: `/uploads/avatars/${file}`,
+              uploadedAt: stats.mtime.toISOString(),
+              size: stats.size,
+            };
+          })
+          .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
+          .slice(0, 12);
+
+        return res.json({ success: true, data });
+      } catch (err) {
+        console.error("Error in GET /api/admin/profile/avatar-history", err);
+        return res.status(500).json({ success: false, error: "Failed to load avatar history" });
       }
     },
   );

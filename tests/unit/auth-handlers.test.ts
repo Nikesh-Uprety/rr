@@ -128,6 +128,33 @@ describe("auth route handlers", () => {
     });
   });
 
+  it("returns field-specific login failures from passport info", async () => {
+    const authenticate = vi.fn((_: string, callback: any) => () =>
+      callback(null, false, {
+        message: "Email not found",
+        field: "email",
+      }),
+    );
+
+    const req = {
+      body: { email: "missing@example.com", password: "Secret123" },
+      logIn: vi.fn(),
+    } as any;
+    const res = createResponse();
+    const next = vi.fn();
+
+    await createLoginHandler({
+      passport: { authenticate } as any,
+    })(req, res as any, next);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      success: false,
+      error: "Email not found",
+      field: "email",
+    });
+  });
+
   it("enables 2FA and clears the setup flag after OTP verification", async () => {
     const consumeOtpToken = vi.fn().mockResolvedValue({
       id: "otp-1",

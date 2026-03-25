@@ -1,16 +1,15 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldPath } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Eye, EyeOff } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/use-toast";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useAnimationControls } from "framer-motion";
 import { canAccessAdminPanel } from "@shared/auth-policy";
 import { getDefaultAdminPath } from "@/lib/adminAccess";
 import {
@@ -18,11 +17,42 @@ import {
   applyAdminFontSettings,
   readAdminFontSettings,
 } from "@/lib/adminFont";
+import { cn } from "@/lib/utils";
 
 const OTP_RESEND_COOLDOWN_SECONDS = 50;
 
 function getOtpCooldownStorageKey(tempToken: string) {
   return `otp-resend-available-at:${tempToken}`;
+}
+
+function getLoginErrorDetails(error: unknown): {
+  message: string | null;
+  field: "email" | "password" | null;
+} {
+  if (!(error instanceof Error)) {
+    return { message: null, field: null };
+  }
+
+  const match = error.message.match(/\{.*\}$/);
+  if (match) {
+    try {
+      const parsed = JSON.parse(match[0]) as {
+        error?: string;
+        field?: "email" | "password" | null;
+      };
+      return {
+        message: parsed.error ?? error.message ?? "Failed to sign in",
+        field: parsed.field ?? null,
+      };
+    } catch {
+      // Fall back to the original message below.
+    }
+  }
+
+  return {
+    message: error.message || "Failed to sign in",
+    field: null,
+  };
 }
 
 const loginSchema = z.object({
@@ -44,6 +74,8 @@ export default function LoginPage() {
   const [tempToken, setTempToken] = useState<string | null>(null);
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [resendSecondsLeft, setResendSecondsLeft] = useState(0);
+  const emailFieldControls = useAnimationControls();
+  const passwordFieldControls = useAnimationControls();
 
   useEffect(() => {
     applyAdminFontSettings(readAdminFontSettings());
@@ -99,7 +131,9 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    setError,
+    clearErrors,
+    formState: { errors, submitCount },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -108,7 +142,7 @@ export default function LoginPage() {
     },
   });
 
-  const { mutateAsync, isPending, error } = useMutation({
+  const { mutateAsync, isPending } = useMutation({
     mutationFn: async (values: LoginFormValues) => {
       const res = await apiRequest("POST", "/api/auth/login", values);
       return (await res.json()) as {
@@ -150,8 +184,40 @@ export default function LoginPage() {
   }
 
   const onSubmit = async (values: LoginFormValues) => {
-    const result = await mutateAsync(values);
-    if (!result.success) return;
+    clearErrors(["email", "password"]);
+
+    let result:
+      | {
+          success: boolean;
+          requires2FA?: boolean;
+          tempToken?: string;
+          requires2FASetup?: boolean;
+          data?: {
+            id: string;
+            email: string;
+            name?: string;
+            role: string;
+            twoFactorEnabled?: boolean;
+          };
+          error?: string;
+        }
+      | undefined;
+
+    try {
+      result = await mutateAsync(values);
+    } catch (err) {
+      const loginError = getLoginErrorDetails(err);
+      const fieldName: FieldPath<LoginFormValues> =
+        loginError.field === "email" ? "email" : "password";
+
+      setError(fieldName, {
+        type: "server",
+        message: loginError.message ?? "Failed to sign in",
+      });
+      return;
+    }
+
+    if (!result?.success) return;
 
     // 2FA flow
     if (result.requires2FA && result.tempToken) {
@@ -275,6 +341,33 @@ export default function LoginPage() {
     resendSecondsLeft > 0
       ? `Didn't receive it? Resend code in ${resendSecondsLeft}s`
       : "Didn't receive it? Resend code";
+  const hasSubmittedLogin = submitCount > 0;
+  const showEmailValidationError = hasSubmittedLogin && Boolean(errors.email);
+  const showPasswordValidationError = hasSubmittedLogin && Boolean(errors.password);
+  const hasEmailAlert = showEmailValidationError;
+  const hasPasswordAlert = showPasswordValidationError;
+
+  useEffect(() => {
+    if (!hasEmailAlert) {
+      return;
+    }
+
+    void emailFieldControls.start({
+      x: [0, -8, 8, -6, 6, -3, 3, 0],
+      transition: { duration: 0.38, ease: "easeInOut" },
+    });
+  }, [emailFieldControls, hasEmailAlert]);
+
+  useEffect(() => {
+    if (!hasPasswordAlert) {
+      return;
+    }
+
+    void passwordFieldControls.start({
+      x: [0, -8, 8, -6, 6, -3, 3, 0],
+      transition: { duration: 0.38, ease: "easeInOut" },
+    });
+  }, [hasPasswordAlert, passwordFieldControls]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950 px-4 py-12 admin-font">
@@ -299,15 +392,26 @@ export default function LoginPage() {
                 <label className="text-sm font-medium text-foreground">
                   Email
                 </label>
-                <Input
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  data-testid="login-email"
-                  {...register("email")}
-                  className="h-12 rounded-lg border-neutral-200 dark:border-neutral-700 bg-background focus-visible:ring-2"
-                />
-                {errors.email && (
+                <motion.div
+                  animate={emailFieldControls}
+                  className="relative"
+                >
+                  <Input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    data-testid="login-email"
+                    {...register("email")}
+                    aria-invalid={hasEmailAlert}
+                    className={cn(
+                      "h-12 rounded-lg bg-background focus-visible:ring-2",
+                      hasEmailAlert
+                        ? "border-red-400/90 text-red-950 dark:text-red-50 shadow-[0_0_0_1px_rgba(248,113,113,0.55),0_0_24px_rgba(239,68,68,0.18)] focus-visible:ring-red-400/70"
+                        : "border-neutral-200 dark:border-neutral-700",
+                    )}
+                  />
+                </motion.div>
+                {showEmailValidationError && errors.email && (
                   <p className="text-xs text-red-500">
                     {errors.email.message}
                   </p>
@@ -318,19 +422,33 @@ export default function LoginPage() {
                 <label className="text-sm font-medium text-foreground">
                   Password
                 </label>
-                <div className="relative">
+                <motion.div
+                  animate={passwordFieldControls}
+                  className="relative"
+                >
                   <Input
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
                     placeholder="••••••••"
                     data-testid="login-password"
                     {...register("password")}
-                    className="h-12 pr-12 rounded-lg border-neutral-200 dark:border-neutral-700 bg-background focus-visible:ring-2"
+                    aria-invalid={hasPasswordAlert}
+                    className={cn(
+                      "h-12 pr-12 rounded-lg bg-background focus-visible:ring-2",
+                      hasPasswordAlert
+                        ? "border-red-400/90 text-red-950 dark:text-red-50 shadow-[0_0_0_1px_rgba(248,113,113,0.55),0_0_24px_rgba(239,68,68,0.18)] focus-visible:ring-red-400/70"
+                        : "border-neutral-200 dark:border-neutral-700",
+                    )}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                    className={cn(
+                      "absolute right-3 top-1/2 -translate-y-1/2 transition-colors p-1",
+                      hasPasswordAlert
+                        ? "text-red-400 hover:text-red-500"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
                     aria-label={
                       showPassword ? "Hide password" : "Show password"
                     }
@@ -341,19 +459,13 @@ export default function LoginPage() {
                       <Eye className="w-4 h-4" />
                     )}
                   </button>
-                </div>
-                {errors.password && (
+                </motion.div>
+                {showPasswordValidationError && errors.password && (
                   <p className="text-xs text-red-500">
                     {errors.password.message}
                   </p>
                 )}
               </div>
-
-              {error && (
-                <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 px-3 py-2 rounded-lg">
-                  {(error as Error).message ?? "Failed to sign in"}
-                </p>
-              )}
 
               <div className="relative pt-2">
                 <div className="flex justify-center">
@@ -498,15 +610,6 @@ export default function LoginPage() {
           &copy; 2025 Rare Atelier. 
         </p>
 
-        <details className="mt-4 text-xs text-muted-foreground">
-          <summary className="cursor-pointer select-none hover:text-foreground transition-colors">
-            Developer credentials
-          </summary>
-          <div className="mt-3 p-3 bg-muted/50 rounded-lg space-y-1 font-mono text-[11px]">
-            <p>Admin: admin@rare.np / admin123</p>
-            <p>Staff: staff@rare.np / staff123</p>
-          </div>
-        </details>
       </div>
     </div>
   );

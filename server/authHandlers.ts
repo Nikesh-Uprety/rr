@@ -45,7 +45,13 @@ export function createLoginHandler(deps?: {
       return res.status(400).json({ success: false, error: "Invalid request body" });
     }
 
-    passport.authenticate("local", (err: any, user: Express.User | false) => {
+    passport.authenticate(
+      "local",
+      (
+        err: any,
+        user: Express.User | false,
+        info?: { message?: string; field?: "email" | "password" },
+      ) => {
       if (err) {
         console.error("AUTH ERROR:", err);
         return res.status(500).json({
@@ -57,7 +63,8 @@ export function createLoginHandler(deps?: {
       if (!user) {
         return res.status(401).json({
           success: false,
-          error: "Invalid email or password",
+          error: info?.message ?? "Invalid email or password",
+          field: info?.field ?? null,
         });
       }
 
@@ -125,7 +132,8 @@ export function createLoginHandler(deps?: {
           },
         );
       })().catch((error) => next(error));
-    })(req, res, next);
+      },
+    )(req, res, next);
   };
 }
 

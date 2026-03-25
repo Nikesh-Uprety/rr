@@ -16,7 +16,7 @@ import { configurePassport, passport } from "../../server/auth";
 
 type VerifyResult = {
   user: false | Express.User;
-  info?: { message?: string };
+  info?: { message?: string; field?: "email" | "password" };
 };
 
 async function verifyCredentials(email: string, password: string): Promise<VerifyResult> {
@@ -26,7 +26,11 @@ async function verifyCredentials(email: string, password: string): Promise<Verif
     strategy._verify(
       email,
       password,
-      (err: Error | null, user: false | Express.User, info?: { message?: string }) => {
+      (
+        err: Error | null,
+        user: false | Express.User,
+        info?: { message?: string; field?: "email" | "password" },
+      ) => {
         if (err) {
           reject(err);
           return;
@@ -93,6 +97,21 @@ describe("passport local strategy", () => {
     const result = await verifyCredentials("staff@example.com", "WrongPassword");
 
     expect(result.user).toBe(false);
-    expect(result.info).toEqual({ message: "Invalid email or password" });
+    expect(result.info).toEqual({
+      message: "Incorrect password",
+      field: "password",
+    });
+  });
+
+  it("reports a missing email as an email-field failure", async () => {
+    storageMock.getUserByEmail.mockResolvedValueOnce(null);
+
+    const result = await verifyCredentials("missing@example.com", "Secret123");
+
+    expect(result.user).toBe(false);
+    expect(result.info).toEqual({
+      message: "Email not found",
+      field: "email",
+    });
   });
 });

@@ -96,6 +96,7 @@ export default function ProductDetail() {
     queryKey: ["products", productId],
     queryFn: () => fetchProductById(productId),
     enabled: !!productId,
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: relatedProductsRaw = [] } = useQuery<ProductApi[]>({
@@ -131,7 +132,31 @@ export default function ProductDetail() {
   const selectedMainImgRef = useRef<HTMLImageElement | null>(null);
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
-  const sizes = useMemo(() => parseJsonArray(product?.sizeOptions ?? undefined), [product?.sizeOptions]);
+  const stockBySize = product?.stockBySize ?? {};
+  const configuredSizes = useMemo(
+    () => parseJsonArray(product?.sizeOptions ?? undefined),
+    [product?.sizeOptions],
+  );
+  const availableSizes = useMemo(() => {
+    const ordered = new Set<string>();
+
+    configuredSizes.forEach((size) => {
+      const normalized = size.trim();
+      if (normalized) ordered.add(normalized);
+    });
+
+    Object.keys(stockBySize).forEach((size) => {
+      const normalized = size.trim();
+      if (normalized) ordered.add(normalized);
+    });
+
+    (product?.variants ?? []).forEach((variant) => {
+      const normalized = variant.size.trim();
+      if (normalized) ordered.add(normalized);
+    });
+
+    return Array.from(ordered);
+  }, [configuredSizes, product?.variants, stockBySize]);
   const galleryUrls = useMemo(() => parseJsonArray(product?.galleryUrls ?? undefined), [product?.galleryUrls]);
   const mainImageUrl = product?.imageUrl ?? "";
   const allImages = useMemo(() => {
@@ -280,6 +305,18 @@ export default function ProductDetail() {
     };
   }, [product?.id, panelZoomEnabled, hoverMedia]);
 
+  const effectiveColor = selectedColor ?? (colors[0] ?? null);
+  const effectiveSize = selectedSize;
+  const selectedVariantStock = selectedSize
+    ? (stockBySize[selectedSize as keyof typeof stockBySize] ?? 0)
+    : null;
+
+  useEffect(() => {
+    if (selectedVariantStock !== null && quantity > selectedVariantStock) {
+      setQuantity(1);
+    }
+  }, [quantity, selectedVariantStock]);
+
   if (isLoading || !product) {
     if (isLoading) {
       return (
@@ -299,9 +336,6 @@ export default function ProductDetail() {
       </div>
     );
   }
-
-  const effectiveColor = selectedColor ?? (colors[0] ?? null);
-  const effectiveSize = selectedSize ?? (sizes[0] ?? null);
   const hasSale = Boolean(product.saleActive) && Number(product.salePercentage) > 0;
   const effectiveUnitPrice = hasSale
     ? Number(product.price) * (1 - Number(product.salePercentage) / 100)
@@ -324,7 +358,10 @@ export default function ProductDetail() {
         category: product.category ?? "",
         sku: "",
         images: allImages.filter(Boolean),
-        variants: [],
+        variants: (product.variants ?? []).map((variant) => ({
+          size: variant.size,
+          color: variant.color ?? "Default",
+        })),
       },
       { size: effectiveSize ?? "One Size", color: effectiveColor ?? "Default" },
       quantity,
@@ -448,7 +485,7 @@ export default function ProductDetail() {
                       : "border-transparent opacity-60 hover:opacity-100"
                   }`}
                 >
-                  <img src={url || ""} alt="" className="h-full w-full object-cover" />
+                  <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>
@@ -502,6 +539,7 @@ export default function ProductDetail() {
                       ref={selectedImageIndex === idx ? selectedMainImgRef : undefined}
                       src={url || ""}
                       alt={`${product.name} - view ${idx + 1}`}
+                      loading={idx === 0 ? "eager" : "lazy"}
                       className={`absolute inset-0 h-full w-full select-none object-contain object-center transition-all duration-500 ${
                         selectedImageIndex === idx
                           ? `opacity-100 ${panelZoomEnabled && hoverMedia ? "scale-[1.03]" : "scale-100"}`
@@ -573,7 +611,7 @@ export default function ProductDetail() {
                       }`}
                       aria-label={`Select image ${i + 1}`}
                     >
-                      <img src={url || ""} alt="" className="h-full w-full object-cover" />
+                      <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -655,46 +693,111 @@ export default function ProductDetail() {
               </div>
             )}
 
-            {sizes.length > 0 && (
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">
-                  Size
-                </p>
-                <div className="flex justify-end mb-3">
-                  <button
-                    onClick={() => setShowSizeGuide(true)}
-                    className="flex items-center gap-1.5 text-sm font-semibold
-                               text-foreground underline underline-offset-4
-                               decoration-foreground hover:opacity-70
-                               transition-opacity duration-200"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24"
-                      fill="none" stroke="currentColor" strokeWidth="2.5"
-                      strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="11" cy="11" r="7"/>
-                      <path d="m21 21-4.35-4.35"/>
-                    </svg>
-                    Size &amp; Fit Guide
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {sizes.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSelectedSize(s)}
-                      className={`w-12 h-10 border text-xs font-medium transition-all rounded-sm ${
-                        effectiveSize === s
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">
+                Size
+              </p>
+              <div className="flex justify-end mb-3">
+                <button
+                  onClick={() => setShowSizeGuide(true)}
+                  className="flex items-center gap-1.5 text-sm font-semibold
+                             text-foreground underline underline-offset-4
+                             decoration-foreground hover:opacity-70
+                             transition-opacity duration-200"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="2.5"
+                    strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                  Size &amp; Fit Guide
+                </button>
               </div>
-            )}
+              <div className="flex flex-wrap gap-3">
+                {availableSizes.map((size) => {
+                  const sizeStock = stockBySize[size] ?? 0;
+                  const isOutOfStock = sizeStock === 0;
+                  const isLowStock = sizeStock > 0 && sizeStock <= 5;
+                  const isSelected = selectedSize === size;
+
+                  return (
+                    <div key={size} className="flex flex-col items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => !isOutOfStock && setSelectedSize(size)}
+                        disabled={isOutOfStock}
+                        className={`
+                          relative w-12 h-12 text-sm font-medium
+                          border rounded-md transition-all duration-200
+                          ${isSelected
+                            ? "border-foreground bg-foreground text-background"
+                            : isOutOfStock
+                              ? "border-border text-muted-foreground/40 cursor-not-allowed bg-muted/30"
+                              : "border-border hover:border-foreground cursor-pointer"
+                          }
+                        `}
+                      >
+                        {size}
+
+                        {isOutOfStock && (
+                          <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <svg
+                              className="absolute inset-0 w-full h-full text-muted-foreground/30"
+                              viewBox="0 0 48 48"
+                              preserveAspectRatio="none"
+                            >
+                              <line
+                                x1="4"
+                                y1="4"
+                                x2="44"
+                                y2="44"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                          </span>
+                        )}
+                      </button>
+
+                      {isOutOfStock && (
+                        <span className="text-[10px] text-muted-foreground/60 text-center leading-tight">
+                          Out of
+                          <br />
+                          stock
+                        </span>
+                      )}
+
+                      {isLowStock && !isOutOfStock && (
+                        <span className="text-[10px] text-amber-500 text-center leading-tight">
+                          Only {sizeStock}
+                          <br />
+                          left
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {selectedSize && selectedVariantStock !== null && (
+                <p
+                  className={`text-xs mt-2 ${
+                    selectedVariantStock === 0
+                      ? "text-red-500"
+                      : selectedVariantStock <= 5
+                        ? "text-amber-500"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  {selectedVariantStock === 0
+                    ? "This size is not available in store"
+                    : selectedVariantStock <= 5
+                      ? `Only ${selectedVariantStock} units left in this size`
+                      : `${selectedVariantStock} in stock`}
+                </p>
+              )}
+            </div>
 
             <div>
               <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">
@@ -708,10 +811,17 @@ export default function ProductDetail() {
                 >
                   <Minus className="w-3 h-3" />
                 </button>
-                <span className="w-10 text-center text-sm">{quantity}</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={selectedVariantStock ?? 99}
+                  value={quantity}
+                  onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
+                  className="w-12 bg-transparent text-center text-sm outline-none"
+                />
                 <button
                   type="button"
-                  onClick={() => setQuantity(quantity + 1)}
+                  onClick={() => setQuantity(Math.min(selectedVariantStock ?? 99, quantity + 1))}
                   className="w-10 h-10 flex items-center justify-center hover:bg-gray-50"
                 >
                   <Plus className="w-3 h-3" />
@@ -722,15 +832,19 @@ export default function ProductDetail() {
             <div className="flex flex-col gap-3 pt-2">
               <Button
                 onClick={handleAddToCart}
-                disabled={product.stock === 0}
+                disabled={!selectedSize || selectedVariantStock === 0}
                 className="w-full h-14 bg-black text-white hover:bg-gray-900 rounded-none uppercase tracking-[0.2em] text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {product.stock === 0 ? "Out of Stock" : "Add to Bag"}
+                {!selectedSize
+                  ? "Select a size"
+                  : selectedVariantStock === 0
+                    ? "Out of Stock"
+                    : "Add to Bag"}
               </Button>
               <Button
                 variant="outline"
                 onClick={handleBuyNow}
-                disabled={product.stock === 0}
+                disabled={!selectedSize || selectedVariantStock === 0}
                 className="w-full h-14 border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-900 hover:text-white dark:hover:bg-zinc-100 dark:hover:text-zinc-900 rounded-none uppercase tracking-[0.2em] text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Buy Now
@@ -776,6 +890,7 @@ export default function ProductDetail() {
                 <img
                   src={p.imageUrl ?? ""}
                   alt={p.name}
+                  loading="lazy"
                   className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
                 />
               </div>
@@ -857,6 +972,7 @@ export default function ProductDetail() {
                   key={`modal-${url}-${idx}`}
                   src={url || ""}
                   alt={`${product.name} fullscreen view ${idx + 1}`}
+                  loading="lazy"
                   className={`absolute inset-0 m-auto max-w-full max-h-full object-contain rounded-sm shadow-2xl transition-opacity duration-300 ${
                     selectedImageIndex === idx ? "opacity-100" : "opacity-0"
                   }`}
@@ -877,7 +993,7 @@ export default function ProductDetail() {
                       }`}
                       aria-label={`Open image ${i + 1}`}
                     >
-                      <img src={url || ""} alt="" className="w-full h-full object-cover" />
+                      <img src={url || ""} alt="" loading="lazy" className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>

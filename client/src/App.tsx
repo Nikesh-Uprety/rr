@@ -31,6 +31,7 @@ const loadPaymentProcessPage = () => import("@/pages/storefront/PaymentProcess")
 const loadOrderSuccessPage = () => import("@/pages/storefront/OrderSuccess");
 const loadAdminDashboardPage = () => import("@/pages/admin/Dashboard");
 const loadAdminProductsPage = () => import("@/pages/admin/Products");
+const loadAdminInventoryPage = () => import("@/pages/admin/Inventory");
 const loadAdminOrdersPage = () => import("@/pages/admin/Orders");
 const loadAdminBillsPage = () => import("@/pages/admin/Bills");
 const loadAdminCustomersPage = () => import("@/pages/admin/Customers");
@@ -59,6 +60,7 @@ const PaymentProcess = lazy(loadPaymentProcessPage);
 const OrderSuccess = lazy(loadOrderSuccessPage);
 const AdminDashboard = lazy(loadAdminDashboardPage);
 const AdminProducts = lazy(loadAdminProductsPage);
+const AdminInventory = lazy(loadAdminInventoryPage);
 const AdminOrders = lazy(loadAdminOrdersPage);
 const AdminBills = lazy(loadAdminBillsPage);
 const AdminCustomers = lazy(loadAdminCustomersPage);
@@ -122,6 +124,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/admin/logs") return loadAdminLogsPage();
   if (cleanPath === "/admin/promo-codes") return loadAdminPromoCodesPage();
   if (cleanPath === "/admin/products") return loadAdminProductsPage();
+  if (cleanPath === "/admin/inventory") return loadAdminInventoryPage();
   if (cleanPath === "/admin/orders") return loadAdminOrdersPage();
   if (cleanPath === "/admin/customers") return loadAdminCustomersPage();
   if (cleanPath === "/admin/store-users") return loadAdminStoreUsersPage();
@@ -268,6 +271,13 @@ function AppRoutes() {
         <ProtectedRoute requiredAdminPage="products">
           <AdminLayout>
             <AdminProducts />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/inventory">
+        <ProtectedRoute requiredAdminPage="products">
+          <AdminLayout>
+            <AdminInventory />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
@@ -721,6 +731,7 @@ function App() {
       void loadCheckoutPage();
       void loadAdminDashboardPage();
       void loadAdminProductsPage();
+      void loadAdminInventoryPage();
       void loadAdminOrdersPage();
     };
 

@@ -34,6 +34,7 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { page: "dashboard", href: "/admin", icon: LayoutGrid, label: "Dashboard", type: "system" },
   { page: "analytics", href: "/admin/analytics", icon: BarChart, label: "Analytics", type: "analytics" },
   { page: "products", href: "/admin/products", icon: Package, label: "Products", type: "product" },
+  { page: "products", href: "/admin/inventory", icon: Package, label: "Inventory", type: "product" },
   { page: "orders", href: "/admin/orders", icon: ShoppingBag, label: "Orders", type: "order" },
   { page: "pos", href: "/admin/pos", icon: CreditCard, label: "Point of Sale", type: "pos" },
   { page: "bills", href: "/admin/bills", icon: Receipt, label: "Bills", type: "bill" },

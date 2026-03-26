@@ -406,6 +406,7 @@ export default function AdminOrders() {
               <tr>
                 <th className="px-4 py-3 font-medium">S.N</th>
                 <th className="px-4 py-3 font-medium">Customer</th>
+                <th className="px-4 py-3 font-medium">Items</th>
                 <th className="px-4 py-3 font-medium">Date</th>
                 <th className="px-4 py-3 font-medium">Payment</th>
                 <th className="px-4 py-3 font-medium">Status</th>
@@ -425,6 +426,9 @@ export default function AdminOrders() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="h-3 w-20 bg-muted animate-pulse" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="h-3 w-40 bg-muted animate-pulse" />
                       </td>
                       <td className="px-4 py-3">
                         <div className="h-6 w-20 bg-muted rounded-full animate-pulse" />
@@ -469,6 +473,13 @@ export default function AdminOrders() {
                               <p>{order.country}</p>
                             </div>
                           )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-xs text-muted-foreground max-w-[240px]">
+                            {order.items?.map((item) =>
+                              `${item.name}${item.size ? ` (${item.size})` : ""} × ${item.quantity}`,
+                            ).join(", ") || "—"}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                           {order.createdAt ? (
@@ -699,14 +710,26 @@ export default function AdminOrders() {
                               className="flex items-start justify-between gap-3 border border-border/50 rounded-xl p-3 bg-card/60"
                             >
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">
-                                  {it.product?.name ?? "Unknown Product"}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] mt-1">
-                                  Size: {it.size ?? "—"} • Color: {it.color ?? "—"}
-                                </p>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium">{it.product?.name ?? "Unknown Product"}</span>
+                                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    {it.size && (
+                                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-medium">
+                                        Size: {it.size}
+                                      </span>
+                                    )}
+                                    {it.color && (
+                                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                                        {it.color}
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-muted-foreground">
+                                      Qty: {qty}
+                                    </span>
+                                  </div>
+                                </div>
                                 <p className="text-[11px] text-muted-foreground mt-2">
-                                  Qty: {qty} • Unit: {formatPrice(unit)}
+                                  Unit: {formatPrice(unit)}
                                 </p>
                               </div>
                               <div className="text-right">

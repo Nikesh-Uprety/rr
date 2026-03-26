@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  index,
   integer,
   jsonb,
   numeric,
   pgTable,
+  serial,
   text,
   timestamp,
   varchar,
@@ -73,6 +75,8 @@ export const products = pgTable("products", {
   shortDetails: text("short_details"),
   description: text("description"),
   price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+  costPrice: integer("cost_price").default(0),
+  sku: varchar("sku", { length: 100 }).default(""),
   imageUrl: text("image_url"),
   galleryUrls: text("gallery_urls"), // JSON array of image URLs
   category: text("category"),
@@ -91,7 +95,9 @@ export const products = pgTable("products", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (table) => ({
+  productsByCategory: index("products_category_idx").on(table.category),
+}));
 
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
@@ -162,9 +168,13 @@ export const orderItems = pgTable("order_items", {
   productId: varchar("product_id")
     .notNull()
     .references(() => products.id),
+  variantId: integer("variant_id").references(() => productVariants.id),
+  size: varchar("size", { length: 10 }).default(""),
   quantity: integer("quantity").notNull(),
   unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull(),
-});
+}, (table) => ({
+  orderItemsByProduct: index("order_items_product_id_idx").on(table.productId),
+}));
 
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
@@ -455,3 +465,23 @@ export const siteAssets = pgTable("site_assets", {
 
 export type SiteAsset = typeof siteAssets.$inferSelect;
 export type InsertSiteAsset = typeof siteAssets.$inferInsert;
+
+export const productVariants = pgTable("product_variants", {
+  id: serial("id").primaryKey(),
+  productId: varchar("product_id")
+    .notNull()
+    .references(() => products.id, { onDelete: "cascade" }),
+  size: varchar("size", { length: 10 }).notNull(),
+  color: varchar("color", { length: 50 }).default(""),
+  sku: varchar("sku", { length: 100 }).default(""),
+  stock: integer("stock").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  productVariantsByProductAndSize: index(
+    "product_variants_product_id_size_idx",
+  ).on(table.productId, table.size),
+}));
+
+export type ProductVariant = typeof productVariants.$inferSelect;
+export type InsertProductVariant = typeof productVariants.$inferInsert;

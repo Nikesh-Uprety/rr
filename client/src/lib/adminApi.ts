@@ -31,6 +31,12 @@ export interface AdminOrder {
   deliveryRequired?: boolean;
   deliveryProvider?: string | null;
   deliveryAddress?: string | null;
+  items?: Array<{
+    productId: string;
+    quantity: number;
+    size?: string | null;
+    name: string;
+  }>;
 }
 
 export interface AdminCustomer {

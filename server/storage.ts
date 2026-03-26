@@ -45,6 +45,8 @@ import { broadcastNotification } from "./websocket";
 
 export interface CreateOrderItemInput {
   productId: string;
+  variantId?: number | null;
+  size?: string | null;
   quantity: number;
   unitPrice: number;
 }
@@ -471,6 +473,8 @@ export class PgStorage implements IStorage {
         shortDetails: products.shortDetails,
         description: products.description,
         price: products.price,
+        costPrice: products.costPrice,
+        sku: products.sku,
         imageUrl: products.imageUrl,
         galleryUrls: products.galleryUrls,
         category: products.category,
@@ -503,6 +507,8 @@ export class PgStorage implements IStorage {
         shortDetails: products.shortDetails,
         description: products.description,
         price: products.price,
+        costPrice: products.costPrice,
+        sku: products.sku,
         imageUrl: products.imageUrl,
         galleryUrls: products.galleryUrls,
         category: products.category,
@@ -535,6 +541,8 @@ export class PgStorage implements IStorage {
         shortDetails: data.shortDetails ?? null,
         description: data.description ?? null,
         price: data.price,
+        costPrice: data.costPrice ?? 0,
+        sku: data.sku ?? "",
         imageUrl: data.imageUrl ?? null,
         galleryUrls: data.galleryUrls ?? null,
         category: data.category ?? null,
@@ -554,6 +562,8 @@ export class PgStorage implements IStorage {
         shortDetails: products.shortDetails,
         description: products.description,
         price: products.price,
+        costPrice: products.costPrice,
+        sku: products.sku,
         imageUrl: products.imageUrl,
         galleryUrls: products.galleryUrls,
         category: products.category,
@@ -592,6 +602,8 @@ export class PgStorage implements IStorage {
         shortDetails: data.shortDetails,
         description: data.description,
         price: data.price,
+        costPrice: data.costPrice,
+        sku: data.sku,
         imageUrl: data.imageUrl,
         galleryUrls: data.galleryUrls,
         category: data.category,
@@ -612,6 +624,8 @@ export class PgStorage implements IStorage {
         shortDetails: products.shortDetails,
         description: products.description,
         price: products.price,
+        costPrice: products.costPrice,
+        sku: products.sku,
         imageUrl: products.imageUrl,
         galleryUrls: products.galleryUrls,
         category: products.category,
@@ -772,7 +786,46 @@ export class PgStorage implements IStorage {
       .limit(limit)
       .offset(offset);
 
-    return rows;
+    if (rows.length === 0) {
+      return rows;
+    }
+
+    const orderIds = rows.map((row) => row.id);
+    const items = await db
+      .select({
+        orderId: orderItems.orderId,
+        productId: orderItems.productId,
+        quantity: orderItems.quantity,
+        size: orderItems.size,
+        productName: products.name,
+      })
+      .from(orderItems)
+      .leftJoin(products, eq(orderItems.productId, products.id))
+      .where(inArray(orderItems.orderId, orderIds))
+      .orderBy(asc(orderItems.id));
+
+    const itemsByOrderId = new Map<string, Array<{
+      productId: string;
+      quantity: number;
+      size: string | null;
+      name: string;
+    }>>();
+
+    items.forEach((item) => {
+      const entry = itemsByOrderId.get(item.orderId) ?? [];
+      entry.push({
+        productId: item.productId,
+        quantity: item.quantity,
+        size: item.size,
+        name: item.productName ?? "Unknown Product",
+      });
+      itemsByOrderId.set(item.orderId, entry);
+    });
+
+    return rows.map((row) => ({
+      ...row,
+      items: itemsByOrderId.get(row.id) ?? [],
+    }));
   }
 
   async getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }> {
@@ -821,6 +874,8 @@ export class PgStorage implements IStorage {
         id: orderItems.id,
         orderId: orderItems.orderId,
         productId: orderItems.productId,
+        variantId: orderItems.variantId,
+        size: orderItems.size,
         quantity: orderItems.quantity,
         unitPrice: orderItems.unitPrice,
         product: products,
@@ -897,6 +952,8 @@ export class PgStorage implements IStorage {
         data.items.map((item) => ({
           orderId: orderRow.id,
           productId: item.productId,
+          variantId: item.variantId ?? null,
+          size: item.size ?? "",
           quantity: item.quantity,
           unitPrice: item.unitPrice.toString(),
         })),
@@ -2515,6 +2572,8 @@ export class MemStorage implements IStorage {
       shortDetails: data.shortDetails ?? null,
       description: data.description ?? null,
       price: data.price.toString(),
+      costPrice: data.costPrice ?? 0,
+      sku: data.sku ?? "",
       imageUrl: data.imageUrl ?? null,
       galleryUrls: data.galleryUrls ?? null,
       category: data.category ?? null,
@@ -2626,7 +2685,15 @@ export class MemStorage implements IStorage {
   }
 
   async getOrders(): Promise<Order[]> {
-    return this._orders.map(({ items: _items, ...order }) => order);
+    return this._orders.map(({ items, ...order }) => ({
+      ...order,
+      items: items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        size: item.size ?? null,
+        name: this._products.find((product) => product.id === item.productId)?.name ?? "Unknown Product",
+      })),
+    }));
   }
 
   async getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }> {
@@ -2675,6 +2742,8 @@ export class MemStorage implements IStorage {
         id: crypto.randomUUID(),
         orderId: id,
         productId: item.productId,
+        variantId: item.variantId ?? null,
+        size: item.size ?? "",
         quantity: item.quantity,
         unitPrice: item.unitPrice.toString(),
       })),

@@ -35,6 +35,7 @@ import {
     posSessions,
     platforms,
     Product,
+    productVariants,
     products,
     promoCodes,
     siteAssets
@@ -256,6 +257,7 @@ export async function registerRoutes(
   app.use("/api/admin/categories", requireAdminPageAccess("products"));
   app.use("/api/admin/upload-product-image", requireAdminPageAccess("products"));
   app.use("/api/admin/products", requireAdminPageAccess("products"));
+  app.use("/api/admin/inventory", requireAdminPageAccess("products"));
   app.use("/api/admin/attributes", requireAdminPageAccess("products"));
   app.use("/api/admin/site-assets", requireAdminPageAccess("landing-page"));
   app.use("/api/admin/orders", requireAdminPageAccess("orders"));
@@ -471,6 +473,7 @@ export async function registerRoutes(
         includeInactive: false,
       });
 
+      res.set("Cache-Control", "public, max-age=60");
       return res.json({ success: true, data: products });
     } catch (err) {
       console.error("Error in GET /api/products", err);
@@ -482,14 +485,42 @@ export async function registerRoutes(
 
   app.get("/api/products/:id", async (req: Request, res: Response) => {
     try {
-      const product = await storage.getProductById(req.params.id as string);
+      const id = req.params.id as string;
+      const product = await storage.getProductById(id);
       if (!product) {
         return res
           .status(404)
           .json({ success: false, error: "Product not found" });
       }
 
-      return res.json({ success: true, data: product });
+      const variants = await db
+        .select({
+          id: productVariants.id,
+          size: productVariants.size,
+          color: productVariants.color,
+          stock: productVariants.stock,
+          sku: productVariants.sku,
+        })
+        .from(productVariants)
+        .where(eq(productVariants.productId, id))
+        .orderBy(productVariants.size);
+
+      const stockBySize = {
+        S: variants.find((variant) => variant.size === "S")?.stock ?? 0,
+        M: variants.find((variant) => variant.size === "M")?.stock ?? 0,
+        L: variants.find((variant) => variant.size === "L")?.stock ?? 0,
+        XL: variants.find((variant) => variant.size === "XL")?.stock ?? 0,
+      };
+
+      res.set("Cache-Control", "public, max-age=30");
+      return res.json({
+        success: true,
+        data: {
+          ...product,
+          variants,
+          stockBySize,
+        },
+      });
     } catch (err) {
       console.error("Error in GET /api/products/:id", err);
       return res
@@ -523,6 +554,8 @@ export async function registerRoutes(
   const orderItemSchema = z.object({
     productId: z.string(),
     variantId: z.string().optional(),
+    size: z.string().optional(),
+    selectedSize: z.string().optional(),
     quantity: z.number().int().positive(),
     priceAtTime: z.number().nonnegative(),
   });
@@ -657,10 +690,64 @@ export async function registerRoutes(
         promoDiscountAmount,
         items: items.map((item) => ({
           productId: item.productId,
+          variantId: item.variantId ? Number(item.variantId) : null,
+          size: item.size || item.selectedSize || "",
           quantity: item.quantity,
           unitPrice: item.priceAtTime,
         })),
       });
+
+      for (const item of items) {
+        const productId = item.productId;
+        const size = item.size || item.selectedSize || null;
+
+        if (size) {
+          const variant = await db
+            .select()
+            .from(productVariants)
+            .where(and(
+              eq(productVariants.productId, productId),
+              eq(productVariants.size, size),
+            ))
+            .limit(1);
+
+          if (variant.length > 0) {
+            const newStock = Math.max(0, (variant[0].stock ?? 0) - item.quantity);
+            await db
+              .update(productVariants)
+              .set({ stock: newStock, updatedAt: new Date() })
+              .where(eq(productVariants.id, variant[0].id));
+          }
+        }
+
+        const allVariants = await db
+          .select()
+          .from(productVariants)
+          .where(eq(productVariants.productId, productId));
+
+        if (allVariants.length > 0) {
+          const totalStock = allVariants.reduce((sum, variant) => sum + (variant.stock ?? 0), 0);
+
+          await db
+            .update(products)
+            .set({ stock: totalStock })
+            .where(eq(products.id, productId));
+        } else {
+          const existingProduct = await db
+            .select({ stock: products.stock })
+            .from(products)
+            .where(eq(products.id, productId))
+            .limit(1);
+
+          if (existingProduct.length > 0) {
+            const newStock = Math.max(0, (existingProduct[0].stock ?? 0) - item.quantity);
+            await db
+              .update(products)
+              .set({ stock: newStock })
+              .where(eq(products.id, productId));
+          }
+        }
+      }
 
       const fullOrder = await storage.getOrderById(order.id);
 
@@ -1442,6 +1529,8 @@ export async function registerRoutes(
           shortDetails: parsed.data.shortDetails || null,
           description: parsed.data.description || null,
           price: parsed.data.price.toString(),
+          costPrice: 0,
+          sku: "",
           imageUrl: parsed.data.imageUrl || null,
           galleryUrls: parsed.data.galleryUrls || null,
           category: parsed.data.category || null,
@@ -1568,6 +1657,298 @@ export async function registerRoutes(
       } catch (err) {
         console.error("Error in PATCH /api/admin/products/:id/home-featured", err);
         return res.status(500).json({ success: false, error: "Failed to update home featured flag" });
+      }
+    },
+  );
+
+  const parseNumericValue = (value: unknown): number => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
+
+  const resolveInventoryStatus = (totalStock: number): "healthy" | "low" | "critical" => {
+    if (totalStock <= 3) return "critical";
+    if (totalStock <= 10) return "low";
+    return "healthy";
+  };
+
+  let summaryCache: { data: InventorySummaryResponse; ts: number } | null = null;
+  const CACHE_TTL = 30_000;
+
+  type InventorySummaryResponse = {
+    totalProducts: number;
+    totalSkus: number;
+    totalQuantity: number;
+    totalInventoryValue: number;
+    totalInventoryCost: number;
+    lowStockCount: number;
+    criticalStockCount: number;
+  };
+
+  app.get(
+    "/api/admin/inventory/summary",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        if (summaryCache && Date.now() - summaryCache.ts < CACHE_TTL) {
+          return res.json(summaryCache.data);
+        }
+
+        const variants = await db
+          .select()
+          .from(productVariants);
+
+        const productRows = await db
+          .select()
+          .from(products);
+
+        const totalQuantity = variants.reduce(
+          (sum, variant) => sum + (variant.stock ?? 0),
+          0,
+        );
+
+        const [inventoryValueRow] = await db
+          .select({
+            value: sql<string>`coalesce(sum(${productVariants.stock} * ${products.price}), 0)::text`,
+          })
+          .from(productVariants)
+          .leftJoin(products, eq(productVariants.productId, products.id));
+
+        const productTotals = productRows.map((product) => {
+          const productVariantRows = variants.filter((variant) => variant.productId === product.id);
+          const totalStock = productVariantRows.reduce((sum, variant) => sum + (variant.stock ?? 0), 0);
+          return { ...product, totalStock };
+        });
+
+        const lowStockCount = productTotals.filter(
+          (product) => product.totalStock > 3 && product.totalStock <= 10,
+        ).length;
+
+        const criticalStockCount = productTotals.filter(
+          (product) => product.totalStock <= 3,
+        ).length;
+
+        const totalInventoryValue = parseNumericValue(inventoryValueRow?.value);
+
+        const result: InventorySummaryResponse = {
+          totalProducts: productRows.length,
+          totalSkus: variants.length + productRows.length,
+          totalQuantity,
+          totalInventoryValue,
+          totalInventoryCost: totalInventoryValue * 0.5,
+          lowStockCount,
+          criticalStockCount,
+        };
+
+        summaryCache = { data: result, ts: Date.now() };
+        return res.json(result);
+      } catch (err) {
+        console.error("Error in GET /api/admin/inventory/summary", err);
+        return res.status(500).json({ error: "Failed to load inventory summary" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/inventory/products",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const status = getQueryParam(req.query.status) ?? "all";
+        const category = (getQueryParam(req.query.category) ?? "").trim();
+        const search = (getQueryParam(req.query.search) ?? "").trim();
+
+        const productRows = await db
+          .select()
+          .from(products)
+          .orderBy(products.name);
+
+        const variants = await db
+          .select()
+          .from(productVariants);
+
+        const variantsByProduct: Record<string, Record<string, number>> = {};
+        variants.forEach((variant) => {
+          if (!variantsByProduct[variant.productId]) {
+            variantsByProduct[variant.productId] = {};
+          }
+          variantsByProduct[variant.productId][variant.size] = variant.stock ?? 0;
+        });
+
+        const result = productRows.map((product) => {
+          const stockBySize = variantsByProduct[product.id] || {};
+          const totalStock = Object.values(stockBySize)
+            .reduce((sum, value) => sum + value, 0);
+          const price = parseNumericValue(product.price);
+          const costPrice = product.costPrice || Math.floor(price * 0.5);
+          const statusValue = resolveInventoryStatus(totalStock);
+
+          return {
+            id: product.id,
+            name: product.name,
+            sku: product.sku || `RR-${product.id}`,
+            category: product.category || "Uncategorized",
+            price,
+            costPrice,
+            stockBySize,
+            totalStock,
+            inventoryValue: totalStock * price,
+            status: statusValue,
+          };
+        });
+
+        let filtered = result;
+        if (status && status !== "all") {
+          filtered = filtered.filter((product) => product.status === status);
+        }
+        if (category) {
+          filtered = filtered.filter(
+            (product) => product.category.toLowerCase() === category.toLowerCase(),
+          );
+        }
+        if (search) {
+          filtered = filtered.filter((product) =>
+            product.name.toLowerCase().includes(search.toLowerCase()),
+          );
+        }
+
+        filtered.sort((a, b) => a.totalStock - b.totalStock);
+        return res.json(filtered);
+      } catch (err) {
+        console.error("Error in GET /api/admin/inventory/products", err);
+        return res.status(500).json({ error: "Failed to load inventory products" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/inventory/:productId/stock",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { productId } = req.params;
+        const bodySchema = z.object({
+          size: z.string().trim().min(1).optional(),
+          newStock: z.number().int(),
+        });
+        const parsed = bodySchema.safeParse(req.body);
+
+        if (!parsed.success) {
+          return res.status(400).json({ error: "Invalid inventory update payload" });
+        }
+
+        const { size, newStock } = parsed.data;
+
+        if (newStock < 0) {
+          return res.status(400).json({ error: "Stock cannot be negative" });
+        }
+
+        if (size) {
+          const existing = await db
+            .select()
+            .from(productVariants)
+            .where(and(
+              eq(productVariants.productId, productId as string),
+              eq(productVariants.size, size),
+            ))
+            .limit(1);
+
+          if (existing.length > 0) {
+            await db
+              .update(productVariants)
+              .set({ stock: newStock, updatedAt: new Date() })
+              .where(eq(productVariants.id, existing[0].id));
+          } else {
+            await db
+              .insert(productVariants)
+              .values({
+                productId: productId as string,
+                size,
+                stock: newStock,
+                sku: `RR-${productId}-${size}`,
+              });
+          }
+
+          const allVariants = await db
+            .select()
+            .from(productVariants)
+            .where(eq(productVariants.productId, productId as string));
+
+          const totalStock = allVariants.reduce(
+            (sum, variant) => sum + (variant.stock ?? 0),
+            0,
+          );
+
+          await db
+            .update(products)
+            .set({ stock: totalStock })
+            .where(eq(products.id, productId as string));
+        }
+
+        summaryCache = null;
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/inventory/:productId/stock", err);
+        return res.status(500).json({ error: "Failed to update stock" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/inventory/seed-variants",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const productRows = await db
+          .select({
+            id: products.id,
+            name: products.name,
+            stock: products.stock,
+            price: products.price,
+            sku: products.sku,
+          })
+          .from(products);
+
+        let seeded = 0;
+        let skipped = 0;
+
+        for (const product of productRows) {
+          const [existingCount] = await db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(productVariants)
+            .where(eq(productVariants.productId, product.id));
+
+          if ((existingCount?.count ?? 0) > 0) {
+            skipped += 1;
+            continue;
+          }
+
+          const stock = product.stock ?? 0;
+          const s = Math.floor(stock * 0.2);
+          const m = Math.floor(stock * 0.35);
+          const l = Math.floor(stock * 0.3);
+          const xl = stock - s - m - l;
+          const baseSku = product.sku || `RR-${product.id}`;
+
+          await db.insert(productVariants).values([
+            { productId: product.id, size: "S", stock: s, sku: `${baseSku}-S` },
+            { productId: product.id, size: "M", stock: m, sku: `${baseSku}-M` },
+            { productId: product.id, size: "L", stock: l, sku: `${baseSku}-L` },
+            { productId: product.id, size: "XL", stock: xl, sku: `${baseSku}-XL` },
+          ]);
+
+          seeded += 1;
+        }
+
+        summaryCache = null;
+        return res.json({ seeded, skipped });
+      } catch (err) {
+        console.error("Error in POST /api/admin/inventory/seed-variants", err);
+        return res.status(500).json({ error: "Failed to seed variants" });
       }
     },
   );
@@ -3365,6 +3746,8 @@ export async function registerRoutes(
         deliveryAddress: deliveryAddress ?? null,
         items: items.map((item: any) => ({
           productId: String(item.productId),
+          variantId: item.variantId ? Number(item.variantId) : null,
+          size: item.size || item.selectedSize || "",
           quantity: Number(item.quantity ?? 0),
           unitPrice: Number(item.unitPrice ?? 0),
         })),
@@ -3406,13 +3789,55 @@ export async function registerRoutes(
         status: "issued",
       }).returning();
 
-      // Deduct inventory
       for (const item of items) {
-        if (item.productId) {
+        const productId = String(item.productId);
+        const size = item.size || item.selectedSize || null;
+
+        if (size) {
+          const variant = await db
+            .select()
+            .from(productVariants)
+            .where(and(
+              eq(productVariants.productId, productId),
+              eq(productVariants.size, size),
+            ))
+            .limit(1);
+
+          if (variant.length > 0) {
+            const newStock = Math.max(0, (variant[0].stock ?? 0) - Number(item.quantity ?? 0));
+            await db
+              .update(productVariants)
+              .set({ stock: newStock, updatedAt: new Date() })
+              .where(eq(productVariants.id, variant[0].id));
+          }
+        }
+
+        const allVariants = await db
+          .select()
+          .from(productVariants)
+          .where(eq(productVariants.productId, productId));
+
+        if (allVariants.length > 0) {
+          const totalStock = allVariants.reduce((sum, variant) => sum + (variant.stock ?? 0), 0);
+
           await db
             .update(products)
-            .set({ stock: sql`${products.stock} - ${item.quantity}` })
-            .where(eq(products.id, item.productId));
+            .set({ stock: totalStock })
+            .where(eq(products.id, productId));
+        } else {
+          const existingProduct = await db
+            .select({ stock: products.stock })
+            .from(products)
+            .where(eq(products.id, productId))
+            .limit(1);
+
+          if (existingProduct.length > 0) {
+            const newStock = Math.max(0, (existingProduct[0].stock ?? 0) - Number(item.quantity ?? 0));
+            await db
+              .update(products)
+              .set({ stock: newStock })
+              .where(eq(products.id, productId));
+          }
         }
       }
 

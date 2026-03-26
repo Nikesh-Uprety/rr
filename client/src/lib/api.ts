@@ -18,6 +18,14 @@ export interface ProductApi {
   saleActive?: boolean | null;
   homeFeatured?: boolean;
   homeFeaturedImageIndex?: number;
+  stockBySize?: Record<string, number>;
+  variants?: Array<{
+    id: number;
+    size: string;
+    color: string | null;
+    stock: number;
+    sku: string | null;
+  }>;
 }
 
 export interface CategoryApi {
@@ -30,6 +38,7 @@ export interface CategoryApi {
 export interface OrderItemInput {
   productId: string;
   variantId?: string;
+  size?: string;
   quantity: number;
   priceAtTime: number;
 }
@@ -134,6 +143,7 @@ export interface OrderDetail {
     quantity: number;
     unitPrice: number | string;
     productId: string;
+    size?: string | null;
     product?: {
       id: string;
       name: string;

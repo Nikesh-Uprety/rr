@@ -43,6 +43,19 @@
   --admin-font-family: 'Iosevka Charon Mono', monospace;
   --admin-font-size: 15px;
   --admin-font-letter-spacing: 0.01em;
+  --bg: #f3eee6;
+  --bg2: #ece4d8;
+  --fg: #181411;
+  --fg-dim: rgba(24, 20, 17, 0.56);
+  --fg-ghost: rgba(24, 20, 17, 0.08);
+  --gold: #b99356;
+  --gold-dim: rgba(185, 147, 86, 0.16);
+  --border: rgba(24, 20, 17, 0.12);
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --nav-h: 68px;
+  --ease: cubic-bezier(.4,0,.2,1);
   --background: 0 0% 100%;
   --foreground: 0 0% 10%;
   
@@ -152,7 +165,15 @@
 
 /* DARK MODE */
 .dark {
-  --background: 0 0% 5%;
+  --bg: #15120f;
+  --bg2: #1d1915;
+  --fg: #e8e4db;
+  --fg-dim: rgba(232, 228, 219, 0.62);
+  --fg-ghost: rgba(232, 228, 219, 0.1);
+  --gold: #c9a96e;
+  --gold-dim: rgba(201, 169, 110, 0.18);
+  --border: rgba(232, 228, 219, 0.12);
+  --background: 20 12% 9%;
   --foreground: 0 0% 98%;
   
   --card: 0 0% 9%;
@@ -223,6 +244,14 @@
 
 /* WARM MODE */
 .warm {
+  --bg: #ebe1d2;
+  --bg2: #e1d5c3;
+  --fg: #221912;
+  --fg-dim: rgba(34, 25, 18, 0.55);
+  --fg-ghost: rgba(34, 25, 18, 0.08);
+  --gold: #b8863f;
+  --gold-dim: rgba(184, 134, 63, 0.18);
+  --border: rgba(34, 25, 18, 0.1);
   --background: 40 33% 96%;
   --foreground: 20 20% 20%;
   
@@ -291,6 +320,53 @@
   .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
     background: var(--sidebar-scrollbar-thumb-hover);
   }
+}
+
+@keyframes rare-announce-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes rare-ticker-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes rare-story-bar-fill {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+@keyframes rare-scroll-pulse {
+  0%, 100% { transform: scaleY(0.35); opacity: 0.35; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes rare-arrow-bounce {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(8px); }
+}
+
+.rare-announce-track {
+  animation: rare-announce-marquee 20s linear infinite;
+}
+
+.rare-ticker-track {
+  animation: rare-ticker-marquee 28s linear infinite;
+}
+
+.rare-story-bar-fill {
+  animation-name: rare-story-bar-fill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.rare-scroll-line {
+  animation: rare-scroll-pulse 2.4s ease-in-out infinite;
+}
+
+.rare-drag-arrow {
+  animation: rare-arrow-bounce 1.8s ease-in-out infinite;
 }
 
 @layer utilities {

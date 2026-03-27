@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getQueryFn } from "@/lib/queryClient";
 
 export interface CurrentUser {
   id: string;
@@ -22,7 +21,16 @@ export const AUTH_QUERY_KEY = ["/api/auth/me"] as const;
 export function useCurrentUser() {
   const { data, isLoading } = useQuery<MeResponse | null>({
     queryKey: AUTH_QUERY_KEY,
-    queryFn: getQueryFn<MeResponse>({ on401: "returnNull" }),
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        if (res.status === 401) return null;
+        if (!res.ok) return null;
+        return (await res.json()) as MeResponse;
+      } catch {
+        return null;
+      }
+    },
     staleTime: 1000 * 60 * 5, // 5 minutes - data considered fresh
     gcTime: 1000 * 60 * 60, // 1 hour - keep in cache even if unused
     refetchOnWindowFocus: true, // Refetch when user returns to tab

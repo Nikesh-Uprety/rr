@@ -485,3 +485,69 @@ export const productVariants = pgTable("product_variants", {
 
 export type ProductVariant = typeof productVariants.$inferSelect;
 export type InsertProductVariant = typeof productVariants.$inferInsert;
+
+export const pageTemplates = pgTable('page_templates', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 100 }).notNull(),
+  slug: varchar('slug', { length: 100 }).notNull().unique(),
+  description: text('description'),
+  thumbnailUrl: text('thumbnail_url'),
+  tier: varchar('tier', { length: 20 })
+    .notNull()
+    .default('free'),
+  priceNpr: integer('price_npr')
+    .notNull()
+    .default(0),
+  isPurchased: boolean('is_purchased')
+    .notNull()
+    .default(true),
+  isActive: boolean('is_active')
+    .notNull()
+    .default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+})
+
+export type PageTemplate =
+  typeof pageTemplates.$inferSelect
+export type InsertPageTemplate =
+  typeof pageTemplates.$inferInsert
+
+export const pageSections = pgTable('page_sections', {
+  id: serial('id').primaryKey(),
+  templateId: integer('template_id')
+    .notNull()
+    .references(() => pageTemplates.id,
+      { onDelete: 'cascade' }),
+  sectionType: varchar('section_type', { length: 50 })
+    .notNull(),
+  label: varchar('label', { length: 100 }),
+  orderIndex: integer('order_index')
+    .notNull()
+    .default(0),
+  isVisible: boolean('is_visible')
+    .notNull()
+    .default(true),
+  config: jsonb('config').default('{}'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+})
+
+export type PageSection =
+  typeof pageSections.$inferSelect
+export type InsertPageSection =
+  typeof pageSections.$inferInsert
+
+export const siteSettings = pgTable('site_settings', {
+  id: serial('id').primaryKey(),
+  activeTemplateId: integer('active_template_id')
+    .references(() => pageTemplates.id),
+  publishedAt: timestamp('published_at'),
+  publishedBy: varchar('published_by')
+    .references(() => users.id),
+  updatedAt: timestamp('updated_at').defaultNow(),
+})
+
+export type SiteSettings =
+  typeof siteSettings.$inferSelect
+export type InsertSiteSettings =
+  typeof siteSettings.$inferInsert

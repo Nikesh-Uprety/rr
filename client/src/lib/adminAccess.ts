@@ -9,10 +9,10 @@ import {
   Receipt,
   Settings,
   ShoppingBag,
+  Sparkles,
   Tags,
   User,
   Users,
-  ChevronsLeftRight,
 } from "lucide-react";
 import {
   canAccessAdminPage,
@@ -32,6 +32,7 @@ export interface AdminNavItem {
 
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { page: "dashboard", href: "/admin", icon: LayoutGrid, label: "Dashboard", type: "system" },
+  { page: "landing-page", href: "/admin/canvas", icon: Sparkles, label: "Canvas", type: "system" },
   { page: "analytics", href: "/admin/analytics", icon: BarChart, label: "Analytics", type: "analytics" },
   { page: "products", href: "/admin/products", icon: Package, label: "Products", type: "product" },
   { page: "products", href: "/admin/inventory", icon: Package, label: "Inventory", type: "product" },
@@ -48,13 +49,6 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     href: "/admin/storefront-images",
     icon: Settings,
     label: "Storefront Images",
-    type: "system",
-  },
-  {
-    page: "landing-page",
-    href: "/admin/landing-page",
-    icon: ChevronsLeftRight,
-    label: "Landing Page",
     type: "system",
   },
 ];
@@ -75,7 +69,7 @@ const ADMIN_ROUTE_BY_PAGE: Record<AdminPageKey, string> = {
   "promo-codes": "/admin/promo-codes",
   images: "/admin/images",
   "storefront-images": "/admin/storefront-images",
-  "landing-page": "/admin/landing-page",
+  "landing-page": "/admin/canvas",
 };
 
 const ADMIN_DEFAULT_PAGE_ORDER: AdminPageKey[] = [

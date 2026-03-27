@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { formatPrice } from "@/lib/format";
-import { MOCK_PRODUCTS } from "@/lib/mockData";
-import { Link } from "wouter";
-import { ExternalLink, Sparkles, Star, Gem, Diamond, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchHomeFeaturedProducts, fetchProducts, type ProductApi } from "@/lib/api";
-import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
-import { OptimizedImage } from "@/components/ui/OptimizedImage";
+import { fetchHomeFeaturedProducts, fetchProducts } from "@/lib/api";
+import { useScroll, useTransform } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 import OurServices from "@/components/home/OurServices";
+import HeroSection from "@/components/home/HeroSection";
+import QuoteSection from "@/components/home/QuoteSection";
+import FeaturedCollection from "@/components/home/FeaturedCollection";
+import CampaignBanner from "@/components/home/CampaignBanner";
+import NewArrivalsSection from "@/components/home/NewArrivalsSection";
+import GoldTickerSection from "@/components/home/GoldTickerSection";
+import FreshReleaseSection from "@/components/home/FreshReleaseSection";
 import { ScrollProgress } from "@/components/ScrollProgress";
 
 type SiteAsset = {
@@ -43,362 +44,6 @@ const LIFESTYLE_IMAGES_FALLBACK = [
   "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/589049070_17986476560913773_350565688129391821_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=102&ig_cache_key=Mzc3ODU3ODg0MjAwNTY0NTU5Nw%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTc5NS5zZHIuQzMifQ%3D%3D&_nc_ohc=xHR20j7rQNoQ7kNvwFO9t2s&_nc_oc=AdkrxPNMtgOtY3GmtQghJriONkvXttDjhc9pUDC7HWn0AJ9XWcEIc9u-2t9GjH5P49Y&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=KLgY0WiWUz90hQ3-kU0wjQ&_nc_ss=8&oh=00_AfykWLe3XijJQFThpyjPobnr0u1kWg-W6_FOpPeJUKu8tw&oe=69BD7C79",
   "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/575594259_17984209781913773_7313822284254687486_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=103&ig_cache_key=Mzc2MTk2MjA2MjM5NTM4MDg3NQ%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTgwMC5zZHIuQzMifQ%3D%3D&_nc_ohc=T1IjMD62vJ8Q7kNvwGnWT7G&_nc_oc=Adlo703DNg6YfjJOHEClflyLa1KUFDsIe6BF8UY8c_j-h5Gh5WWTKd6r1LJZOTQmMCs&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=WcwdBNgmsQH2FyyZK7KI_A&_nc_ss=8&oh=00_AfzGvCdkiyzlTeSs6sqFWTFyQBWQHdmxlrdGxpHsMEj5JA&oe=69BD8D26"
 ];
-
-const FEATURED_STATIC_IMAGES = [
-  "https://cdn2.blanxer.com/uploads/67cd36dcf133882caba612b4/product_image-dsc03423-6408.webp", // Lifestyle for Two-Way Zip
-  "https://cdn2.blanxer.com/uploads/67cd36dcf133882caba612b4/product_image-dsc02288-edit-2-8008.webp", // Lifestyle for Essential Hoodie
-];
-
-const DUMMY_NEW_ARRIVAL_IMAGES = [
-  "https://placehold.co/900x1200/0b1020/ffffff?text=RARE+ALT+1",
-  "https://placehold.co/900x1200/111827/ffffff?text=RARE+ALT+2",
-  "https://placehold.co/900x1200/0f172a/ffffff?text=RARE+ALT+3",
-];
-
-function getGalleryImagesForCard(product: ProductApi, { addDummyFallback }: { addDummyFallback: boolean }) {
-  const main = product.imageUrl ?? "";
-  const parsed = (() => {
-    try {
-      const urls = product.galleryUrls ? JSON.parse(product.galleryUrls) : [];
-      return Array.isArray(urls) ? urls.filter((u) => typeof u === "string") : [];
-    } catch {
-      return [];
-    }
-  })();
-
-  const all = [main, ...parsed].filter(Boolean);
-  if (!addDummyFallback) return all.length > 0 ? all : [main].filter(Boolean);
-
-  // For testing: if there aren't multiple images, add dummy slides.
-  if (all.length >= 2) return all;
-  return [...all, ...DUMMY_NEW_ARRIVAL_IMAGES].filter(Boolean);
-}
-
-function FeaturedProductCard({ product, index }: { product: ProductApi; index: number }) {
-  const [mobileImageIndex, setMobileImageIndex] = useState(0);
-  const touchStartX = useRef(0);
-  const autoCycleRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const didSwipeRef = useRef(false);
-
-  // Parse gallery images for mobile slideshow
-  const galleryImages = (() => {
-    try {
-      const urls = product.galleryUrls ? JSON.parse(product.galleryUrls) : [];
-      const mainImg = product.imageUrl ?? "";
-      const all = mainImg ? [mainImg, ...urls] : [...urls];
-      return all.length > 0 ? all : [mainImg];
-    } catch {
-      return [product.imageUrl ?? ""];
-    }
-  })();
-
-  // Auto-cycle images on mobile/tablet (paused during swipe)
-  const startAutoCycle = useCallback(() => {
-    if (galleryImages.length <= 1) return;
-    if (autoCycleRef.current) clearInterval(autoCycleRef.current);
-    autoCycleRef.current = setInterval(() => {
-      setMobileImageIndex((prev) => (prev + 1) % galleryImages.length);
-    }, 2000);
-  }, [galleryImages.length]);
-
-  useEffect(() => {
-    startAutoCycle();
-    return () => {
-      if (autoCycleRef.current) clearInterval(autoCycleRef.current);
-    };
-  }, [startAutoCycle]);
-
-  // Touch swipe handlers for mobile/tablet (< 1024px)
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    if (autoCycleRef.current) {
-      clearInterval(autoCycleRef.current);
-      autoCycleRef.current = null;
-    }
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
-    if (galleryImages.length <= 1) {
-      startAutoCycle();
-      return;
-    }
-    if (Math.abs(deltaX) > 50) {
-      didSwipeRef.current = true;
-      setMobileImageIndex((prev) => {
-        if (deltaX < 0) return (prev + 1) % galleryImages.length; // swipe left = next
-        return (prev - 1 + galleryImages.length) % galleryImages.length; // swipe right = prev
-      });
-      setTimeout(() => { didSwipeRef.current = false; }, 400);
-    }
-    startAutoCycle();
-  };
-
-  const handleGalleryClick = (e: React.MouseEvent) => {
-    if (didSwipeRef.current) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  };
-
-  const staticImage = FEATURED_STATIC_IMAGES[index] ?? (product.galleryUrls ? JSON.parse(product.galleryUrls)[0] : product.imageUrl ?? "");
-
-  return (
-    <Link
-      href={`/product/${product.id}`}
-      className="group cursor-pointer relative"
-    >
-      <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5] rounded-xl shadow-2xl transition-all duration-300 hover:shadow-white/5">
-        {/* Desktop view — hover swap (hidden on mobile/tablet, lg = 1024px) */}
-        <div className="hidden lg:block absolute inset-0 z-0">
-          <AnimatePresence mode="wait">
-            <motion.div
-              className="absolute inset-0 z-0"
-              whileHover={{ scale: 1.1 }}
-              transition={{ duration: 0.4, ease: [0.33, 1, 0.68, 1] }}
-            >
-              <OptimizedImage
-                src={staticImage}
-                alt={`${product.name} lifestyle`}
-                className="w-full h-full object-cover transition-opacity duration-1000 ease-in-out group-hover:opacity-0"
-                priority={index < 2}
-              />
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 ease-in-out">
-                <OptimizedImage
-                  src={product.imageUrl ?? ""}
-                  alt={product.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* Mobile/tablet view — auto-sliding gallery + touch swipe (hidden on desktop, < 1024px) */}
-        <div
-          className="lg:hidden absolute inset-0 z-0 touch-pan-y"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onClick={handleGalleryClick}
-        >
-          {galleryImages.map((src: string, imgIdx: number) => (
-            <div
-              key={imgIdx}
-              className="absolute inset-0 transition-opacity duration-700 ease-in-out"
-              style={{ opacity: imgIdx === mobileImageIndex ? 1 : 0 }}
-            >
-              <img
-                src={src}
-                alt={`${product.name} view ${imgIdx + 1}`}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          ))}
-          {/* Slide indicators */}
-          {galleryImages.length > 1 && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
-              {galleryImages.map((_: string, dotIdx: number) => (
-                <div
-                  key={dotIdx}
-                  className={`h-1 rounded-full transition-all duration-500 ${
-                    dotIdx === mobileImageIndex
-                      ? "w-5 bg-white shadow-lg"
-                      : "w-1.5 bg-white/40"
-                  }`}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Desktop: Dark Gradient Overlay on Hover */}
-        <div className="hidden lg:block absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10" />
-
-        {/* Mobile/tablet: Always-visible gradient overlay */}
-        <div className="lg:hidden absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none z-10" />
-
-        {/* Desktop: Glassmorphism Detail Reveal on Hover */}
-        <div 
-          className="hidden lg:flex absolute inset-x-4 bottom-4 z-20 p-6 backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl shadow-xl justify-between items-center opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-700 ease-out"
-        >
-          <div>
-            <h3 className="text-white text-xl font-black uppercase tracking-tighter mb-1">
-              {product.name}
-            </h3>
-            {product.saleActive && Number(product.salePercentage) > 0 ? (
-              <div className="flex items-center gap-2">
-                <p className="text-white font-black text-lg">
-                  {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
-                </p>
-                <p className="text-white/50 font-medium text-sm line-through">
-                  {formatPrice(product.price)}
-                </p>
-                <span className="bg-white text-black text-[9px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-sm">
-                  {product.salePercentage}% OFF
-                </span>
-              </div>
-            ) : (
-              <p className="text-white/70 font-medium text-lg">
-                {formatPrice(product.price)}
-              </p>
-            )}
-          </div>
-          <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-white">
-            <ArrowRight className="w-5 h-5" />
-          </div>
-        </div>
-
-        {/* Mobile/tablet: Always-visible product info */}
-        <div className="lg:hidden absolute inset-x-3 bottom-3 z-20 p-4 backdrop-blur-xl bg-black/40 border border-white/10 rounded-xl shadow-xl">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-white text-base font-black uppercase tracking-tighter mb-0.5 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                {product.name}
-              </h3>
-              {product.saleActive && Number(product.salePercentage) > 0 ? (
-                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-700">
-                  <p className="text-white font-black text-sm">
-                    {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
-                  </p>
-                  <p className="text-white/50 font-medium text-xs line-through">
-                    {formatPrice(product.price)}
-                  </p>
-                  <span className="bg-white text-black text-[8px] font-black uppercase tracking-[0.1em] px-1.5 py-0.5 rounded-sm">
-                    {product.salePercentage}% OFF
-                  </span>
-                </div>
-              ) : (
-                <p className="text-white/70 font-medium text-sm animate-in fade-in slide-in-from-bottom-2 duration-700">
-                  {formatPrice(product.price)}
-                </p>
-              )}
-            </div>
-            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-white">
-              <ArrowRight className="w-4 h-4" />
-            </div>
-          </div>
-        </div>
-
-        {/* Desktop: External link button on hover */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            window.open(`/product/${product.id}`, "_blank");
-          }}
-          className="absolute top-4 right-4 z-30 hidden lg:flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:text-black"
-        >
-          <ExternalLink className="h-4 w-4" />
-        </button>
-      </div>
-    </Link>
-  );
-}
-
-function NewArrivalCard({
-  product,
-  imageAspectClass = "aspect-[4/5] sm:aspect-[3/4]",
-}: {
-  product: ProductApi;
-  imageAspectClass?: string;
-}) {
-  const preferredIndex = Number.isInteger(product.homeFeaturedImageIndex)
-    ? Number(product.homeFeaturedImageIndex)
-    : 0;
-  const images = useMemo(
-    () => {
-      const all = getGalleryImagesForCard(product, { addDummyFallback: true });
-      if (all.length <= 1) return all;
-      const clamped = Math.max(0, Math.min(preferredIndex, all.length - 1));
-      const preferred = all[clamped] ?? all[0];
-      const rest = all.filter((_, idx) => idx !== clamped);
-      return [preferred, ...rest];
-    },
-    [preferredIndex, product],
-  );
-  const [idx, setIdx] = useState(0);
-
-  // Adaptive timing: primary image (idx 0) holds 3.5s, gallery images cycle at 2.0s
-  useEffect(() => {
-    if (images.length <= 1) return;
-    const duration = idx === 0 ? 3800 : 2300;
-    const t = setTimeout(() => setIdx((p) => (p + 1) % images.length), duration);
-    return () => clearTimeout(t);
-  }, [images.length, idx]);
-
-  return (
-    <Link href={`/product/${product.id}`} className="group block cursor-pointer">
-      <div
-        className={`relative overflow-hidden rounded-xl border border-zinc-200/70 bg-zinc-100/70 dark:border-zinc-800/80 dark:bg-zinc-900/40 ${imageAspectClass} mb-4 shadow-[0_12px_40px_-30px_rgba(0,0,0,0.85)] transition-all duration-500 group-hover:-translate-y-1 group-hover:shadow-[0_24px_60px_-30px_rgba(0,0,0,0.9)]`}
-      >
-        <div className="absolute inset-0">
-          {images.slice(0, 6).map((src: string, imgIdx: number) => (
-            <div
-              key={`${product.id}-img-${imgIdx}`}
-              className="absolute inset-0"
-              style={{
-                opacity: imgIdx === idx ? 1 : 0,
-                transition: "opacity 1.4s cubic-bezier(0.22, 1, 0.36, 1)",
-                zIndex: imgIdx === idx ? 1 : 0,
-              }}
-            >
-              <OptimizedImage
-                src={src}
-                alt={`${product.name} view ${imgIdx + 1}`}
-                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.035]"
-              />
-            </div>
-          ))}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-60 z-[2]" />
-          <div className="absolute inset-0 z-[3] border border-white/30 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-        </div>
-
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            window.open(`/product/${product.id}`, "_blank");
-          }}
-          className="absolute right-3 top-3 z-10 hidden h-8 w-8 items-center justify-center rounded-full border border-white/30 bg-black/35 text-white opacity-0 backdrop-blur-md transition-all duration-300 group-hover:opacity-100 lg:flex"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-        </button>
-
-        <div className="absolute left-3 top-3 z-[5]">
-          {product.saleActive && Number(product.salePercentage) > 0 && (
-            <span className="rounded-full border border-white/30 bg-black/45 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.2em] text-white backdrop-blur-md">
-              {product.salePercentage}% OFF
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="px-0.5">
-        <div className="mb-1.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">
-          <span className="inline-block h-[1px] w-5 bg-zinc-400/70 dark:bg-zinc-600/80" />
-          Crafted Quality
-        </div>
-        <h3 className="mb-1 truncate text-[11px] font-black uppercase tracking-[0.14em] text-zinc-900 transition-colors duration-300 group-hover:text-black dark:text-zinc-100 dark:group-hover:text-white">
-          {product.name}
-        </h3>
-        <div className="flex items-center gap-2 text-[11px] font-bold tracking-[0.08em] text-zinc-700 dark:text-zinc-300">
-          {product.saleActive && Number(product.salePercentage) > 0 ? (
-            <>
-              <span className="text-primary">
-                {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
-              </span>
-              <span className="text-[10px] text-zinc-500 line-through dark:text-zinc-500">{formatPrice(product.price)}</span>
-            </>
-          ) : (
-            <span>{formatPrice(product.price)}</span>
-          )}
-        </div>
-      </div>
-    </Link>
-  );
-}
 
 export default function Home() {
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -459,6 +104,36 @@ export default function Home() {
         .then((r) => r.json())
         .then((r) => r.data ?? []),
     staleTime: 5 * 60 * 1000,
+  });
+
+  const previewTemplateId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
+    return rawValue && /^\d+$/.test(rawValue) ? rawValue : null;
+  }, []);
+  const previewSectionId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const rawValue = new URLSearchParams(window.location.search).get("canvasSectionId");
+    return rawValue && /^-?\d+$/.test(rawValue) ? Number(rawValue) : null;
+  }, []);
+  const previewFontPreset = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("canvasFontPreset");
+  }, []);
+
+  const { data: pageConfig } = useQuery({
+    queryKey: ["page-config", previewTemplateId],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (previewTemplateId) {
+        params.set("templateId", previewTemplateId);
+      }
+      const url = params.toString()
+        ? `/api/public/page-config?${params.toString()}`
+        : "/api/public/page-config";
+      return fetch(url).then((r) => r.json());
+    },
+    staleTime: 30 * 1000,
   });
 
   // Device detection
@@ -568,6 +243,21 @@ export default function Home() {
     }, 5000);
   }, [lifestyleImages.length]);
 
+  const handleCarouselNext = useCallback(() => {
+    pauseAutoScroll();
+    goNext();
+  }, [goNext, pauseAutoScroll]);
+
+  const handleCarouselPrev = useCallback(() => {
+    pauseAutoScroll();
+    goPrev();
+  }, [goPrev, pauseAutoScroll]);
+
+  const handleCarouselGoTo = useCallback((index: number) => {
+    pauseAutoScroll();
+    goToSlide(index);
+  }, [goToSlide, pauseAutoScroll]);
+
   // Auto-scroll effect for lifestyle carousel + hero image fallback cycling
   useEffect(() => {
     autoPlayRef.current = setInterval(() => {
@@ -633,409 +323,223 @@ export default function Home() {
     }
   };
 
+  const parallaxY = yParallax;
+  const campaignBannerAltText = campaignAssets[0]?.altText || "Campaign story";
+  const defaultSections = [
+    { id: -1, sectionType: "hero", isVisible: true, config: {}, orderIndex: 1 },
+    { id: -2, sectionType: "quote", isVisible: true, config: {}, orderIndex: 2 },
+    { id: -3, sectionType: "featured", isVisible: true, config: {}, orderIndex: 3 },
+    { id: -4, sectionType: "campaign", isVisible: true, config: {}, orderIndex: 4 },
+    { id: -5, sectionType: "arrivals", isVisible: true, config: {}, orderIndex: 5 },
+    { id: -6, sectionType: "services", isVisible: true, config: {}, orderIndex: 6 },
+  ];
+
+  const activeSections = (
+    pageConfig?.sections?.length
+      ? pageConfig.sections
+      : defaultSections
+  ).filter((s: any) => s.isVisible)
+    .sort((a: any, b: any) => a.orderIndex - b.orderIndex)
+    .filter((section: any) => previewSectionId == null || Number(section.id) === previewSectionId);
+  const isMaisonNocturne = pageConfig?.template?.slug === "maison-nocturne";
+  const isNikeshDesign = pageConfig?.template?.slug === "nikeshdesign";
+  const isLuxuryEditorialTemplate = isMaisonNocturne || isNikeshDesign;
+
+  useEffect(() => {
+    if (!isLuxuryEditorialTemplate) return;
+    const nodes = Array.from(document.querySelectorAll(".reveal, .p-card, .ed-cell"));
+    if (!nodes.length) return;
+
+    nodes.forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      node.style.opacity = "0";
+      node.style.transform = node.classList.contains("ed-cell") ? "scale(0.97)" : "translateY(36px)";
+      node.style.transition = "opacity 0.85s var(--ease), transform 0.85s var(--ease)";
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!(entry.target instanceof HTMLElement)) return;
+          if (!entry.isIntersecting) return;
+          entry.target.style.opacity = "1";
+          entry.target.style.transform = entry.target.classList.contains("ed-cell") ? "scale(1)" : "translateY(0)";
+          observer.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.08, rootMargin: "0px 0px -40px 0px" },
+    );
+
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [activeSections, isLuxuryEditorialTemplate]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    const originalDisplay = root.style.getPropertyValue("--font-display");
+    const originalBody = root.style.getPropertyValue("--font-body");
+    const originalMono = root.style.getPropertyValue("--font-mono");
+
+    const presets: Record<string, { display: string; body: string; mono: string }> = {
+      inter: {
+        display: "'Playfair Display', Georgia, serif",
+        body: "'Inter', sans-serif",
+        mono: "'DM Mono', monospace",
+      },
+      "roboto-slab": {
+        display: "'Roboto Slab', 'Playfair Display', serif",
+        body: "'Roboto Slab', Georgia, serif",
+        mono: "'DM Mono', monospace",
+      },
+      "space-grotesk": {
+        display: "'Playfair Display', Georgia, serif",
+        body: "'Space Grotesk', 'DM Sans', sans-serif",
+        mono: "'DM Mono', monospace",
+      },
+      "ibm-plex-sans": {
+        display: "'Playfair Display', Georgia, serif",
+        body: "'IBM Plex Sans', 'DM Sans', sans-serif",
+        mono: "'DM Mono', monospace",
+      },
+    };
+
+    const preset = previewFontPreset ? presets[previewFontPreset] : null;
+    if (!preset) {
+      root.style.removeProperty("--font-display");
+      root.style.removeProperty("--font-body");
+      root.style.removeProperty("--font-mono");
+      return () => {
+        if (originalDisplay) root.style.setProperty("--font-display", originalDisplay);
+        if (originalBody) root.style.setProperty("--font-body", originalBody);
+        if (originalMono) root.style.setProperty("--font-mono", originalMono);
+      };
+    }
+
+    root.style.setProperty("--font-display", preset.display);
+    root.style.setProperty("--font-body", preset.body);
+    root.style.setProperty("--font-mono", preset.mono);
+
+    return () => {
+      if (originalDisplay) root.style.setProperty("--font-display", originalDisplay);
+      else root.style.removeProperty("--font-display");
+      if (originalBody) root.style.setProperty("--font-body", originalBody);
+      else root.style.removeProperty("--font-body");
+      if (originalMono) root.style.setProperty("--font-mono", originalMono);
+      else root.style.removeProperty("--font-mono");
+    };
+  }, [previewFontPreset]);
+
+  function renderSection(section: any) {
+    switch (section.sectionType) {
+      case "hero":
+        return (
+          <HeroSection
+            key={section.id}
+            heroImages={heroImages}
+            heroIndex={heroIndex}
+            heroLoading={heroLoading}
+            videoFailed={videoFailed}
+            isMobile={isMobile}
+            isTransitioning={isTransitioning}
+            onVideoError={() => setVideoFailed(true)}
+            heroVideoRef={heroVideoRef}
+            config={section.config}
+          />
+        );
+      case "quote":
+        return (
+          <QuoteSection
+            key={section.id}
+            config={section.config}
+          />
+        );
+      case "featured":
+        return (
+          <FeaturedCollection
+            key={section.id}
+            featuredProducts={featuredProducts ?? []}
+            isFeaturedSuccess={isFeaturedSuccess}
+            featureCollectionImages={lifestyleImages}
+            carouselIndex={carouselIndex}
+            isTransitioning={isTransitioning}
+            onCarouselNext={handleCarouselNext}
+            onCarouselPrev={handleCarouselPrev}
+            onCarouselGoTo={handleCarouselGoTo}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+            config={section.config}
+          />
+        );
+      case "ticker":
+        return (
+          <GoldTickerSection
+            key={section.id}
+            config={section.config}
+          />
+        );
+      case "campaign":
+        return (
+          <CampaignBanner
+            key={section.id}
+            exploreCollectionImage={campaignBannerImage}
+            parallaxOffset={parallaxY}
+            imageAlt={campaignBannerAltText}
+            config={section.config}
+          />
+        );
+      case "arrivals":
+        return (
+          <NewArrivalsSection
+            key={section.id}
+            newArrivals={normalizedNewArrivals}
+            isNewArrivalsSuccess={isNewArrivalsSuccess}
+            config={section.config}
+          />
+        );
+      case "services":
+        return (
+          <OurServices
+            key={section.id}
+            config={section.config}
+          />
+        );
+      case "fresh-release":
+        return (
+          <FreshReleaseSection
+            key={section.id}
+            config={section.config}
+          />
+        );
+      default:
+        return null;
+    }
+  }
+
   return (
-    <div className="flex flex-col min-h-screen pt-20">
+    <div
+      className="flex min-h-screen flex-col"
+      style={{
+        paddingTop: isLuxuryEditorialTemplate ? 0 : "5rem",
+        background: isLuxuryEditorialTemplate ? "var(--bg)" : undefined,
+      }}
+    >
       {/* Scroll Progress Indicator - Minimal premium line at top */}
       <ScrollProgress />
-
       <Helmet>
         <title>Rare Atelier | Home - Premium Streetwear</title>
         <meta name="description" content="Welcome to Rare Atelier. Explore our premium streetwear and minimal luxury collection. Authentic style, timeless designs." />
         <meta property="og:title" content="Rare Atelier | Premium Streetwear" />
         <meta property="og:url" content={window.location.origin} />
       </Helmet>
-      {/* Hero Section */}
-      <section className="relative h-[90vh] min-h-[650px] md:min-h-[750px] lg:min-h-[850px] w-full overflow-hidden bg-neutral-900">
-        {/* Native Video Background – autoplay, loop, muted */}
-        {showHeroVideo ? (
-          <motion.div
-            key="hero-video"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1.5, ease: "easeInOut" }}
-            className="absolute inset-0 w-full h-full"
-          >
-            <video
-              ref={heroVideoRef}
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="auto"
-              poster={heroImages[0] || undefined}
-              onError={() => setVideoFailed(true)}
-              className="w-full h-full object-cover"
-            >
-              <source src="/videos/videorare.mp4" type="video/mp4" />
-            </video>
-          </motion.div>
-        ) : heroLoading ? (
-          <div
-            className="absolute inset-0 w-full h-full animate-pulse bg-muted"
-            style={{ aspectRatio: "1920/800" }}
-          />
-        ) : (
-          <AnimatePresence mode="popLayout">
-            <motion.div
-              key={`hero-image-${heroIndex}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1.5, ease: "easeInOut" }}
-              className="absolute inset-0 w-full h-full"
-            >
-              {heroImages[heroIndex] ? (
-                <OptimizedImage
-                  src={heroImages[heroIndex]}
-                  alt="Luxury street style campaign"
-                  className="w-full h-full object-cover object-center"
-                  priority
-                  loading="eager"
-                />
-              ) : (
-                <div className="w-full h-full bg-neutral-900" />
-              )}
-            </motion.div>
-          </AnimatePresence>
-        )}
-        <div className="absolute inset-0 bg-black/0 dark:bg-black/40 transition-colors duration-700 pointer-events-none" />
-
-        {/* Editorial Left Text Section */}
-        <div className="absolute inset-0 flex items-start md:items-center container mx-auto px-6 sm:px-12 md:px-16 pt-32 sm:pt-40 md:pt-0 pointer-events-none z-10">
-          <div className="flex items-center gap-6 md:gap-12 pl-2">
-            {/* Elegant Vertical Line */}
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "clamp(120px, 20vh, 180px)", opacity: 0.4 }}
-              transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
-              className="w-px bg-white hidden md:block"
-            />
-            
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-              className="text-white flex flex-col items-start w-full"
-            >
-              {/* Premium Archival Detail */}
-              <span className="text-[9px] md:text-xs tracking-[0.4em] md:tracking-[0.5em] opacity-40 font-bold mb-4 md:mb-6 block uppercase">
-                [W'25/ARCHIVE]
-              </span>
-              
-              <h1 className="font-serif text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-semibold leading-[0.9] tracking-tighter shadow-black/20 text-shadow-sm">
-                Beyond
-                <br />
-                Trends.
-              </h1>
-              
-              <p className="mt-4 md:mt-8 text-xl sm:text-3xl md:text-4xl font-serif italic opacity-70 tracking-wide text-shadow-sm">
-                Beyond Time.
-              </p>
-            </motion.div>
-          </div>
-        </div>
-
-        {/* Center CTA group with stagger animation */}
-        <div className="absolute inset-0 flex items-end justify-center pb-24 sm:pb-32 md:pb-20 md:items-end pt-0 md:pt-0 pointer-events-none z-20">
-          <div className="flex flex-col items-center gap-4 md:gap-5 pointer-events-auto">
-            {/* Animated reveal line */}
-            <motion.div
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="w-12 md:w-16 h-px bg-white/50 origin-center hidden md:block"
-            />
-
-            {/* CTA Button */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <Button
-                size="lg"
-                asChild
-                className="rounded-none bg-white text-black hover:bg-white/90 px-8 sm:px-12 md:px-16 h-12 sm:h-14 md:h-15 text-[9px] md:text-xs uppercase tracking-[0.3em] md:tracking-[0.4em] font-black transition-all duration-300 hover:scale-105 active:scale-95 shadow-2xl hero-btn-glow group"
-              >
-                <Link href="/products" className="flex items-center gap-3">
-                  Explore Shop
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform duration-300" />
-                </Link>
-              </Button>
-            </motion.div>
-
-            {/* Tagline below button */}
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.6 }}
-              transition={{ duration: 0.8, delay: 1.0, ease: "easeOut" }}
-              className="text-[8px] md:text-[11px] tracking-[0.5em] md:tracking-[0.7em] uppercase text-white font-bold text-shadow-sm mt-1 md:mt-0"
-            >
-              Authenticity In Motion
-            </motion.p>
-          </div>
-        </div>
-      </section>
-
-      {/* Quote Section */}
-      {/* Quote Section - Glassmorphism & Bioluminescent Glow (autoplay) */}
-      <section className="py-16 md:py-24 relative overflow-hidden transition-colors duration-500
-        bg-gradient-to-br from-[#faf8f5] via-[#f5f2eb] to-[#f0ebe3]
-        dark:bg-neutral-950">
-        {/* Bioluminescent glow orbs — CSS keyframes autoplay on load, blur(40px) on orb */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          {/* Light mode: amber/gold + dusty rose — stronger opacity so effects are visible */}
-          <div
-            className="quote-glow-orb absolute top-[-10%] left-[10%] w-[480px] h-[480px] rounded-full dark:hidden"
-            style={{ background: "rgba(220, 170, 80, 0.55)" }}
-            aria-hidden
-          />
-          <div
-            className="quote-glow-orb-alt absolute bottom-[-10%] right-[10%] w-[420px] h-[420px] rounded-full dark:hidden"
-            style={{ background: "rgba(185, 125, 150, 0.5)" }}
-            aria-hidden
-          />
-          {/* Dark mode: soft cyan/violet glow orbs — visible on dark bg */}
-          <div
-            className="quote-glow-orb absolute top-[-10%] left-[10%] w-[480px] h-[480px] rounded-full hidden dark:block"
-            style={{ background: "rgba(120, 180, 255, 0.45)" }}
-            aria-hidden
-          />
-          <div
-            className="quote-glow-orb-alt absolute bottom-[-10%] right-[10%] w-[420px] h-[420px] rounded-full hidden dark:block"
-            style={{ background: "rgba(160, 120, 220, 0.4)" }}
-            aria-hidden
-          />
-        </div>
-        
-        <div className="relative max-w-5xl mx-auto px-6 z-10">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-            className="relative p-8 md:p-16 rounded-[2rem] overflow-hidden
-              border border-amber-300/50 dark:border-white/20
-              bg-white/70 dark:bg-neutral-900/80
-              backdrop-blur-2xl
-              shadow-[0_8px_40px_0_rgba(120,90,60,0.12)] dark:shadow-[0_8px_40px_0_rgba(0,0,0,0.5)]"
-          >
-            {/* Ambient iridescent glow — always visible */}
-            <div className="absolute inset-0 bg-gradient-to-br from-amber-200/15 via-transparent to-amber-100/10 dark:from-white/10 dark:via-transparent dark:to-white/5 pointer-events-none" />
-            
-            <div className="relative flex flex-col items-center text-center">
-              <div className="h-px w-10 bg-amber-600/60 dark:bg-white/50 mb-8" />
-              
-              <h2 className="text-2xl md:text-5xl lg:text-5xl font-serif italic leading-tight tracking-tight max-w-3xl text-neutral-900 dark:text-white mb-10">
-                {"The best way to predict the future is to create it.".split(" ").map((word, i) => (
-                  <motion.span
-                    key={i}
-                    initial={{ opacity: 0, y: 15 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ 
-                      duration: 0.6, 
-                      delay: i * 0.08,
-                      ease: [0.22, 1, 0.36, 1]
-                    }}
-                    className="inline-block mr-[0.3em] last:mr-0"
-                  >
-                    {word}
-                  </motion.span>
-                ))}
-              </h2>
-
-              <motion.div
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 1, delay: 1 }}
-                className="flex items-center gap-4"
-              >
-                <div className="h-px w-6 bg-amber-600/50 dark:bg-white/40" />
-                <span className="text-[10px] md:text-xs tracking-[0.4em] uppercase font-black text-neutral-700 dark:text-white/90">
-                  Alan Kay
-                </span>
-                <div className="h-px w-6 bg-amber-600/50 dark:bg-white/40" />
-              </motion.div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Featured Collection */}
-      <section className="py-24 container mx-auto px-6 max-w-7xl">
-        <div className="flex justify-between items-end mb-16">
-          <div>
-            <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2">
-              Editor's Choice
-            </h2>
-            <h3 className="text-4xl font-black uppercase tracking-tighter">
-              Featured Collection
-            </h3>
-          </div>
-          <Link
-            href="/products"
-            className="text-xs font-bold uppercase tracking-widest border-b border-black pb-1 hover:opacity-60 transition-opacity"
-          >
-            View All
-          </Link>
-        </div>
-
-        {/* Lifestyle carousel — swipeable with slide transitions */}
-        <div
-          className="relative aspect-video md:aspect-[21/9] overflow-hidden rounded-sm mb-16 bg-neutral-100 dark:bg-neutral-900 cursor-grab active:cursor-grabbing select-none group/carousel"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
-        >
-          {/* Sliding images container */}
-          <div
-            className="flex h-full transition-transform duration-600 ease-in-out"
-            style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
-          >
-            {lifestyleImages.map((src, i) => (
-              <img
-                key={src}
-                src={src}
-                alt={`Featured collection image ${i + 1}`}
-                className="w-full h-full object-cover object-center flex-shrink-0"
-                draggable={false}
-              />
-            ))}
-          </div>
-
-          {/* Left arrow */}
-          <button
-            onClick={(e) => { e.stopPropagation(); pauseAutoScroll(); goPrev(); }}
-            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover/carousel:opacity-100 transition-all duration-300 hover:bg-black/60 hover:scale-110"
-            aria-label="Previous slide"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-
-          {/* Right arrow */}
-          <button
-            onClick={(e) => { e.stopPropagation(); pauseAutoScroll(); goNext(); }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover/carousel:opacity-100 transition-all duration-300 hover:bg-black/60 hover:scale-110"
-            aria-label="Next slide"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-
-          {/* Dynamic dot indicators */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2.5 items-center bg-black/20 backdrop-blur-sm rounded-full px-3 py-2">
-            {lifestyleImages.map((_, i) => (
-              <button
-                key={i}
-                onClick={(e) => { e.stopPropagation(); pauseAutoScroll(); goToSlide(i); }}
-                className={`rounded-full transition-all duration-500 ease-out ${
-                  i === carouselIndex
-                    ? "w-7 h-2.5 bg-white shadow-lg shadow-white/30"
-                    : "w-2.5 h-2.5 bg-white/40 hover:bg-white/70 hover:scale-125"
-                }`}
-                aria-label={`Go to slide ${i + 1}`}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {featuredProducts.map((product, i) => (
-            <FeaturedProductCard key={product.id} product={product} index={i} />
-          ))}
-        </div>
-      </section>
-
-      {/* Campaign Banner - Final Refined Transparency & Logo Sizing */}
-      <section className="relative h-[80vh] w-full overflow-hidden my-32 group/banner">
-        <motion.div 
-          style={{ y: yParallax }}
-          className="absolute inset-0 w-full h-[120%] -top-[10%]"
-        >
-          <img
-            alt={campaignAssets[0]?.altText || "Campaign story"}
-            className="w-full h-full object-cover object-center"
-            src={campaignBannerImage}
-          />
-        </motion.div>
-        
-        <div 
-          className="absolute inset-0 z-10 pointer-events-none opacity-0 group-hover/banner:opacity-100 transition-opacity duration-1000"
-          onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            e.currentTarget.style.setProperty('--mouse-x', `${x}px`);
-            e.currentTarget.style.setProperty('--mouse-y', `${y}px`);
-          }}
-          style={{
-            background: 'radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(255,255,255,0.08) 0%, transparent 40%)'
-          } as any}
-        />
-
-        <div className="absolute inset-0 bg-black/0 dark:bg-black/40 transition-colors duration-700" />
-        
-        <div className="absolute inset-0 flex items-center justify-center p-6 sm:p-12 z-20">
-          <motion.div 
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1, ease: "easeOut" }}
-            className="max-w-xl w-full backdrop-blur-[2px] bg-transparent border border-white/10 p-6 md:p-10 text-center text-white rounded-3xl shadow-2xl overflow-hidden relative"
-          >
-            {/* Ambient revolving background elements inside glass */}
-            <div className="absolute top-0 right-0 p-4">
-               <Gem className="w-4 h-4 text-white/10 animate-revolve" />
-            </div>
-            
-            <h2 className="text-[14px] md:text-lg font-black mb-4 tracking-[0.4em] uppercase leading-tight italic">
-              Explore the <br/><span className="not-italic text-outline-white">journey behind.</span>
-            </h2>
-            <p className="text-[10px] md:text-xs opacity-60 font-bold tracking-[0.3em] uppercase max-w-sm mx-auto mb-8 leading-relaxed">
-              Discover the meticulous craftsmanship and story of the Winter '25 collection.
-            </p>
-            <Button
-              variant="outline"
-              className="rounded-full px-8 h-12 border-white/20 text-white hover:bg-white hover:text-black transition-all uppercase text-[8px] tracking-[0.4em] font-black group/btn shadow-xl hover:shadow-white/20 active:scale-95"
-              asChild
-            >
-              <Link href="/new-collection" className="flex items-center gap-3">
-                Explore Collection <ArrowRight className="w-3 h-3 group-hover/btn:translate-x-1.5 transition-transform" />
-              </Link>
-            </Button>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* New Arrivals */}
-      <section className="py-24 container mx-auto px-6 max-w-7xl">
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.34em] text-center text-zinc-500 dark:text-zinc-400 mb-3">
-          Latest Drops
-        </h2>
-        <h3 className="text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-center text-zinc-900 dark:text-zinc-100 mb-4">
-          New Arrivals
-        </h3>
-        <p className="mx-auto mb-14 max-w-2xl text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
-          Curated originals from Rare Atelier, crafted to elevate everyday wear.
-        </p>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10">
-          {normalizedNewArrivals.map((product) => (
-            <div key={product.id}>
-              <NewArrivalCard
-                product={product}
-                imageAspectClass="aspect-[4/5]"
-              />
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <OurServices />
+      <main className={isLuxuryEditorialTemplate ? "bg-[var(--bg)] text-[var(--fg)]" : undefined}>
+        {activeSections.map(renderSection)}
+      </main>
     </div>
   );
 }

@@ -7,7 +7,7 @@ import path from "path";
 import sharp from "sharp";
 import multer from "multer";
 import { z } from "zod";
-import { canAccessAdminPanel, requiresTwoFactorChallenge } from "@shared/auth-policy";
+import { canAccessAdminPage, canAccessAdminPanel, requiresTwoFactorChallenge } from "@shared/auth-policy";
 import { storage } from "./storage";
 import passport from "passport";
 import { processAndStoreImage, deleteLocalImage } from "./lib/imageService";
@@ -32,13 +32,16 @@ import {
     mediaAssets,
     newsletterSubscribers,
     orders,
+    pageSections,
+    pageTemplates,
     posSessions,
     platforms,
     Product,
     productVariants,
     products,
     promoCodes,
-    siteAssets
+    siteAssets,
+    siteSettings,
 } from "../shared/schema";
 import { db } from "./db";
 import {
@@ -278,6 +281,628 @@ export async function registerRoutes(
   app.use("/api/admin/images", requireAdminPageAccess("images"));
   app.use("/api/admin/media", requireAdminPageAccess("images"));
   app.use("/api/admin/storefront-image-library", requireAdminPageAccess("storefront-images"));
+
+  app.get("/api/public/page-config", async (req: Request, res: Response) => {
+    try {
+      const previewTemplateIdRaw =
+        typeof req.query.templateId === "string" ? req.query.templateId : undefined;
+      const previewTemplateId =
+        previewTemplateIdRaw && /^\d+$/.test(previewTemplateIdRaw)
+          ? parseInt(previewTemplateIdRaw, 10)
+          : null;
+
+      if (
+        previewTemplateId !== null &&
+        !canAccessAdminPage((req.user as Express.User | undefined)?.role, "landing-page")
+      ) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+
+      const settings = await db
+        .select()
+        .from(siteSettings)
+        .limit(1);
+
+      if (!settings.length && previewTemplateId === null) {
+        res.set("Cache-Control", "public, max-age=30");
+        return res.json({ template: null, sections: [] });
+      }
+
+      const activeId = previewTemplateId ?? settings[0]?.activeTemplateId ?? null;
+      if (!activeId) {
+        res.set("Cache-Control", "public, max-age=30");
+        return res.json({ template: null, sections: [] });
+      }
+
+      const template = await db
+        .select()
+        .from(pageTemplates)
+        .where(eq(pageTemplates.id, activeId))
+        .limit(1);
+
+      const sections = await db
+        .select()
+        .from(pageSections)
+        .where(eq(pageSections.templateId, activeId))
+        .orderBy(pageSections.orderIndex);
+
+      res.set("Cache-Control", "public, max-age=30");
+      return res.json({
+        template: template[0] ?? null,
+        sections: sections.filter((s) => s.isVisible),
+      });
+    } catch (err) {
+      console.error("Error in GET /api/public/page-config", err);
+      return res.status(500).json({ error: "Failed to load page config" });
+    }
+  });
+
+  app.post("/api/admin/canvas/seed", requireAdminPageAccess("landing-page"), async (_req: Request, res: Response) => {
+    try {
+      const existingTemplates = await db.select().from(pageTemplates);
+      const maisonTemplateValues = {
+        name: "Maison Nocturne",
+        slug: "maison-nocturne",
+        tier: "premium",
+        priceNpr: 0,
+        isPurchased: true,
+        description: "A cinematic luxury editorial homepage for Rare Atelier.",
+      } as const;
+      const nikeshTemplateValues = {
+        name: "Nikesh Design",
+        slug: "nikeshdesign",
+        tier: "premium",
+        priceNpr: 0,
+        isPurchased: true,
+        thumbnailUrl: "/images/landingpage3.webp",
+        description: "A full editorial homepage based on the Rare Atelier luxury sample layout.",
+      } as const;
+      const maisonSections = [
+        {
+          sectionType: "hero",
+          label: "Hero Story",
+          orderIndex: 1,
+          isVisible: true,
+          config: {
+            variant: "maison-nocturne",
+            slides: [
+              {
+                tag: "W'25 / Archive",
+                headline: "Beyond Trends.",
+                eyebrow: "Authenticity in Motion",
+                body: "Kathmandu-made silhouettes with editorial weight and everyday ease.",
+                ctaLabel: "Explore Shop",
+                ctaHref: "/products",
+              },
+              {
+                tag: "New Arrival · SS25",
+                headline: "Basics Collar Jacket",
+                eyebrow: "Unisex · Limited Edition",
+                body: "Layered structure, sharp tailoring, and a restrained modern finish.",
+                ctaLabel: "Shop Now",
+                ctaHref: "/products",
+              },
+              {
+                tag: "Lookbook",
+                headline: "Street Atelier",
+                eyebrow: "Where craft meets the city",
+                body: "A luxury streetwear wardrobe built for long days and late nights.",
+                ctaLabel: "View Collection",
+                ctaHref: "/new-collection",
+              },
+              {
+                tag: "Footwear",
+                headline: "Ground Work.",
+                eyebrow: "Every step — considered",
+                body: "Foundational pieces designed to hold form, tone, and movement.",
+                ctaLabel: "Shop Footwear",
+                ctaHref: "/products",
+              },
+            ],
+          },
+        },
+        {
+          sectionType: "ticker",
+          label: "Gold Ticker",
+          orderIndex: 2,
+          isVisible: true,
+          config: {
+            items: [
+              "New Arrivals — SS 2025",
+              "Free Shipping NPR 5,000+",
+              "Dragon Hoodie — Back in Stock",
+              "New Footwear Drop",
+              "Basics Collar Jacket · Limited",
+              "Authenticity in Motion",
+            ],
+          },
+        },
+        {
+          sectionType: "featured",
+          label: "Featured Products",
+          orderIndex: 3,
+          isVisible: true,
+          config: {
+            variant: "maison-nocturne",
+            label: "Featured Products",
+            title: "Curated silhouettes for the new season.",
+            hint: "Drag to explore",
+          },
+        },
+        {
+          sectionType: "campaign",
+          label: "Editorial Lookbook",
+          orderIndex: 4,
+          isVisible: true,
+          config: {
+            variant: "maison-nocturne-lookbook",
+          },
+        },
+        {
+          sectionType: "quote",
+          label: "Brand Statement",
+          orderIndex: 5,
+          isVisible: true,
+          config: {
+            variant: "maison-nocturne-statement",
+            text: "Craft without compromise. Style without explanation.",
+            attribution: "Rare Atelier — Authenticity in Motion",
+          },
+        },
+      ] as const;
+      const nikeshSections = [
+        {
+          sectionType: "hero",
+          label: "Story Hero",
+          orderIndex: 1,
+          isVisible: true,
+          config: {
+            variant: "nikeshdesign",
+            slides: [
+              {
+                tag: "W'25 / Archive",
+                headline: "Beyond Trends.",
+                body: "Authenticity in Motion",
+                ctaLabel: "Explore Shop",
+                ctaHref: "/products",
+              },
+              {
+                tag: "New Arrival · SS25",
+                headline: "Basics Collar Jacket",
+                body: "Unisex · Limited Edition",
+                ctaLabel: "Shop Now",
+                ctaHref: "/products",
+              },
+              {
+                tag: "Lookbook",
+                headline: "Street Atelier",
+                body: "Where craft meets the city",
+                ctaLabel: "View Collection",
+                ctaHref: "/new-collection",
+              },
+              {
+                tag: "Footwear",
+                headline: "Ground Work.",
+                body: "Every step — considered",
+                ctaLabel: "Shop Footwear",
+                ctaHref: "/products?category=footwear",
+              },
+            ],
+          },
+        },
+        {
+          sectionType: "ticker",
+          label: "Ticker Marquee",
+          orderIndex: 2,
+          isVisible: true,
+          config: {
+            items: [
+              "New Arrivals — SS 2025",
+              "Free Shipping NPR 5,000+",
+              "Dragon Hoodie — Back in Stock",
+              "New Footwear Drop",
+              "Basics Collar Jacket · Limited",
+              "Authenticity in Motion",
+            ],
+          },
+        },
+        {
+          sectionType: "featured",
+          label: "Featured Products",
+          orderIndex: 3,
+          isVisible: true,
+          config: {
+            variant: "nikeshdesign-featured",
+            label: "Featured Products",
+            title: "Luxury essentials selected from the current Rare collection.",
+            hint: "Drag to explore →",
+          },
+        },
+        {
+          sectionType: "campaign",
+          label: "Editorial Grid",
+          orderIndex: 4,
+          isVisible: true,
+          config: {
+            variant: "nikeshdesign-lookbook",
+          },
+        },
+        {
+          sectionType: "quote",
+          label: "Brand Statement",
+          orderIndex: 5,
+          isVisible: true,
+          config: {
+            variant: "nikeshdesign-statement",
+            text: "Craft without compromise. Style without explanation.",
+            attribution: "Rare Atelier — Authenticity in Motion",
+          },
+        },
+      ] as const;
+
+      if (existingTemplates.length > 0) {
+        let totalTemplates = existingTemplates.length;
+        const existingMaison = existingTemplates.find((template) => template.slug === "maison-nocturne");
+        const existingNikesh = existingTemplates.find((template) => template.slug === "nikeshdesign");
+
+        if (!existingMaison) {
+          const [maisonNocturne] = await db
+            .insert(pageTemplates)
+            .values(maisonTemplateValues)
+            .returning();
+
+          await db.insert(pageSections).values(
+            maisonSections.map((section) => ({
+              templateId: maisonNocturne.id,
+              ...section,
+            })),
+          );
+
+          totalTemplates += 1;
+        }
+
+        if (!existingNikesh) {
+          const [nikeshDesign] = await db
+            .insert(pageTemplates)
+            .values(nikeshTemplateValues)
+            .returning();
+
+          await db.insert(pageSections).values(
+            nikeshSections.map((section) => ({
+              templateId: nikeshDesign.id,
+              ...section,
+            })),
+          );
+
+          totalTemplates += 1;
+        }
+
+        return res.json({ seeded: true, templates: totalTemplates, existing: true });
+      }
+
+      const [rareDarkLuxury] = await db
+        .insert(pageTemplates)
+        .values({
+          name: "RARE Dark Luxury",
+          slug: "rare-dark-luxury",
+          tier: "premium",
+          priceNpr: 0,
+          isPurchased: true,
+          description: "The original RARE.NP dark editorial homepage",
+        })
+        .returning();
+
+      const [cleanMinimal] = await db
+        .insert(pageTemplates)
+        .values({
+          name: "Clean Minimal",
+          slug: "clean-minimal",
+          tier: "free",
+          priceNpr: 0,
+          isPurchased: true,
+          description: "Simple, clean white layout. Fast and lightweight.",
+        })
+        .returning();
+
+      const [editorialGrid] = await db
+        .insert(pageTemplates)
+        .values({
+          name: "Editorial Grid",
+          slug: "editorial-grid",
+          tier: "free",
+          priceNpr: 0,
+          isPurchased: true,
+          description: "Magazine-style grid layout with bold typography.",
+        })
+        .returning();
+
+      const [maisonNocturne] = await db
+        .insert(pageTemplates)
+        .values(maisonTemplateValues)
+        .returning();
+      const [nikeshDesign] = await db
+        .insert(pageTemplates)
+        .values(nikeshTemplateValues)
+        .returning();
+
+      await db.insert(pageSections).values([
+        { templateId: rareDarkLuxury.id, sectionType: "hero", label: "Hero", orderIndex: 1, isVisible: true, config: { variant: "dark-cinematic" } },
+        { templateId: rareDarkLuxury.id, sectionType: "quote", label: "Quote Section", orderIndex: 2, isVisible: true, config: { text: "Wear the rare ones." } },
+        { templateId: rareDarkLuxury.id, sectionType: "featured", label: "Featured Collection", orderIndex: 3, isVisible: true, config: {} },
+        { templateId: rareDarkLuxury.id, sectionType: "campaign", label: "Campaign Banner", orderIndex: 4, isVisible: true, config: {} },
+        { templateId: rareDarkLuxury.id, sectionType: "arrivals", label: "New Arrivals", orderIndex: 5, isVisible: true, config: {} },
+        { templateId: rareDarkLuxury.id, sectionType: "services", label: "Our Services", orderIndex: 6, isVisible: true, config: {} },
+
+        { templateId: cleanMinimal.id, sectionType: "hero", label: "Simple Hero", orderIndex: 1, isVisible: true, config: { variant: "light-centered" } },
+        { templateId: cleanMinimal.id, sectionType: "featured", label: "Featured Products", orderIndex: 2, isVisible: true, config: {} },
+        { templateId: cleanMinimal.id, sectionType: "services", label: "Services", orderIndex: 3, isVisible: true, config: {} },
+        { templateId: cleanMinimal.id, sectionType: "arrivals", label: "New Arrivals", orderIndex: 4, isVisible: true, config: {} },
+
+        { templateId: editorialGrid.id, sectionType: "hero", label: "Editorial Hero", orderIndex: 1, isVisible: true, config: { variant: "editorial" } },
+        { templateId: editorialGrid.id, sectionType: "arrivals", label: "New Arrivals Grid", orderIndex: 2, isVisible: true, config: {} },
+        { templateId: editorialGrid.id, sectionType: "quote", label: "Pull Quote", orderIndex: 3, isVisible: true, config: {} },
+        { templateId: editorialGrid.id, sectionType: "featured", label: "Featured Collection", orderIndex: 4, isVisible: true, config: {} },
+
+        ...maisonSections.map((section) => ({
+          templateId: maisonNocturne.id,
+          ...section,
+        })),
+        ...nikeshSections.map((section) => ({
+          templateId: nikeshDesign.id,
+          ...section,
+        })),
+      ]);
+
+      await db.insert(siteSettings).values({
+        activeTemplateId: rareDarkLuxury.id,
+        publishedAt: new Date(),
+      });
+
+      return res.json({ seeded: true, templates: 5 });
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/seed", err);
+      return res.status(500).json({ error: "Failed to seed canvas templates" });
+    }
+  });
+
+  app.get("/api/admin/canvas/templates", requireAdminPageAccess("landing-page"), async (_req: Request, res: Response) => {
+    try {
+      const templates = await db
+        .select()
+        .from(pageTemplates)
+        .orderBy(pageTemplates.tier, pageTemplates.name);
+      return res.json(templates);
+    } catch (err) {
+      console.error("Error in GET /api/admin/canvas/templates", err);
+      return res.status(500).json({ error: "Failed to load templates" });
+    }
+  });
+
+  app.get("/api/admin/canvas/templates/:id/sections", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
+      const sections = await db
+        .select()
+        .from(pageSections)
+        .where(eq(pageSections.templateId, parseInt(id)))
+        .orderBy(pageSections.orderIndex);
+      return res.json(sections);
+    } catch (err) {
+      console.error("Error in GET /api/admin/canvas/templates/:id/sections", err);
+      return res.status(500).json({ error: "Failed to load sections" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/templates/:id/activate", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
+      const publishedBy = (req.user as Express.User | undefined)?.id ?? null;
+      const existing = await db
+        .select()
+        .from(siteSettings)
+        .limit(1);
+
+      if (existing.length > 0) {
+        await db
+          .update(siteSettings)
+          .set({
+            activeTemplateId: parseInt(id),
+            publishedAt: new Date(),
+            publishedBy,
+            updatedAt: new Date(),
+          })
+          .where(eq(siteSettings.id, existing[0].id));
+      } else {
+        await db.insert(siteSettings).values({
+          activeTemplateId: parseInt(id),
+          publishedAt: new Date(),
+        });
+      }
+
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/templates/:id/activate", err);
+      return res.status(500).json({ error: "Failed to activate template" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/sections/:id", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
+      const { isVisible, config, orderIndex, label } = req.body;
+      const updateData: any = { updatedAt: new Date() };
+      if (isVisible !== undefined) updateData.isVisible = isVisible;
+      if (config !== undefined) updateData.config = config;
+      if (orderIndex !== undefined) updateData.orderIndex = orderIndex;
+      if (label !== undefined) updateData.label = label;
+
+      const [updated] = await db
+        .update(pageSections)
+        .set(updateData)
+        .where(eq(pageSections.id, parseInt(id)))
+        .returning();
+
+      return res.json(updated);
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/sections/:id", err);
+      return res.status(500).json({ error: "Failed to update section" });
+    }
+  });
+
+  app.post("/api/admin/canvas/templates/:id/sections", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
+      const { sectionType, label, orderIndex, config } = req.body;
+
+      const [newSection] = await db
+        .insert(pageSections)
+        .values({
+          templateId: parseInt(id),
+          sectionType,
+          label: label ?? sectionType,
+          orderIndex: orderIndex ?? 99,
+          isVisible: true,
+          config: config ?? {},
+        })
+        .returning();
+
+      return res.json(newSection);
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/templates/:id/sections", err);
+      return res.status(500).json({ error: "Failed to create section" });
+    }
+  });
+
+  app.post("/api/admin/canvas/sections/:id/duplicate", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
+      const [existing] = await db
+        .select()
+        .from(pageSections)
+        .where(eq(pageSections.id, parseInt(id)))
+        .limit(1);
+
+      if (!existing) {
+        return res.status(404).json({ error: "Section not found" });
+      }
+
+      const siblingSections = await db
+        .select()
+        .from(pageSections)
+        .where(eq(pageSections.templateId, existing.templateId))
+        .orderBy(pageSections.orderIndex);
+
+      const nextOrderIndex =
+        siblingSections.reduce((max, section) => Math.max(max, section.orderIndex ?? 0), 0) + 1;
+
+      const [duplicate] = await db
+        .insert(pageSections)
+        .values({
+          templateId: existing.templateId,
+          sectionType: existing.sectionType,
+          label: existing.label ? `${existing.label} Copy` : `${existing.sectionType} Copy`,
+          orderIndex: nextOrderIndex,
+          isVisible: existing.isVisible,
+          config: existing.config ?? {},
+        })
+        .returning();
+
+      return res.json(duplicate);
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/sections/:id/duplicate", err);
+      return res.status(500).json({ error: "Failed to duplicate section" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/sections/:id/move-template", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
+      const targetTemplateId = Number(req.body?.templateId);
+
+      if (!Number.isFinite(targetTemplateId)) {
+        return res.status(400).json({ error: "templateId is required" });
+      }
+
+      const [existing] = await db
+        .select()
+        .from(pageSections)
+        .where(eq(pageSections.id, parseInt(id)))
+        .limit(1);
+
+      if (!existing) {
+        return res.status(404).json({ error: "Section not found" });
+      }
+
+      const targetSections = await db
+        .select()
+        .from(pageSections)
+        .where(eq(pageSections.templateId, targetTemplateId))
+        .orderBy(pageSections.orderIndex);
+
+      const nextOrderIndex =
+        targetSections.reduce((max, section) => Math.max(max, section.orderIndex ?? 0), 0) + 1;
+
+      const [moved] = await db
+        .update(pageSections)
+        .set({
+          templateId: targetTemplateId,
+          orderIndex: nextOrderIndex,
+          updatedAt: new Date(),
+        })
+        .where(eq(pageSections.id, parseInt(id)))
+        .returning();
+
+      return res.json(moved);
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/sections/:id/move-template", err);
+      return res.status(500).json({ error: "Failed to move section to another template" });
+    }
+  });
+
+  app.delete("/api/admin/canvas/sections/:id", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const rawId = req.params.id;
+      const id = Array.isArray(rawId) ? rawId[0] : rawId;
+      await db
+        .delete(pageSections)
+        .where(eq(pageSections.id, parseInt(id)));
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in DELETE /api/admin/canvas/sections/:id", err);
+      return res.status(500).json({ error: "Failed to delete section" });
+    }
+  });
+
+  app.get("/api/admin/canvas/settings", requireAdminPageAccess("landing-page"), async (_req: Request, res: Response) => {
+    try {
+      const settings = await db
+        .select()
+        .from(siteSettings)
+        .limit(1);
+
+      const activeTemplate = settings[0]?.activeTemplateId
+        ? await db
+            .select()
+            .from(pageTemplates)
+            .where(eq(pageTemplates.id, settings[0].activeTemplateId))
+            .limit(1)
+        : [];
+
+      return res.json({
+        ...settings[0],
+        activeTemplate: activeTemplate[0] ?? null,
+      });
+    } catch (err) {
+      console.error("Error in GET /api/admin/canvas/settings", err);
+      return res.status(500).json({ error: "Failed to load canvas settings" });
+    }
+  });
 
   app.post(
     "/api/auth/login",

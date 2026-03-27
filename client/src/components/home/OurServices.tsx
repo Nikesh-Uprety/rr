@@ -2,6 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import "./OurServices.css";
 
+interface OurServicesProps {
+  config?: Record<string, any>;
+}
+
+type ServiceCardConfig = {
+  title: string;
+  text: string;
+  buttonLabel: string;
+  target: string;
+};
+
 const GRAIN_DATA_URI = `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E")`;
 
 function SectionMountainSilhouette() {
@@ -108,10 +119,11 @@ function Card3ExchangeArt() {
   );
 }
 
-export default function OurServices() {
+export default function OurServices({ config: _config = {} }: OurServicesProps) {
   const [, setLocation] = useLocation();
   const sectionRef = useRef<HTMLElement>(null);
   const [cardsVisible, setCardsVisible] = useState(false);
+  const config = (_config ?? {}) as Record<string, any>;
 
   useEffect(() => {
     const el = sectionRef.current;
@@ -140,6 +152,71 @@ export default function OurServices() {
       window.location.hash = "contact";
     });
   };
+
+  const handleTarget = (target?: string) => {
+    switch (target) {
+      case "/shop":
+      case "shop":
+        goShop();
+        return;
+      case "/new-collection":
+      case "new-collection":
+        goNewCollection();
+        return;
+      case "atelier-contact":
+      case "/atelier#contact":
+      case "contact":
+        goAtelierContact();
+        return;
+      case "/atelier":
+      case "atelier":
+        setLocation("/atelier");
+        return;
+      default:
+        if (typeof target === "string" && target.trim()) {
+          setLocation(target);
+          return;
+        }
+        goShop();
+    }
+  };
+
+  const serviceCards: ServiceCardConfig[] = Array.isArray(config.cards) && config.cards.length
+    ? config.cards
+        .filter((card): card is Record<string, unknown> => !!card && typeof card === "object")
+        .map((card) => ({
+          title: typeof card.title === "string" ? card.title : "",
+          text: typeof card.text === "string" ? card.text : "",
+          buttonLabel: typeof card.buttonLabel === "string" ? card.buttonLabel : "",
+          target: typeof card.target === "string" ? card.target : "",
+        }))
+        .filter((card) => card.title || card.text || card.buttonLabel || card.target)
+    : [
+        {
+          title: "Fast Delivery",
+          text: "Nationwide door-to-door shipping so your Rare pieces arrive quickly and safely, from Kathmandu to your doorstep.",
+          buttonLabel: "Shop Now",
+          target: "/shop",
+        },
+        {
+          title: "Made In Nepal",
+          text: "Designed and produced with Himalayan craft value small runs, honest materials, and a story stitched into every garment.",
+          buttonLabel: "See Products",
+          target: "/new-collection",
+        },
+        {
+          title: "Easy Exchange",
+          text: "Need a different size? Our exchange process is straightforward reach out and we will help you swap with confidence.",
+          buttonLabel: "Contact Us",
+          target: "atelier-contact",
+        },
+      ];
+  const sectionTitle = typeof config.title === "string" && config.title.trim()
+    ? config.title
+    : "Our Services";
+  const sectionText = typeof config.text === "string" && config.text.trim()
+    ? config.text
+    : "Door-to-Door Delivery Across Nepal 🇳🇵";
 
   return (
     <section
@@ -180,84 +257,42 @@ export default function OurServices() {
             fontSize: "clamp(32px, 4.5vw, 52px)",
           }}
         >
-          Our Services
+          {sectionTitle}
         </h2>
         <p
           className="mb-11 text-center text-[#3a3028]"
           style={{ fontSize: "clamp(14px, 1.6vw, 18px)" }}
         >
-          Door-to-Door Delivery Across Nepal 🇳🇵
+          {sectionText}
         </p>
 
         <div className="grid max-w-[960px] grid-cols-1 gap-5 md:grid-cols-3 md:gap-5">
-          {/* Card 1 */}
-          <article
-            className={`our-services-card flex flex-col overflow-hidden rounded-[20px] bg-[rgba(255,255,255,0.82)] shadow-[0_4px_32px_rgba(0,0,0,0.10)] backdrop-blur-[12px] transition-[transform,box-shadow] duration-300 ease-in-out ${
-              cardsVisible ? "visible" : ""
-            }`}
-          >
-            <Card1TruckArt />
-            <div className="flex flex-1 flex-col items-center bg-[rgba(255,255,255,0.95)] px-6 pb-7 pt-6 text-center">
-              <h3 className="our-services-card-title mb-2.5 text-[20px] font-bold text-[#1a1510]">Fast Delivery</h3>
-              <p className="mb-5 flex-1 text-[13.5px] leading-[1.7] text-[#5a524a]">
-                Nationwide door-to-door shipping so your Rare pieces arrive quickly and safely, from Kathmandu to your
-                doorstep.
-              </p>
-              <button
-                type="button"
-                onClick={goShop}
-                className="our-services-btn cursor-pointer rounded-md border-none bg-[#1a1510] px-8 py-[11px] text-[13px] font-medium tracking-[0.06em] text-[#f0c84a] transition-[background,transform] duration-200 hover:scale-[1.02] hover:bg-[#2a2018]"
+          {serviceCards.slice(0, 3).map((card, index) => {
+            const art = index === 0 ? <Card1TruckArt /> : index === 1 ? <Card2Art /> : <Card3ExchangeArt />;
+            return (
+              <article
+                key={`${card.title}-${index}`}
+                className={`our-services-card flex flex-col overflow-hidden rounded-[20px] bg-[rgba(255,255,255,0.82)] shadow-[0_4px_32px_rgba(0,0,0,0.10)] backdrop-blur-[12px] transition-[transform,box-shadow] duration-300 ease-in-out ${
+                  cardsVisible ? "visible" : ""
+                }`}
               >
-                Shop Now
-              </button>
-            </div>
-          </article>
-
-          {/* Card 2 */}
-          <article
-            className={`our-services-card flex flex-col overflow-hidden rounded-[20px] bg-[rgba(255,255,255,0.82)] shadow-[0_4px_32px_rgba(0,0,0,0.10)] backdrop-blur-[12px] transition-[transform,box-shadow] duration-300 ease-in-out ${
-              cardsVisible ? "visible" : ""
-            }`}
-          >
-            <Card2Art />
-            <div className="flex flex-1 flex-col items-center bg-[rgba(255,255,255,0.95)] px-6 pb-7 pt-6 text-center">
-              <h3 className="our-services-card-title mb-2.5 text-[20px] font-bold text-[#1a1510]">Made In Nepal</h3>
-              <p className="mb-5 flex-1 text-[13.5px] leading-[1.7] text-[#5a524a]">
-                Designed and produced with Himalayan craft value small runs, honest materials, and a story stitched into
-                every garment.
-              </p>
-              <button
-                type="button"
-                onClick={goNewCollection}
-                className="our-services-btn cursor-pointer rounded-md border-none bg-[#1a1510] px-8 py-[11px] text-[13px] font-medium tracking-[0.06em] text-[#f0c84a] transition-[background,transform] duration-200 hover:scale-[1.02] hover:bg-[#2a2018]"
-              >
-                See Products
-              </button>
-            </div>
-          </article>
-
-          {/* Card 3 */}
-          <article
-            className={`our-services-card flex flex-col overflow-hidden rounded-[20px] bg-[rgba(255,255,255,0.82)] shadow-[0_4px_32px_rgba(0,0,0,0.10)] backdrop-blur-[12px] transition-[transform,box-shadow] duration-300 ease-in-out ${
-              cardsVisible ? "visible" : ""
-            }`}
-          >
-            <Card3ExchangeArt />
-            <div className="flex flex-1 flex-col items-center bg-[rgba(255,255,255,0.95)] px-6 pb-7 pt-6 text-center">
-              <h3 className="our-services-card-title mb-2.5 text-[20px] font-bold text-[#1a1510]">Easy Exchange</h3>
-              <p className="mb-5 flex-1 text-[13.5px] leading-[1.7] text-[#5a524a]">
-                Need a different size? Our exchange process is straightforward reach out and we will help you swap with
-                confidence.
-              </p>
-              <button
-                type="button"
-                onClick={goAtelierContact}
-                className="our-services-btn cursor-pointer rounded-md border-none bg-[#1a1510] px-8 py-[11px] text-[13px] font-medium tracking-[0.06em] text-[#f0c84a] transition-[background,transform] duration-200 hover:scale-[1.02] hover:bg-[#2a2018]"
-              >
-                Contact Us
-              </button>
-            </div>
-          </article>
+                {art}
+                <div className="flex flex-1 flex-col items-center bg-[rgba(255,255,255,0.95)] px-6 pb-7 pt-6 text-center">
+                  <h3 className="our-services-card-title mb-2.5 text-[20px] font-bold text-[#1a1510]">{card.title}</h3>
+                  <p className="mb-5 flex-1 text-[13.5px] leading-[1.7] text-[#5a524a]">
+                    {card.text}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleTarget(card.target)}
+                    className="our-services-btn cursor-pointer rounded-md border-none bg-[#1a1510] px-8 py-[11px] text-[13px] font-medium tracking-[0.06em] text-[#f0c84a] transition-[background,transform] duration-200 hover:scale-[1.02] hover:bg-[#2a2018]"
+                  >
+                    {card.buttonLabel || "Learn More"}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </div>
     </section>

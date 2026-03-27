@@ -1,18 +1,32 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
 
 export default function Footer() {
   const { toast } = useToast();
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [location] = useLocation();
+  const previewTemplateId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
+    return rawValue && /^\d+$/.test(rawValue) ? rawValue : null;
+  }, []);
+  const { data: pageConfig } = useQuery({
+    queryKey: ["page-config", previewTemplateId],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (previewTemplateId) {
+        params.set("templateId", previewTemplateId);
+      }
+      const url = params.toString()
+        ? `/api/public/page-config?${params.toString()}`
+        : "/api/public/page-config";
+      return fetch(url).then((r) => r.json());
+    },
+    staleTime: 30 * 1000,
+  });
 
   const newsletterMutation = useMutation({
     mutationFn: async (email: string) => {
@@ -42,7 +56,148 @@ export default function Footer() {
   };
 
   const isHomePage = location === "/";
+  const isMaisonNocturne = pageConfig?.template?.slug === "maison-nocturne";
+  const isNikeshDesign = pageConfig?.template?.slug === "nikeshdesign";
   const TIKTOK_URL = "#";
+
+  if (isNikeshDesign) {
+    return (
+      <footer className="px-6 py-16 sm:px-8 lg:px-10" style={{ background: "var(--bg)", color: "var(--fg)" }}>
+        <div className="footer-inner mx-auto grid max-w-[1440px] gap-10 border-t pt-14 md:grid-cols-[1.3fr_1fr_1fr]" style={{ borderColor: "var(--border)" }}>
+          <div className="footer-logo-block">
+            <Link href="/" className="inline-block">
+              <span
+                className="f-logo block text-2xl uppercase"
+                style={{ fontFamily: "var(--font-display)", letterSpacing: "0.24em" }}
+              >
+                Rare Atelier
+              </span>
+              <span
+                className="f-sub mt-2 block text-[9px] uppercase"
+                style={{ fontFamily: "var(--font-mono)", letterSpacing: "0.26em", color: "var(--gold)" }}
+              >
+                Kathmandu · Est. 2022
+              </span>
+            </Link>
+          </div>
+
+          <div className="footer-col">
+            <h4 className="mb-5 text-[10px] uppercase" style={{ fontFamily: "var(--font-mono)", letterSpacing: "0.22em", color: "var(--gold)" }}>
+              Shop
+            </h4>
+            <ul className="space-y-3 text-sm" style={{ fontFamily: "var(--font-body)", color: "var(--fg-dim)" }}>
+              <li><Link href="/products" className="hover:text-[var(--fg)]">New Arrivals</Link></li>
+              <li><Link href="/products" className="hover:text-[var(--fg)]">Men</Link></li>
+              <li><Link href="/products" className="hover:text-[var(--fg)]">Women</Link></li>
+              <li><Link href="/products?category=footwear" className="hover:text-[var(--fg)]">Footwear</Link></li>
+              <li><Link href="/products" className="hover:text-[var(--fg)]">Accessories</Link></li>
+            </ul>
+          </div>
+
+          <div className="footer-col">
+            <h4 className="mb-5 text-[10px] uppercase" style={{ fontFamily: "var(--font-mono)", letterSpacing: "0.22em", color: "var(--gold)" }}>
+              Atelier
+            </h4>
+            <ul className="space-y-3 text-sm" style={{ fontFamily: "var(--font-body)", color: "var(--fg-dim)" }}>
+              <li><Link href="/atelier" className="hover:text-[var(--fg)]">About</Link></li>
+              <li><Link href="/new-collection" className="hover:text-[var(--fg)]">Lookbook</Link></li>
+              <li><Link href="/shipping" className="hover:text-[var(--fg)]">Stockists</Link></li>
+              <li><Link href="/refund" className="hover:text-[var(--fg)]">Care Guide</Link></li>
+              <li><Link href="/contact" className="hover:text-[var(--fg)]">Contact</Link></li>
+            </ul>
+          </div>
+        </div>
+        <div className="footer-bottom footer-inner mx-auto mt-10 flex max-w-[1440px] flex-col gap-4 border-t pt-6 text-[10px] uppercase sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "var(--border)", fontFamily: "var(--font-mono)", letterSpacing: "0.2em", color: "var(--fg-dim)" }}>
+          <p className="footer-copy">© 2026 Rare Atelier. All rights reserved.</p>
+          <div className="footer-socials flex gap-5">
+            <a href="https://www.instagram.com/rare.np/" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--fg)]">Instagram</a>
+            <a href={TIKTOK_URL} target="_blank" rel="noopener noreferrer" className="hover:text-[var(--fg)]">TikTok</a>
+            <a href="https://www.facebook.com/rarenp" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--fg)]">Facebook</a>
+          </div>
+        </div>
+      </footer>
+    );
+  }
+
+  if (isMaisonNocturne) {
+    return (
+      <footer className="bg-[#0A0A0A] text-white pt-32 pb-12">
+        <div className="container mx-auto px-6 max-w-7xl">
+          <div className="grid grid-cols-1 gap-16 mb-20 md:grid-cols-4">
+            <div className="col-span-1">
+              <Link href="/" className="inline-block">
+                <img
+                  src="/images/logo.webp"
+                  alt="Rare Atelier"
+                  className="h-12 w-auto mb-8 object-contain brightness-0 invert"
+                />
+              </Link>
+              <p className="text-gray-500 text-sm leading-relaxed tracking-wide">
+                Khusibu, Nayabazar, Kathmandu
+                <br />
+                (+977)-9705208960
+                <br />
+                rarenepal999@gmail.com
+              </p>
+            </div>
+
+            <div>
+              <h4 className="mb-8 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Legals</h4>
+              <ul className="space-y-4 text-xs tracking-widest">
+                <li><Link href="/shipping" className="transition-colors hover:text-gray-400">Shipping Policy</Link></li>
+                <li><Link href="/refund" className="transition-colors hover:text-gray-400">Refund Policy</Link></li>
+                <li><Link href="/privacy" className="transition-colors hover:text-gray-400">Privacy Policy</Link></li>
+                <li><Link href="/terms" className="transition-colors hover:text-gray-400">Terms of service</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="mb-8 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Social</h4>
+              <ul className="space-y-4 text-xs tracking-widest">
+                <li><a href="https://www.instagram.com/rare.np/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 transition-colors hover:text-gray-400">Instagram</a></li>
+                <li><a href={TIKTOK_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 transition-colors hover:text-gray-400">TikTok</a></li>
+                <li><a href="https://www.facebook.com/rarenp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 transition-colors hover:text-gray-400">Facebook</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="mb-8 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Newsletter</h4>
+              <p className="mb-6 text-xs leading-relaxed tracking-wide text-gray-500">
+                Sign up for early access to drops and exclusive stories.
+              </p>
+              <form onSubmit={handleNewsletterSubmit} className="group flex border-b border-gray-800 pb-2 transition-colors focus-within:border-white">
+                <input
+                  type="email"
+                  required
+                  value={newsletterEmail}
+                  onChange={(e) => setNewsletterEmail(e.target.value)}
+                  className="flex-1 bg-transparent py-2 text-sm placeholder:text-gray-700 focus:outline-none"
+                  placeholder="Email Address"
+                />
+                <button
+                  disabled={newsletterMutation.isPending}
+                  className="ml-4 text-[10px] font-bold uppercase tracking-widest transition-opacity hover:opacity-60 disabled:opacity-50"
+                >
+                  {newsletterMutation.isPending ? "..." : "Join"}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div className="container mx-auto max-w-7xl px-6">
+          <div className="flex flex-col gap-4 border-t border-gray-900 pt-6 text-[10px] uppercase tracking-[0.2em] text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+            <span>© 2026 Rare Atelier. All rights reserved.</span>
+            <div className="flex flex-wrap gap-5">
+              <span>Built by 0xnikuhacks</span>
+              <a href="https://www.instagram.com/rare.np/" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-gray-400">Instagram</a>
+              <a href={TIKTOK_URL} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-gray-400">TikTok</a>
+              <a href="https://www.facebook.com/rarenp" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-gray-400">Facebook</a>
+            </div>
+          </div>
+        </div>
+      </footer>
+    );
+  }
 
   return (
     <>
@@ -65,9 +220,7 @@ export default function Footer() {
                 </p>
               </div>
               <div>
-                <h4 className="font-bold mb-8 uppercase tracking-[0.2em] text-[10px] text-gray-400">
-                  Legals
-                </h4>
+                <h4 className="font-bold mb-8 uppercase tracking-[0.2em] text-[10px] text-gray-400">Legals</h4>
                 <ul className="space-y-4 text-xs tracking-widest">
                   <li><Link href="/shipping" className="hover:text-gray-400 transition-colors">Shipping Policy</Link></li>
                   <li><Link href="/refund" className="hover:text-gray-400 transition-colors">Refund Policy</Link></li>
@@ -76,34 +229,15 @@ export default function Footer() {
                 </ul>
               </div>
               <div>
-                <h4 className="font-bold mb-8 uppercase tracking-[0.2em] text-[10px] text-gray-400">
-                  Social
-                </h4>
+                <h4 className="font-bold mb-8 uppercase tracking-[0.2em] text-[10px] text-gray-400">Social</h4>
                 <ul className="space-y-4 text-xs tracking-widest">
-                  <li>
-                    <a href="https://www.instagram.com/rare.np/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 015.45 2.525c.636-.247 1.363-.416 2.427-.465C8.901 2.013 9.256 2 11.685 2h.63zm-.081 1.802h-.468c-2.456 0-2.784.011-3.807.058-.975.045-1.504.207-1.857.344-.467.182-.8.398-1.15.748-.35.35-.566.683-.748 1.15-.137.353-.3.882-.344 1.857-.047 1.023-.058 1.351-.058 3.807v.468c0 2.456.011 2.784.058 3.807.045.975.207 1.504.344 1.857.182.466.399.8.748 1.15.35.35.683.566 1.15.748.353.137.882.3 1.857.344 1.054.048 1.37.058 4.041.058h.08c2.597 0 2.917-.01 3.96-.058.976-.045 1.505-.207 1.858-.344.466-.182.8-.398 1.15-.748.35-.35.566-.683.748-1.15.137-.353.3-.882.344-1.857.048-1.055.058-1.37.058-4.041v-.08c0-2.597-.01-2.917-.058-3.96-.045-.976-.207-1.505-.344-1.858a3.097 3.097 0 00-.748-1.15 3.098 3.098 0 00-1.15-.748c-.353-.137-.882-.3-1.857-.344-1.023-.047-1.351-.058-3.807-.058zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z"/></svg>
-                      Instagram
-                    </a>
-                  </li>
-                  <li>
-                    <a href={TIKTOK_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.79 1.54V6.79a4.85 4.85 0 0 1-1.02-.1z"/></svg>
-                      TikTok
-                    </a>
-                  </li>
-                  <li>
-                    <a href="https://www.facebook.com/rarenp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                      Facebook
-                    </a>
-                  </li>
+                  <li><a href="https://www.instagram.com/rare.np/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">Instagram</a></li>
+                  <li><a href={TIKTOK_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">TikTok</a></li>
+                  <li><a href="https://www.facebook.com/rarenp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">Facebook</a></li>
                 </ul>
               </div>
               <div>
-                <h4 className="font-bold mb-8 uppercase tracking-[0.2em] text-[10px] text-gray-400">
-                  Newsletter
-                </h4>
+                <h4 className="font-bold mb-8 uppercase tracking-[0.2em] text-[10px] text-gray-400">Newsletter</h4>
                 <p className="text-xs text-gray-500 mb-6 tracking-wide leading-relaxed">
                   Sign up for early access to drops and exclusive stories.
                 </p>
@@ -116,7 +250,7 @@ export default function Footer() {
                     className="bg-transparent py-2 flex-1 focus:outline-none text-sm placeholder:text-gray-700"
                     placeholder="Email Address"
                   />
-                  <button 
+                  <button
                     disabled={newsletterMutation.isPending}
                     className="text-[10px] font-bold uppercase tracking-widest ml-4 hover:opacity-60 transition-opacity disabled:opacity-50"
                   >
@@ -124,49 +258,6 @@ export default function Footer() {
                   </button>
                 </form>
               </div>
-            </div>
-            <div className="pt-8 border-t border-gray-900 flex flex-col md:flex-row justify-between items-center gap-6">
-              <HoverCard openDelay={120} closeDelay={120}>
-                <HoverCardTrigger asChild>
-                  <span className="cursor-pointer text-[10px] uppercase tracking-[0.3em] font-black underline-offset-4 hover:underline">
-                    0xn1ku_hacks
-                  </span>
-                </HoverCardTrigger>
-                <HoverCardContent
-                  className="w-72 border-border bg-popover/95 p-4 text-popover-foreground backdrop-blur"
-                  align="start"
-                >
-                  <div className="flex gap-3 items-center">
-                    <img
-                      src="https://github.com/Nikesh-Uprety.png"
-                      className="w-12 h-12 rounded-full"
-                      alt="Nikesh"
-                    />
-                    <div>
-                      <p className="font-semibold text-sm">Nikesh Uprety</p>
-                      <p className="text-xs text-muted-foreground">@0xn1kesh</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-col gap-1.5">
-                    <a
-                      href="https://github.com/Nikesh-Uprety"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs flex items-center gap-2 hover:underline"
-                    >
-                      GitHub → github.com/Nikesh-Uprety
-                    </a>
-                    <a
-                      href="https://www.instagram.com/0xn1kesh/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs flex items-center gap-2 hover:underline"
-                    >
-                      Instagram → @0xn1kesh
-                    </a>
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
             </div>
           </div>
         </footer>

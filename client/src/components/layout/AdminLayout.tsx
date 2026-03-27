@@ -24,7 +24,6 @@ import {
   Sidebar,
   SidebarHeader,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarMenu,
   SidebarMenuItem,
@@ -284,7 +283,7 @@ export default function AdminLayout({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl text-[12px] font-extrabold uppercase tracking-[0.22em] transition-colors",
+                    "flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold tracking-[0.08em] transition-colors",
                     isActive 
                       ? "bg-primary text-primary-foreground" 
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -298,16 +297,6 @@ export default function AdminLayout({
           </nav>
         </div>
 
-        <div className="p-4 border-t border-border">
-           <Button
-            variant="ghost"
-            className="w-full justify-start gap-3 h-12 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-500/10 font-black uppercase tracking-widest text-[11px]"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </Button>
-        </div>
       </div>
 
       <Sidebar
@@ -372,7 +361,7 @@ export default function AdminLayout({
                       isActive={isActive}
                       tooltip={isVisuallyExpanded ? undefined : item.label}
                       className={cn(
-                        "h-10 rounded-lg text-[11px] font-extrabold uppercase tracking-[0.22em] transition-all duration-300 ease-out",
+                        "h-10 rounded-lg text-[10px] font-semibold tracking-[0.08em] transition-all duration-300 ease-out",
                         isVisuallyExpanded ? "px-3" : "justify-center px-2",
                         isActive &&
                           "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
@@ -413,29 +402,6 @@ export default function AdminLayout({
           </SidebarGroup>
         </SidebarContent>
 
-        <SidebarFooter className="border-t border-sidebar-border/60 p-4">
-          <div>
-            <Button
-              variant="ghost"
-              className={cn(
-                "h-10 rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 text-[10px] font-black uppercase tracking-[0.18em] transition-all duration-300 ease-out",
-                isVisuallyExpanded ? "w-full justify-start gap-3" : "w-full justify-center gap-0 px-0",
-              )}
-              onClick={handleLogout}
-              title="Sign Out"
-            >
-              <LogOut className="h-4 w-4" />
-              <span
-                className={cn(
-                  "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
-                  isVisuallyExpanded ? "min-w-0 opacity-100" : "max-w-0 opacity-0",
-                )}
-              >
-                Sign Out
-              </span>
-            </Button>
-          </div>
-        </SidebarFooter>
         <div
           role="separator"
           aria-orientation="vertical"
@@ -477,6 +443,15 @@ export default function AdminLayout({
           <div className="flex items-center gap-2.5">
             <ThemeToggle />
             <NotificationBadge />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 rounded-xl text-[10px] font-semibold tracking-[0.12em] text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/20"
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign Out
+            </Button>
             <Link
               href="/admin/profile"
               className="w-8 h-8 rounded-full border border-border/70 bg-card/40 overflow-hidden"

@@ -70,11 +70,16 @@ setInterval(() => {
  * Add security headers to all responses
  */
 export function securityHeaders(_req: Request, res: Response, next: NextFunction) {
+  const isCanvasPreviewRequest =
+    _req.path === "/" &&
+    typeof _req.query.canvasPreviewTemplateId === "string" &&
+    _req.query.canvasPreviewTemplateId.length > 0;
+
   // Strict Transport Security - enforce HTTPS
   res.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
 
   // Prevent clickjacking
-  res.set("X-Frame-Options", "DENY");
+  res.set("X-Frame-Options", isCanvasPreviewRequest ? "SAMEORIGIN" : "DENY");
 
   // Prevent MIME type sniffing
   res.set("X-Content-Type-Options", "nosniff");
@@ -86,15 +91,16 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
   res.set("Referrer-Policy", "strict-origin-when-cross-origin");
 
   // Content Security Policy
+  const frameAncestors = isCanvasPreviewRequest ? "'self'" : "'none'";
   if (process.env.NODE_ENV === "production") {
     res.set(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.instagram.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' https://www.google.com https://player.cloudinary.com https://www.instagram.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
+      `default-src 'self'; script-src 'self' 'unsafe-inline' https://www.instagram.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' https://www.google.com https://player.cloudinary.com https://www.instagram.com; frame-ancestors ${frameAncestors}; object-src 'none'; base-uri 'self';`
     );
   } else {
     res.set(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.instagram.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https: ws: wss:; frame-src 'self' https://www.google.com https://player.cloudinary.com https://www.instagram.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
+      `default-src 'self'; script-src 'self' 'unsafe-inline' https://www.instagram.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https: ws: wss:; frame-src 'self' https://www.google.com https://player.cloudinary.com https://www.instagram.com; frame-ancestors ${frameAncestors}; object-src 'none'; base-uri 'self';`
     );
   }
 

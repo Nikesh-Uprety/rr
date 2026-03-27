@@ -103,6 +103,9 @@ const sessionMiddleware = session({
 const isAppDocumentRequest = (req: Request) =>
   !req.path.startsWith("/api") && (req.method === "GET" || req.method === "HEAD");
 
+const isAuthStatusRequest = (req: Request) =>
+  req.method === "GET" && req.path === "/api/auth/me";
+
 app.use((req, res, next) => {
   sessionMiddleware(req, res, (err) => {
     if (!err) return next();
@@ -119,7 +122,7 @@ app.use((req, res, next) => {
       },
     );
 
-    if (isAppDocumentRequest(req)) {
+    if (isAppDocumentRequest(req) || isAuthStatusRequest(req)) {
       return next();
     }
 
@@ -149,7 +152,7 @@ app.use((req, res, next) => {
       },
     );
 
-    if (isAppDocumentRequest(req)) {
+    if (isAppDocumentRequest(req) || isAuthStatusRequest(req)) {
       return next();
     }
 
@@ -212,7 +215,21 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await ensureDefaultProductAttributes();
+  try {
+    await ensureDefaultProductAttributes();
+  } catch (error) {
+    logger.warn(
+      "Default product attributes bootstrap skipped",
+      {
+        timestamp: new Date().toISOString(),
+        source: "APP",
+      },
+      error,
+      {
+        reason: "database_unavailable_during_startup",
+      },
+    );
+  }
 
   // Serve uploaded files - MUST be before registerRoutes and vite
   const path = await import("path");

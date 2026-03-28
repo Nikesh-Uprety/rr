@@ -63,13 +63,16 @@ export default function FreshReleaseSection({ config }: FreshReleaseSectionProps
     staleTime: 60 * 1000,
   });
 
-  const title = config?.title ?? "Fresh Release";
+  const resolvedConfig = config ?? {};
+  const title = resolvedConfig.title ?? "Fresh Release";
   const text =
-    config?.text ?? "A selected grid of recent pieces with enough room to highlight product density and clean merchandising.";
-  const productIds = Array.isArray(config?.productIds)
-    ? config.productIds.map((id: unknown) => String(id))
+    resolvedConfig.text ?? "A selected grid of recent pieces with enough room to highlight product density and clean merchandising.";
+  const productIds = Array.isArray(resolvedConfig.productIds)
+    ? resolvedConfig.productIds.map((id: unknown) => String(id))
     : [];
-  const desktopColumns = Number.isFinite(Number(config?.columns)) ? Math.max(2, Math.min(4, Number(config.columns))) : 4;
+  const desktopColumns = Number.isFinite(Number(resolvedConfig.columns))
+    ? Math.max(2, Math.min(4, Number(resolvedConfig.columns)))
+    : 4;
 
   const selectedProducts = useMemo(() => {
     const source = productIds.length > 0

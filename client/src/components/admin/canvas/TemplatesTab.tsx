@@ -1,17 +1,31 @@
 import { useMemo } from "react";
-import { apiRequest, useQueryClient } from "@/lib/queryClient";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, ExternalLink, Sparkles, ArrowUp, ArrowDown, Copy, Eye, EyeOff, MoreHorizontal, ArrowRightLeft, Plus, GripVertical, Palette } from "lucide-react";
+import { RefreshCw, ExternalLink, Sparkles } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
-import type { CanvasTemplate, CanvasSection, CanvasSettings, SectionDraft } from "@/pages/admin/Canvas";
+
+type CanvasTemplate = {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  thumbnailUrl: string | null;
+  tier: string;
+  priceNpr: number;
+  isPurchased: boolean;
+  isActive: boolean;
+};
+
+type CanvasSettings = {
+  id?: number;
+  activeTemplateId?: number | null;
+  activeTemplate?: CanvasTemplate | null;
+};
 
 interface TemplatesTabProps {
   templates: CanvasTemplate[];
@@ -23,7 +37,7 @@ interface TemplatesTabProps {
   effectiveTemplateId: number | null;
   activateMutation: ReturnType<typeof useMutation>;
   toast: ReturnType<typeof useToast>;
-  queryClient: ReturnType<typeof useQueryClient>;
+  queryClient: QueryClient;
   previewKey: number;
   setPreviewKey: (key: number) => void;
 }

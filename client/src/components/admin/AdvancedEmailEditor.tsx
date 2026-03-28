@@ -2,12 +2,9 @@ import React, { useRef, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import SyntaxHighlighter from "react-syntax-highlighter";
-import { atomOneDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { 
   Search, 
   X, 
-  ChevronDown, 
   Copy, 
   FileCode,
   Palette,
@@ -70,9 +67,7 @@ export function AdvancedEmailEditor({
   const [showSplitView, setShowSplitViewLocal] = useState(initialSplitView);
   const [editMode, setEditMode] = useState(false);
   const [isPreviewMobile, setIsPreviewMobile] = useState(false);
-  const editorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const contentEditableSnapshot = useRef<string>("");
 
   const handleSplitViewChange = (value: boolean) => {
     setShowSplitViewLocal(value);
@@ -260,10 +255,8 @@ export function AdvancedEmailEditor({
   };
 
   const handleLineNumbers = () => {
-    if (editorRef.current) {
-      const lines = htmlContent.split("\n").length;
-      return Array.from({ length: lines }, (_, i) => i + 1).join("\n");
-    }
+    const lines = Math.max(htmlContent.split("\n").length, 1);
+    return Array.from({ length: lines }, (_, i) => i + 1).join("\n");
   };
 
   return (
@@ -346,7 +339,7 @@ export function AdvancedEmailEditor({
 
       {showSplitView ? (
         <div className="grid grid-cols-2 gap-4 h-[600px]">
-          {/* Editor Panel with Syntax Highlighting */}
+          {/* Editor Panel */}
           <div className="flex flex-col space-y-2 border border-[#E5E5E0] dark:border-border rounded-lg overflow-hidden bg-[#282c34]">
             <div className="flex items-center justify-between p-2 bg-[#1e1f26] border-b border-[#3e3f47]">
               <span className="text-xs text-gray-400 font-mono">HTML</span>
@@ -381,23 +374,13 @@ export function AdvancedEmailEditor({
                     <div key={n}>{n}</div>
                   ))}
                 </div>
-                {/* Code with Syntax Highlighting */}
-                <div className="flex-1 p-3 overflow-auto">
-                  <SyntaxHighlighter
-                    language="html"
-                    style={atomOneDark}
-                    customStyle={{
-                      margin: 0,
-                      padding: 0,
-                      background: "transparent",
-                      fontSize: "12px",
-                      lineHeight: "1.5",
-                    }}
-                    wrapLongLines
-                  >
-                    {htmlContent}
-                  </SyntaxHighlighter>
-                </div>
+                <Textarea
+                  ref={textareaRef}
+                  value={htmlContent}
+                  onChange={(e) => onHtmlChange(e.target.value)}
+                  spellCheck={false}
+                  className="min-h-[560px] flex-1 resize-none rounded-none border-0 bg-transparent p-3 font-mono text-xs leading-6 text-white focus-visible:ring-0"
+                />
               </div>
             </div>
           </div>
@@ -453,7 +436,7 @@ export function AdvancedEmailEditor({
       ) : (
         /* Compact View */
         <div className="space-y-3">
-          {/* Syntax Highlighted Editor */}
+          {/* Compact Editor */}
           <div className="border border-[#E5E5E0] dark:border-border rounded-lg overflow-hidden bg-[#282c34]">
             <div className="flex items-center justify-between p-2 bg-[#1e1f26] border-b border-[#3e3f47]">
               <span className="text-xs text-gray-400 font-mono">HTML</span>
@@ -487,23 +470,13 @@ export function AdvancedEmailEditor({
                   <div key={n}>{n}</div>
                 ))}
               </div>
-              {/* Code Editor with Highlighting */}
-              <div className="flex-1 p-3 font-mono text-xs overflow-auto">
-                <SyntaxHighlighter
-                  language="html"
-                  style={atomOneDark}
-                  customStyle={{
-                    margin: 0,
-                    padding: 0,
-                    background: "transparent",
-                    fontSize: "12px",
-                    lineHeight: "1.5",
-                  }}
-                  wrapLongLines
-                >
-                  {htmlContent}
-                </SyntaxHighlighter>
-              </div>
+              <Textarea
+                ref={textareaRef}
+                value={htmlContent}
+                onChange={(e) => onHtmlChange(e.target.value)}
+                spellCheck={false}
+                className="h-full flex-1 resize-none rounded-none border-0 bg-transparent p-3 font-mono text-xs leading-6 text-white focus-visible:ring-0"
+              />
             </div>
           </div>
         </div>

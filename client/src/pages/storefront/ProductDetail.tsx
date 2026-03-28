@@ -312,6 +312,27 @@ export default function ProductDetail() {
     : null;
 
   useEffect(() => {
+    if (availableSizes.length === 0) {
+      if (selectedSize !== null) {
+        setSelectedSize(null);
+      }
+      return;
+    }
+
+    const hasValidSelectedSize =
+      selectedSize !== null && availableSizes.includes(selectedSize) && (stockBySize[selectedSize] ?? 0) > 0;
+
+    if (hasValidSelectedSize) {
+      return;
+    }
+
+    const firstInStockSize = availableSizes.find((size) => (stockBySize[size] ?? 0) > 0) ?? null;
+    if (firstInStockSize !== selectedSize) {
+      setSelectedSize(firstInStockSize);
+    }
+  }, [availableSizes, selectedSize, stockBySize]);
+
+  useEffect(() => {
     if (selectedVariantStock !== null && quantity > selectedVariantStock) {
       setQuantity(1);
     }
@@ -831,6 +852,7 @@ export default function ProductDetail() {
 
             <div className="flex flex-col gap-3 pt-2">
               <Button
+                data-testid="product-add-to-bag"
                 onClick={handleAddToCart}
                 disabled={!selectedSize || selectedVariantStock === 0}
                 className="w-full h-14 bg-black text-white hover:bg-gray-900 rounded-none uppercase tracking-[0.2em] text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed"
@@ -842,6 +864,7 @@ export default function ProductDetail() {
                     : "Add to Bag"}
               </Button>
               <Button
+                data-testid="product-buy-now"
                 variant="outline"
                 onClick={handleBuyNow}
                 disabled={!selectedSize || selectedVariantStock === 0}

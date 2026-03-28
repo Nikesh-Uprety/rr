@@ -5,6 +5,7 @@ const PORT = Number(process.env.PORT ?? 5001);
 const baseURL = `http://127.0.0.1:${PORT}`;
 const authFile = path.join(import.meta.dirname, "tests/e2e/.auth/admin.json");
 const useExistingServer = process.env.PLAYWRIGHT_USE_EXISTING === "1";
+const browserName = process.env.PLAYWRIGHT_BROWSER === "chromium" ? "chromium" : "firefox";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -14,7 +15,7 @@ export default defineConfig({
   reporter: process.env.CI ? [["html"], ["list"]] : "list",
   use: {
     baseURL,
-    browserName: "firefox",
+    browserName,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",

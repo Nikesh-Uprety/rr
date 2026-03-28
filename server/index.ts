@@ -5,8 +5,11 @@ import "dotenv/config";
 import express, { NextFunction, type Request, Response } from "express";
 import session from "express-session";
 import { createServer } from "http";
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
+import { products, users } from "@shared/schema";
 import { configurePassport, passport } from "./auth";
-import { pool } from "./db";
+import { db, pool } from "./db";
 import { logger } from "./logger";
 import { corsHeaders, securityHeaders } from "./middleware/security";
 import { ensureDefaultProductAttributes } from "./productAttributeDefaults";
@@ -214,7 +217,96 @@ app.use((req, res, next) => {
   next();
 });
 
+async function ensureE2ETestState() {
+  const adminPasswordHash = await bcrypt.hash("admin123", 10);
+  const staffPasswordHash = await bcrypt.hash("staff123", 10);
+
+  const existingAdmin = await db.query.users.findFirst({
+    where: eq(users.username, "admin@rare.np"),
+  });
+
+  if (existingAdmin) {
+    await db
+      .update(users)
+      .set({
+        password: adminPasswordHash,
+        role: "admin",
+        displayName: "Admin User",
+        profileImageUrl: null,
+        requires2FASetup: false,
+        twoFactorEnabled: 0,
+        status: "active",
+        emailNotifications: true,
+      })
+      .where(eq(users.id, existingAdmin.id));
+  } else {
+    await db.insert(users).values({
+      username: "admin@rare.np",
+      password: adminPasswordHash,
+      role: "admin",
+      displayName: "Admin User",
+      profileImageUrl: null,
+      requires2FASetup: false,
+      twoFactorEnabled: 0,
+      status: "active",
+      emailNotifications: true,
+    });
+  }
+
+  const existingStaff = await db.query.users.findFirst({
+    where: eq(users.username, "staff@rare.np"),
+  });
+
+  if (!existingStaff) {
+    await db.insert(users).values({
+      username: "staff@rare.np",
+      password: staffPasswordHash,
+      role: "staff",
+      displayName: "Store Staff",
+      profileImageUrl: null,
+      requires2FASetup: false,
+      twoFactorEnabled: 0,
+      status: "active",
+      emailNotifications: true,
+    });
+  }
+
+  const existingProduct = await db.query.products.findFirst();
+  if (!existingProduct) {
+    await db.insert(products).values({
+      name: "E2E Essential Hoodie",
+      shortDetails: "Default product for end-to-end checks",
+      description: "Bootstrap product to keep e2e storefront flows deterministic.",
+      price: "2500",
+      category: "Arrivals",
+      stock: 12,
+      imageUrl: "/images/feature1.webp",
+      galleryUrls: JSON.stringify(["/images/feature1.webp"]),
+      colorOptions: JSON.stringify(["Black"]),
+      sizeOptions: JSON.stringify(["M", "L"]),
+      homeFeatured: true,
+      homeFeaturedImageIndex: 0,
+    });
+  }
+}
+
 (async () => {
+  if (process.env.E2E_TEST_MODE === "1") {
+    try {
+      await ensureE2ETestState();
+      log("E2E bootstrap state ensured", "express");
+    } catch (error) {
+      logger.warn(
+        "E2E bootstrap skipped",
+        {
+          timestamp: new Date().toISOString(),
+          source: "APP",
+        },
+        error,
+      );
+    }
+  }
+
   try {
     await ensureDefaultProductAttributes();
   } catch (error) {

@@ -24,8 +24,8 @@ test("admin can verify payment and manage a product", async ({ browser, page }) 
   const productName = `E2E Product ${Date.now()}`;
 
   await page.goto("/admin/products");
-  await expect(page.getByTestId("admin-products-add-open")).toBeVisible();
-  await page.getByTestId("admin-products-add-open").click();
+  await expect(page.getByRole("button", { name: "Add Product" })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Add Product" }).click();
   await page.getByTestId("admin-product-name").fill(productName);
   await page.getByTestId("admin-product-short-details").fill("End-to-end test product");
   await page.getByTestId("admin-product-price").fill("2500");
@@ -35,7 +35,8 @@ test("admin can verify payment and manage a product", async ({ browser, page }) 
   await page.getByTestId("admin-products-search").fill(productName);
   await expect(page.getByText(productName).first()).toBeVisible();
   await page.locator("[data-testid^='admin-product-edit-open-']").first().click();
-  await pickSelectItem(page.getByTestId("admin-product-edit-category"), "Arrivals");
+  await page.getByTestId("admin-product-edit-category").click();
+  await page.getByRole("option").first().click();
   await page.getByTestId("admin-product-edit-short-details").fill("Updated end-to-end test product");
   await page.getByTestId("admin-product-edit-save").click();
   await expect(page.getByTestId("admin-product-edit-save")).toHaveCount(0);

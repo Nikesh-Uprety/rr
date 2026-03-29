@@ -1,0 +1,98 @@
+Report for /home/nikesh/rr/client/src/pages/storefront/Home.tsx:
+
+1. Major inline JSX visual blocks in the `Home` return statement
+
+- Wrapper/root container: lines 637-1039
+- Scroll progress indicator: lines 638-639
+- SEO head block (`Helmet`): lines 641-646
+- Hero section overall: lines 647-778
+- Hero media area:
+  video/loading/image states: lines 649-700
+- Hero overlay tint: line 701
+- Hero editorial text block: lines 703-736
+- Hero CTA/button block: lines 738-777
+- Quote section overall: lines 780-864
+- Quote background glow layer: lines 785-809
+- Quote content card: lines 811-863
+- Featured Collection section overall: lines 866-952
+- Featured header/title/link: lines 868-883
+- Featured lifestyle carousel: lines 885-945
+- Featured products loop/grid: lines 947-951
+- Campaign banner section: lines 954-1013
+- Campaign banner background/parallax image: lines 956-965
+- Campaign hover spotlight overlay: lines 967-979
+- Campaign content card/CTA: lines 983-1012
+- New Arrivals section overall: lines 1015-1036
+- New Arrivals heading copy: lines 1017-1025
+- New Arrivals products loop/grid: lines 1026-1035
+- Services section mount: line 1038
+
+2. `useState` and `useQuery` hooks used in this file
+
+`useState` in helper components:
+- `FeaturedProductCard` at line 78
+  - `mobileImageIndex`
+  - Manages the current mobile/tablet gallery slide for a featured product card
+- `NewArrivalCard` at line 320
+  - `idx`
+  - Manages the currently visible rotating image for a new-arrival card
+
+`useState` in `Home`:
+- Lines 404-405
+  - `carouselIndex`
+  - Manages current slide in the featured lifestyle carousel
+- Line 405
+  - `isMobile`
+  - Tracks viewport/mobile state for hero video vs image behavior
+- Line 406
+  - `heroIndex`
+  - Tracks current hero fallback image index
+- Line 407
+  - `isTransitioning`
+  - Prevents overlapping carousel transitions
+- Line 408
+  - `videoFailed`
+  - Switches hero from video to image fallback if video errors
+- Lines 419-421
+  - `featureCollectionImages`
+  - Stores featured collection carousel images, defaulting to local assets and possibly overridden from `localStorage`
+- Lines 422-424
+  - `exploreCollectionImage`
+  - Stores campaign/explore banner image, defaulting to local asset and possibly overridden from `localStorage`
+
+`useQuery` in `Home`:
+- Lines 429-432
+  - `featuredProducts`
+  - Fetches featured products with `fetchProducts({ limit: 2 })`
+  - Also exposes `isFeaturedSuccess`
+- Lines 434-437
+  - `newArrivals`
+  - Fetches homepage featured/new-arrival products with `fetchHomeFeaturedProducts`
+  - Also exposes `isNewArrivalsSuccess`
+- Lines 443-453
+  - `heroAssets`
+  - Fetches hero site assets from `/api/site-assets/hero`
+  - Also exposes `heroLoading`
+- Lines 455-462
+  - `campaignAssets`
+  - Fetches campaign/banner assets from `/api/site-assets/new_collection`
+
+Related derived state/hooks:
+- Lines 426-427
+  - `useScroll` / `useTransform`
+  - Drives parallax offset for campaign banner image
+- Lines 439-441
+  - `normalizedNewArrivals`
+  - Limits fetched new arrivals to 8 items
+- Lines 500-505
+  - `heroImages`
+  - Derives active hero image list from fetched hero assets with fallback
+
+3. Helper components/functions defined inside this file
+
+- `getGalleryImagesForCard`: lines 58-75
+- `FeaturedProductCard`: lines 77-297
+- `NewArrivalCard`: lines 299-401
+- `Home`: lines 403-1041
+
+No files were changed. Waiting for your next message.

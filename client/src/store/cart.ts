@@ -34,10 +34,14 @@ function getUnitOriginalPrice(product: Product): number {
 
 interface CartState {
   items: CartItem[];
+  isCartSidebarOpen: boolean;
   addItem: (product: Product, variant: { size: string; color: string }, quantity?: number) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
+  openCartSidebar: () => void;
+  closeCartSidebar: () => void;
+  toggleCartSidebar: () => void;
   get subtotal(): number;
   get originalSubtotal(): number;
   get productDiscountTotal(): number;
@@ -47,6 +51,7 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
+      isCartSidebarOpen: false,
       addItem: (product, variant, quantity = 1) => {
     let shouldNotify = false;
     let notifyPayload: {
@@ -143,6 +148,10 @@ export const useCartStore = create<CartState>()(
     }
       },
       clearCart: () => set({ items: [] }),
+      openCartSidebar: () => set({ isCartSidebarOpen: true }),
+      closeCartSidebar: () => set({ isCartSidebarOpen: false }),
+      toggleCartSidebar: () =>
+        set((state) => ({ isCartSidebarOpen: !state.isCartSidebarOpen })),
       get subtotal() {
         return get().items.reduce((total, item) => total + (item.product.price * item.quantity), 0);
       },

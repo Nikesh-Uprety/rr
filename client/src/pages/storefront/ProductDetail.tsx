@@ -89,6 +89,7 @@ export default function ProductDetail() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const addItem = useCartStore((state) => state.addItem);
+  const openCartSidebar = useCartStore((state) => state.openCartSidebar);
 
   const productId = params?.id ?? "";
 
@@ -389,6 +390,7 @@ export default function ProductDetail() {
     );
     const isMobileOrTablet = window.matchMedia("(max-width: 1024px)").matches;
     toast({ title: "Added to bag", duration: isMobileOrTablet ? 1500 : undefined });
+    openCartSidebar();
   };
 
   const handleBuyNow = () => {

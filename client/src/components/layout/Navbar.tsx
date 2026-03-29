@@ -28,16 +28,17 @@ export default function Navbar() {
   const [isNavHidden, setIsNavHidden] = useState(false);
   const announceRef = useRef<HTMLDivElement>(null);
   const lastScrollYRef = useRef(0);
-  const cartItemsCount = useCartStore((state) =>
-    state.items.reduce((acc, item) => acc + item.quantity, 0),
-  );
-  const { user, isAuthenticated } = useCurrentUser({ enabled: previewTemplateId === null });
-  const queryClient = useQueryClient();
   const previewTemplateId = useMemo(() => {
     if (typeof window === "undefined") return null;
     const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
     return rawValue && /^\d+$/.test(rawValue) ? rawValue : null;
   }, []);
+  const cartItemsCount = useCartStore((state) =>
+    state.items.reduce((acc, item) => acc + item.quantity, 0),
+  );
+  const openCartSidebar = useCartStore((state) => state.openCartSidebar);
+  const { user, isAuthenticated } = useCurrentUser({ enabled: previewTemplateId === null });
+  const queryClient = useQueryClient();
   const { data: pageConfig } = useQuery({
     queryKey: ["page-config", previewTemplateId],
     queryFn: () => {
@@ -375,8 +376,9 @@ export default function Navbar() {
                     {theme === "light" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
                   </button>
                 )}
-                <Link
-                  href="/cart"
+                <button
+                  type="button"
+                  onClick={() => openCartSidebar()}
                   className="relative flex h-10 w-10 items-center justify-center"
                   style={{
                     color: useHeroContrastState ? "#ffffff" : isMaisonLight ? "#181411" : "#ffffff",
@@ -400,7 +402,7 @@ export default function Navbar() {
                       {cartItemsCount}
                     </span>
                   ) : null}
-                </Link>
+                </button>
                 {isNikeshDesign ? (
                   <button
                     type="button"
@@ -619,17 +621,18 @@ export default function Navbar() {
               </button>
             )}
 
-            {cartItemsCount > 0 && (
-              <Link
-                href="/cart"
-                className="relative w-10 h-10 flex items-center justify-center rounded-full border border-white/35 bg-white/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-white/55 dark:border-white/12 dark:bg-white/[0.08] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-white/[0.12]"
-              >
+            <button
+              type="button"
+              onClick={() => openCartSidebar()}
+              className="relative w-10 h-10 flex items-center justify-center rounded-full border border-white/35 bg-white/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-white/55 dark:border-white/12 dark:bg-white/[0.08] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-white/[0.12]"
+            >
                 <ShoppingBag className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full min-w-4 h-4 px-1 flex items-center justify-center text-[10px] font-bold">
-                  {cartItemsCount}
-                </span>
-              </Link>
-            )}
+                {cartItemsCount > 0 ? (
+                  <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full min-w-4 h-4 px-1 flex items-center justify-center text-[10px] font-bold">
+                    {cartItemsCount}
+                  </span>
+                ) : null}
+            </button>
 
             {isAuthenticated && user ? (
               <div className="flex items-center gap-2">

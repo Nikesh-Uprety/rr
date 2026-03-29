@@ -196,6 +196,7 @@
       var currentProgress = 0; // The actual visual value (0-100)
       var targetProgress = 0; // Where the visual value is animating towards
       var isFinishing = false; // Flag to indicate React is ready
+      var hasCompleted = false; // Prevent duplicate teardown calls
 
       // Smooth easing function
       function lerp(start, end, amt) {
@@ -240,31 +241,33 @@
       }
 
       function completeLoadSequence() {
-        if (!loader || loader.classList.contains('loaded')) return;
-        
-        setTimeout(function() {
+        if (hasCompleted) return;
+        hasCompleted = true;
+
+        if (loader && !loader.classList.contains('loaded')) {
           loader.classList.add('loaded');
+        }
+        if (root) {
           root.classList.add('ready');
-          
-          setTimeout(function() {
-            body.classList.remove('loading');
-            // Cleanup loader from DOM after fade out
-            setTimeout(function() {
-              if (loader.parentNode) loader.parentNode.removeChild(loader);
-            }, 1000);
-          }, 800);
-        }, 200);
+        }
+
+        setTimeout(function() {
+          body.classList.remove('loading');
+          if (loader && loader.parentNode) {
+            loader.parentNode.removeChild(loader);
+          }
+        }, 800);
       }
 
       finishLoading = function() {
-        if (isFinishing || !loader || loader.classList.contains('loaded')) return;
+        if (isFinishing || hasCompleted) return;
         
         // React is ready! Accelerate the target to 100 immediately
         isFinishing = true;
         targetProgress = 100;
-        
-        // If we want it to close extremely fast, we can also speed up the lerp
-        // by overriding the loop behavior in a timeout, but standard lerp looks smooth.
+
+        // Hard fallback: never leave app hidden if RAF is delayed/throttled.
+        setTimeout(completeLoadSequence, 900);
       };
 
       // Start the render loop
@@ -273,8 +276,10 @@
       // The React app is now responsible for calling this when ready
       window.finishLoading = finishLoading;
 
-      // Extended Safety timeout (5s) in case React fails entirely
+      // Extended safety timeout in case React fails entirely
       setTimeout(finishLoading, 5000);
+      // Last-resort reveal if both animation and finish callback are delayed.
+      setTimeout(completeLoadSequence, 8000);
     })();
   </script>
   <script type="module" src="/src/main.tsx"></script>

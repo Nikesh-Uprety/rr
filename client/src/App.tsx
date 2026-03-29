@@ -17,6 +17,7 @@ import Home from "@/pages/storefront/Home";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import Footer from "@/components/layout/Footer";
 import { TopLoadingBar } from "@/components/layout/TopLoadingBar";
+import CartSidebar from "@/components/layout/CartSidebar";
 import { fetchCategories, fetchProducts } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Wifi, WifiOff } from "lucide-react";
@@ -197,6 +198,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 flex flex-col transition-colors duration-200 ease-in-out">
         {children}
       </main>
+      <CartSidebar />
       <Footer />
     </div>
   );
@@ -712,6 +714,17 @@ function App() {
     new URLSearchParams(window.location.search).has("canvasPreviewTemplateId");
   const initialPath =
     typeof window !== "undefined" ? window.location.pathname : "/";
+
+  useEffect(() => {
+    // Ensure loader is dismissed for every route family (storefront + admin).
+    if (typeof window === "undefined") return;
+    const done = (window as { finishLoading?: () => void }).finishLoading;
+    if (typeof done !== "function") return;
+    const timer = window.setTimeout(() => {
+      done();
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const aroundNav = useCallback(
     (

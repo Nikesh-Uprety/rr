@@ -1,9 +1,9 @@
-import { useState, useMemo, useEffect, useRef, type WheelEvent } from "react";
+import { useState, useMemo, useEffect, useRef, type WheelEvent as ReactWheelEvent } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Minus, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, Minus, Plus, ShieldCheck, Truck, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { fetchProductById, fetchProducts, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
@@ -19,6 +19,10 @@ function parseJsonArray(s: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+function getDominantWheelDelta(deltaY: number, deltaX: number): number {
+  return Math.abs(deltaY) >= Math.abs(deltaX) ? deltaY : deltaX;
 }
 
 export default function ProductDetail() {
@@ -53,12 +57,17 @@ export default function ProductDetail() {
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
-  const [slideTrigger, setSlideTrigger] = useState(0);
+  const [imageMotionTick, setImageMotionTick] = useState(0);
+  const [imageMotionDirection, setImageMotionDirection] = useState<"down" | "up">("down");
+  const [imageMotionDistance, setImageMotionDistance] = useState(1);
+  const [mainImageScrollUnlocked, setMainImageScrollUnlocked] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
   const galleryCloseTimeoutRef = useRef<number | null>(null);
   const didSwipeRef = useRef(false);
   const galleryWheelLockRef = useRef(false);
+  const pageWheelLockRef = useRef(false);
+  const mainImageViewportRef = useRef<HTMLDivElement | null>(null);
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
   const stockBySize = product?.stockBySize ?? {};
@@ -100,13 +109,10 @@ export default function ProductDetail() {
   }, [allImages.length, selectedImageIndex]);
 
   useEffect(() => {
-    if (allImages.length <= 1 || !allImages[0]) return;
-    if (isGalleryOpen) return;
-    const interval = window.setInterval(() => {
-      setSelectedImageIndex((prev) => (prev + 1) % allImages.length);
-    }, 4000);
-    return () => window.clearInterval(interval);
-  }, [allImages, slideTrigger, isGalleryOpen]);
+    setSelectedImageIndex(0);
+    setImageMotionTick(0);
+    setMainImageScrollUnlocked(allImages.length <= 1);
+  }, [product?.id, allImages.length]);
 
   useEffect(() => {
     if (!isGalleryOpen) return;
@@ -115,26 +121,25 @@ export default function ProductDetail() {
         setIsGalleryVisible(false);
       }
       if (event.key === "ArrowRight") {
-        setSelectedImageIndex((prev) => (prev + 1) % allImages.length);
-        setSlideTrigger((prev) => prev + 1);
+        goToImage(selectedImageIndex + 1, { direction: "down" });
       }
       if (event.key === "ArrowLeft") {
-        setSelectedImageIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
-        setSlideTrigger((prev) => prev + 1);
+        goToImage(selectedImageIndex - 1, { direction: "up" });
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [allImages.length, isGalleryOpen]);
+  }, [allImages.length, isGalleryOpen, selectedImageIndex]);
+
+  const shouldLockMainPageScroll = !isGalleryOpen && allImages.length > 1 && !mainImageScrollUnlocked;
 
   useEffect(() => {
-    if (!isGalleryOpen) return;
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = isGalleryOpen || shouldLockMainPageScroll ? "hidden" : "";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [isGalleryOpen]);
+  }, [isGalleryOpen, shouldLockMainPageScroll]);
 
   useEffect(() => {
     if (!isGalleryOpen) return;
@@ -153,6 +158,44 @@ export default function ProductDetail() {
       }
     };
   }, [isGalleryOpen, isGalleryVisible]);
+
+  useEffect(() => {
+    if (isGalleryOpen || allImages.length <= 1 || mainImageScrollUnlocked) return;
+
+    const onPageWheel = (event: WheelEvent) => {
+      if (!mainImageViewportRef.current) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (pageWheelLockRef.current) return;
+      const delta = getDominantWheelDelta(event.deltaY, event.deltaX);
+      if (Math.abs(delta) < 8) return;
+
+      pageWheelLockRef.current = true;
+      window.setTimeout(() => {
+        pageWheelLockRef.current = false;
+      }, 130);
+
+      if (delta > 0) {
+        if (selectedImageIndex < allImages.length - 1) {
+          goToImage(selectedImageIndex + 1, { direction: "down" });
+        } else {
+          setMainImageScrollUnlocked(true);
+        }
+        return;
+      }
+
+      if (selectedImageIndex > 0) {
+        goToImage(selectedImageIndex - 1, { direction: "up" });
+      }
+    };
+
+    window.addEventListener("wheel", onPageWheel, { passive: false });
+    return () => {
+      window.removeEventListener("wheel", onPageWheel);
+    };
+  }, [allImages.length, isGalleryOpen, mainImageScrollUnlocked, selectedImageIndex]);
 
   const effectiveColor = selectedColor ?? (colors[0] ?? null);
   const effectiveSize = selectedSize;
@@ -246,23 +289,36 @@ export default function ProductDetail() {
     setLocation("/checkout");
   };
 
-  const resetSlideshow = () => {
-    setSlideTrigger((prev) => prev + 1);
-  };
-
-  const goToImage = (index: number, manual = false) => {
+  const goToImage = (
+    index: number,
+    options?: { direction?: "down" | "up"; distance?: number },
+  ) => {
     if (!allImages.length) return;
+    const currentIndex = selectedImageIndex;
     const next = (index + allImages.length) % allImages.length;
+    if (next === currentIndex) return;
+    const inferredDirection =
+      options?.direction ??
+      (next === 0 && currentIndex === allImages.length - 1
+        ? "down"
+        : next === allImages.length - 1 && currentIndex === 0
+          ? "up"
+          : next > currentIndex
+            ? "down"
+            : "up");
+    const inferredDistance = Math.max(1, options?.distance ?? Math.abs(next - currentIndex));
+    setImageMotionDirection(inferredDirection);
+    setImageMotionDistance(inferredDistance);
+    setImageMotionTick((prev) => prev + 1);
     setSelectedImageIndex(next);
-    if (manual) resetSlideshow();
   };
 
-  const goToNextImage = (manual = false) => {
-    goToImage(selectedImageIndex + 1, manual);
+  const goToNextImage = () => {
+    goToImage(selectedImageIndex + 1, { direction: "down", distance: 1 });
   };
 
-  const goToPreviousImage = (manual = false) => {
-    goToImage(selectedImageIndex - 1, manual);
+  const goToPreviousImage = () => {
+    goToImage(selectedImageIndex - 1, { direction: "up", distance: 1 });
   };
 
   const openGallery = () => {
@@ -273,20 +329,21 @@ export default function ProductDetail() {
     setIsGalleryVisible(false);
   };
 
-  const handleGalleryWheel = (event: WheelEvent<HTMLDivElement>) => {
+  const handleGalleryWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
     if (galleryWheelLockRef.current) return;
 
-    const threshold = 18;
-    if (Math.abs(event.deltaY) < threshold) return;
+    const delta = getDominantWheelDelta(event.deltaY, event.deltaX);
+    const threshold = 12;
+    if (Math.abs(delta) < threshold) return;
 
     galleryWheelLockRef.current = true;
     window.setTimeout(() => {
       galleryWheelLockRef.current = false;
     }, 140);
 
-    const isScrollDown = event.deltaY > 0;
+    const isScrollDown = delta > 0;
     const isAtFirst = selectedImageIndex === 0;
     const isAtLast = selectedImageIndex === allImages.length - 1;
 
@@ -295,7 +352,7 @@ export default function ProductDetail() {
         closeGallery();
         return;
       }
-      goToImage(selectedImageIndex + 1, true);
+      goToImage(selectedImageIndex + 1, { direction: "down" });
       return;
     }
 
@@ -303,7 +360,39 @@ export default function ProductDetail() {
       closeGallery();
       return;
     }
-    goToImage(selectedImageIndex - 1, true);
+    goToImage(selectedImageIndex - 1, { direction: "up" });
+  };
+
+  const handleMainImageWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
+    if (isGalleryOpen || allImages.length <= 1) return;
+    const delta = getDominantWheelDelta(event.deltaY, event.deltaX);
+    if (Math.abs(delta) < 8) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (pageWheelLockRef.current) return;
+    pageWheelLockRef.current = true;
+    window.setTimeout(() => {
+      pageWheelLockRef.current = false;
+    }, 130);
+
+    if (delta > 0) {
+      if (selectedImageIndex < allImages.length - 1) {
+        goToImage(selectedImageIndex + 1, { direction: "down", distance: 1 });
+      } else if (!mainImageScrollUnlocked) {
+        setMainImageScrollUnlocked(true);
+      } else {
+        goToImage(0, { direction: "down", distance: allImages.length - 1 });
+      }
+      return;
+    }
+
+    if (selectedImageIndex > 0) {
+      goToImage(selectedImageIndex - 1, { direction: "up", distance: 1 });
+    } else if (mainImageScrollUnlocked) {
+      goToImage(allImages.length - 1, { direction: "up", distance: allImages.length - 1 });
+    }
   };
 
   const structuredData = {
@@ -328,6 +417,20 @@ export default function ProductDetail() {
 
   return (
     <div className="mt-10 w-full px-3 py-24 sm:px-6 lg:px-8 xl:px-10">
+      <style>{`
+        @keyframes product-image-slide-down {
+          0% { transform: translateY(-72px) scale(0.992); opacity: 0; filter: blur(5px); }
+          100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
+        }
+        @keyframes product-image-slide-up {
+          0% { transform: translateY(72px) scale(0.992); opacity: 0; filter: blur(5px); }
+          100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
+        }
+        @keyframes accordion-fade-down {
+          0% { opacity: 0; transform: translateY(-6px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
       <Helmet>
         <title>{`${product.name} | Rare Atelier`}</title>
         <meta name="description" content={product.shortDetails || product.description?.substring(0, 160) || `Buy ${product.name} at Rare Atelier.`} />
@@ -392,32 +495,65 @@ export default function ProductDetail() {
             )}
           </p>
 
-          <div className="space-y-3 border-t border-border pt-5">
-            <details open className="group border-b border-border pb-3">
-              <summary className="cursor-pointer list-none text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                Description
+          <div className="space-y-2 border-t border-border pt-5">
+            <details open className="group rounded-md border border-border/80 bg-background/70 px-3 py-2 transition-colors duration-200 open:border-foreground/20">
+              <summary className="list-none cursor-pointer">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground transition-colors duration-200 group-open:text-foreground" />
+                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground transition-colors duration-200 group-open:text-foreground">
+                      Description
+                    </span>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-all duration-300 group-open:rotate-180 group-open:text-foreground" />
+                </div>
               </summary>
-              <div className="pt-3 text-sm leading-relaxed text-foreground">
+              <div className="pt-3 pb-1 text-[15px] leading-7 text-foreground/90 [animation:accordion-fade-down_190ms_ease-out]">
                 {product.description || "This piece is crafted in limited runs with a clean, tailored streetwear silhouette."}
               </div>
             </details>
 
-            <details className="group border-b border-border pb-3">
-              <summary className="cursor-pointer list-none text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                Product Details
+            <details className="group rounded-md border border-border/80 bg-background/70 px-3 py-2 transition-colors duration-200 open:border-foreground/20">
+              <summary className="list-none cursor-pointer">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-muted-foreground transition-colors duration-200 group-open:text-foreground" />
+                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground transition-colors duration-200 group-open:text-foreground">
+                      Product Details
+                    </span>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-all duration-300 group-open:rotate-180 group-open:text-foreground" />
+                </div>
               </summary>
-              <ul className="space-y-2 pt-3 text-sm text-muted-foreground">
-                <li>Limited-run production with refined finishing.</li>
-                <li>Built for daily wear with elevated streetwear structure.</li>
-                <li>Category: {product.category || "Rare Atelier Signature"}.</li>
+              <ul className="space-y-2 pt-3 pb-1 text-[14px] leading-7 text-muted-foreground [animation:accordion-fade-down_190ms_ease-out]">
+                <li className="flex items-start gap-2">
+                  <span className="mt-[9px] h-1.5 w-1.5 rounded-full bg-foreground/50" />
+                  <span>Limited-run production with refined finishing.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-[9px] h-1.5 w-1.5 rounded-full bg-foreground/50" />
+                  <span>Built for daily wear with elevated streetwear structure.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-[9px] h-1.5 w-1.5 rounded-full bg-foreground/50" />
+                  <span>Category: {product.category || "Rare Atelier Signature"}.</span>
+                </li>
               </ul>
             </details>
 
-            <details className="group pb-2">
-              <summary className="cursor-pointer list-none text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                Shipping & Returns
+            <details className="group rounded-md border border-border/80 bg-background/70 px-3 py-2 transition-colors duration-200 open:border-foreground/20">
+              <summary className="list-none cursor-pointer">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-muted-foreground transition-colors duration-200 group-open:text-foreground" />
+                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground transition-colors duration-200 group-open:text-foreground">
+                      Shipping & Returns
+                    </span>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-all duration-300 group-open:rotate-180 group-open:text-foreground" />
+                </div>
               </summary>
-              <div className="space-y-2 pt-3 text-sm text-muted-foreground">
+              <div className="space-y-2 pt-3 pb-1 text-[14px] leading-7 text-muted-foreground [animation:accordion-fade-down_190ms_ease-out]">
                 <p>Shipping across Nepal in 2-5 business days.</p>
                 <p>Easy exchange support for size issues when stock is available.</p>
               </div>
@@ -428,7 +564,9 @@ export default function ProductDetail() {
         <section className="space-y-4 lg:min-w-0">
           <div className="flex min-w-0 flex-col gap-4">
             <div
+              ref={mainImageViewportRef}
               className="relative h-[72vh] min-h-[500px] overflow-hidden rounded-sm border border-border bg-black/5 sm:h-[76vh] lg:h-[86vh] dark:bg-black/40"
+              onWheel={handleMainImageWheel}
               onClick={() => {
                 if (didSwipeRef.current) {
                   didSwipeRef.current = false;
@@ -447,8 +585,8 @@ export default function ProductDetail() {
                 const deltaX = event.changedTouches[0].clientX - touchStartX;
                 if (Math.abs(deltaX) > 40) {
                   didSwipeRef.current = true;
-                  if (deltaX < 0) goToNextImage(true);
-                  if (deltaX > 0) goToPreviousImage(true);
+                  if (deltaX < 0) goToNextImage();
+                  if (deltaX > 0) goToPreviousImage();
                 }
                 setTouchStartX(null);
               }}
@@ -467,7 +605,7 @@ export default function ProductDetail() {
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        goToImage(i, true);
+                        goToImage(i);
                       }}
                       className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border transition-all ${
                         selectedImageIndex === i
@@ -481,17 +619,21 @@ export default function ProductDetail() {
                 </div>
               ) : null}
 
-              {allImages.map((url, idx) => (
-                <img
-                  key={`${url}-${idx}`}
-                  src={url || ""}
-                  alt={`${product.name} - view ${idx + 1}`}
-                  loading={idx === 0 ? "eager" : "lazy"}
-                  className={`absolute inset-0 h-full w-full select-none object-cover object-center transition-[opacity,transform] duration-300 ease-out ${
-                    selectedImageIndex === idx ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0"
-                  }`}
-                />
-              ))}
+              <img
+                key={`main-${selectedImageIndex}-${imageMotionTick}`}
+                src={allImages[selectedImageIndex] || ""}
+                alt={`${product.name} - view ${selectedImageIndex + 1}`}
+                loading={selectedImageIndex === 0 ? "eager" : "lazy"}
+                className="absolute inset-0 h-full w-full select-none object-cover object-center"
+                style={{
+                  animation:
+                    imageMotionTick > 0
+                      ? imageMotionDirection === "down"
+                        ? `product-image-slide-down ${Math.max(180, 320 - Math.min(imageMotionDistance - 1, 4) * 30)}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                        : `product-image-slide-up ${Math.max(180, 320 - Math.min(imageMotionDistance - 1, 4) * 30)}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                      : "none",
+                }}
+              />
             </div>
           </div>
 
@@ -502,7 +644,7 @@ export default function ProductDetail() {
                   <button
                     key={i}
                     type="button"
-                    onClick={() => goToImage(i, true)}
+                    onClick={() => goToImage(i)}
                     className={`h-[64px] w-[52px] overflow-hidden rounded-sm border transition-all ${
                       selectedImageIndex === i ? "border-black dark:border-white" : "border-transparent opacity-70"
                     }`}
@@ -774,7 +916,7 @@ export default function ProductDetail() {
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation();
-                    goToPreviousImage(true);
+                    goToPreviousImage();
                   }}
                   className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white transition-colors hover:bg-black/45 lg:left-8 lg:h-12 lg:w-12"
                   aria-label="Previous image"
@@ -785,7 +927,7 @@ export default function ProductDetail() {
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation();
-                    goToNextImage(true);
+                    goToNextImage();
                   }}
                   className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white transition-colors hover:bg-black/45 lg:right-8 lg:h-12 lg:w-12"
                   aria-label="Next image"
@@ -821,7 +963,7 @@ export default function ProductDetail() {
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        goToImage(i, true);
+                        goToImage(i);
                       }}
                       className={`h-16 w-12 overflow-hidden rounded-sm border transition-all lg:h-20 lg:w-16 ${
                         selectedImageIndex === i ? "border-white opacity-100" : "border-white/30 opacity-70 hover:opacity-100"

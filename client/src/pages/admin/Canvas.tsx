@@ -20,6 +20,7 @@ import {
 
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 import {
   fetchAdminImages,
@@ -86,6 +87,36 @@ type CanvasSettings = {
   activeTemplateId?: number | null;
   activeTemplate?: CanvasTemplate | null;
 };
+
+const TEMPLATE_PREVIEW_FALLBACKS: Record<string, string> = {
+  "rare-dark-luxury": "/images/landingpage3.webp",
+  "clean-minimal": "/images/landingpage4.webp",
+  "editorial-grid": "/images/landingpage3.webp",
+};
+
+const CANVAS_TAB_ITEMS = [
+  {
+    value: "templates",
+    label: "Templates",
+    hint: "Pick a homepage",
+    icon: Sparkles,
+    iconClassName: "from-fuchsia-500 via-pink-500 to-amber-400 text-white",
+  },
+  {
+    value: "sections",
+    label: "Sections",
+    hint: "Edit each block",
+    icon: GripVertical,
+    iconClassName: "from-sky-500 via-cyan-500 to-blue-500 text-white",
+  },
+  {
+    value: "theme",
+    label: "Theme",
+    hint: "Tune the feel",
+    icon: Palette,
+    iconClassName: "from-emerald-500 via-teal-500 to-lime-400 text-white",
+  },
+] as const;
 
 const SECTION_TYPE_GROUPS = [
   { label: "Hero", types: ["hero"] },
@@ -1627,14 +1658,16 @@ export default function Canvas() {
   };
 
   const renderTemplatePreview = (template: CanvasTemplate) => {
+    const previewUrl = template.thumbnailUrl || TEMPLATE_PREVIEW_FALLBACKS[template.slug] || null;
+
     if (template.slug === "nikeshdesign") {
       return (
         <div
           className="relative h-28 overflow-hidden bg-[#0c0b09]"
           style={
-            template.thumbnailUrl
+            previewUrl
               ? {
-                  backgroundImage: `linear-gradient(180deg,rgba(12,11,9,0.18),rgba(12,11,9,0.84)), url(${template.thumbnailUrl})`,
+                  backgroundImage: `linear-gradient(180deg,rgba(12,11,9,0.18),rgba(12,11,9,0.84)), url(${previewUrl})`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                 }
@@ -1656,9 +1689,9 @@ export default function Canvas() {
         <div
           className="relative h-28 overflow-hidden bg-[#0c0b09]"
           style={
-            template.thumbnailUrl
+            previewUrl
               ? {
-                  backgroundImage: `linear-gradient(180deg,rgba(12,11,9,0.15),rgba(12,11,9,0.82)), url(${template.thumbnailUrl})`,
+                  backgroundImage: `linear-gradient(180deg,rgba(12,11,9,0.15),rgba(12,11,9,0.82)), url(${previewUrl})`,
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                 }
@@ -1683,16 +1716,18 @@ export default function Canvas() {
       );
     }
 
-    if (template.thumbnailUrl) {
+    if (previewUrl) {
       return (
         <div
-          className="h-28 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-700"
+          className="relative h-28 overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-700"
           style={{
-            backgroundImage: `url(${template.thumbnailUrl})`,
+            backgroundImage: `linear-gradient(180deg,rgba(12,12,12,0.08),rgba(12,12,12,0.26)), url(${previewUrl})`,
             backgroundSize: "cover",
-            backgroundPosition: "center",
+            backgroundPosition: "top center",
           }}
-        />
+        >
+          <div className="absolute inset-x-3 top-2 h-3 rounded-full border border-white/20 bg-white/15 backdrop-blur-sm" />
+        </div>
       );
     }
 
@@ -1709,7 +1744,7 @@ export default function Canvas() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-gradient-to-br from-fuchsia-50 via-white to-amber-50 p-6 shadow-sm dark:from-fuchsia-950/20 dark:via-neutral-950 dark:to-amber-950/10">
+      <div className="flex flex-col gap-4 rounded-3xl border border-border/50 bg-gradient-to-br from-fuchsia-50 via-white to-amber-50 p-6 shadow-sm dark:border-white/[0.06] dark:from-fuchsia-950/20 dark:via-neutral-950 dark:to-amber-950/10 dark:shadow-none">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-500 via-pink-500 to-amber-400 text-white shadow-lg">
@@ -1751,24 +1786,42 @@ export default function Canvas() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <Card className="rounded-3xl border-border/60">
+        <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
           <CardContent className="p-4">
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
               orientation="vertical"
-              className="grid gap-4 md:grid-cols-[120px_minmax(0,1fr)] xl:grid-cols-1"
+              className="grid gap-4 md:grid-cols-[152px_minmax(0,1fr)] xl:grid-cols-1"
             >
-              <TabsList className="grid h-auto grid-cols-1 gap-2 bg-transparent p-0">
-                <TabsTrigger value="templates" className="justify-start rounded-xl px-4 py-3">
-                  Templates
-                </TabsTrigger>
-                <TabsTrigger value="sections" className="justify-start rounded-xl px-4 py-3">
-                  Sections
-                </TabsTrigger>
-                <TabsTrigger value="theme" className="justify-start rounded-xl px-4 py-3">
-                  Theme
-                </TabsTrigger>
+              <TabsList className="grid h-auto grid-cols-1 gap-2 rounded-3xl border border-border/40 bg-white/70 p-2 shadow-sm dark:border-white/[0.06] dark:bg-white/[0.02] dark:shadow-none">
+                {CANVAS_TAB_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <TabsTrigger
+                      key={item.value}
+                      value={item.value}
+                      className="group justify-start rounded-2xl border border-transparent px-3 py-3 text-left data-[state=active]:border-border/50 data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:border-white/[0.06] dark:data-[state=active]:bg-white/[0.04] dark:data-[state=active]:shadow-none"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            "flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br shadow-sm transition-transform duration-200 group-data-[state=active]:scale-105 dark:shadow-none",
+                            item.iconClassName,
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-foreground">{item.label}</div>
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                            {item.hint}
+                          </div>
+                        </div>
+                      </div>
+                    </TabsTrigger>
+                  );
+                })}
               </TabsList>
 
               <div className="space-y-4">
@@ -1785,7 +1838,7 @@ export default function Canvas() {
                           <Card
                             key={template.id}
                             className={`overflow-hidden rounded-2xl border transition-all ${
-                              isActive ? "border-emerald-500 shadow-emerald-100 dark:shadow-none" : "border-border/60"
+                              isActive ? "border-emerald-500 shadow-emerald-100 dark:shadow-none" : "border-border/50 dark:border-white/[0.06]"
                             } ${isSelected ? "ring-2 ring-fuchsia-300 dark:ring-fuchsia-700" : ""}`}
                           >
                             {renderTemplatePreview(template)}
@@ -1849,7 +1902,7 @@ export default function Canvas() {
                           <Card
                             key={template.id}
                             className={`overflow-hidden rounded-2xl border transition-all ${
-                              isActive ? "border-emerald-500" : "border-border/60"
+                              isActive ? "border-emerald-500" : "border-border/50 dark:border-white/[0.06]"
                             } ${isSelected ? "ring-2 ring-sky-300 dark:ring-sky-700" : ""}`}
                           >
                             {renderTemplatePreview(template)}
@@ -2159,7 +2212,7 @@ export default function Canvas() {
         </Card>
 
         {activeTab === "templates" ? (
-          <Card className="rounded-3xl border-border/60">
+          <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle>Full Page Preview</CardTitle>
@@ -2177,7 +2230,7 @@ export default function Canvas() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="overflow-hidden rounded-3xl border border-border/60 bg-white">
+              <div className="overflow-hidden rounded-3xl border border-border/40 bg-white dark:border-white/[0.06] dark:bg-neutral-950">
                 <div className="origin-top-left" style={{ transform: "scale(0.6)", width: "166.6667%", height: "calc(100vh / 0.6)" }}>
                   <iframe
                     key={previewKey}
@@ -2194,7 +2247,7 @@ export default function Canvas() {
           </Card>
         ) : activeTab === "sections" ? (
           <div className="space-y-6">
-            <Card className="rounded-3xl border-border/60">
+            <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
               <CardHeader>
                 <CardTitle>Section Workspace</CardTitle>
                 <CardDescription>
@@ -2206,7 +2259,7 @@ export default function Canvas() {
 
             {selectedSection ? (
               <>
-                <Card className="rounded-3xl border-border/60">
+                <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0">
                     <div>
                       <CardTitle>{selectedSection.label ?? selectedSection.sectionType}</CardTitle>
@@ -2962,7 +3015,7 @@ export default function Canvas() {
                 </Card>
               </>
             ) : (
-              <Card className="rounded-3xl border-border/60">
+              <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
                 <CardContent className="p-8 text-sm text-muted-foreground">
                   Select a section from the left to edit it.
                 </CardContent>
@@ -2970,7 +3023,7 @@ export default function Canvas() {
             )}
           </div>
         ) : (
-          <Card className="rounded-3xl border-border/60">
+          <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
             <CardHeader>
               <CardTitle>Theme Controls</CardTitle>
               <CardDescription>
@@ -2978,7 +3031,7 @@ export default function Canvas() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 p-5 text-sm text-muted-foreground">
+              <div className="rounded-2xl border border-dashed border-border/50 bg-muted/20 p-5 text-sm text-muted-foreground dark:border-white/[0.08] dark:bg-white/[0.02]">
                 Preview is intentionally disabled in this tab so typography and future theme controls stay focused and fast.
               </div>
               <p className="text-xs text-muted-foreground">

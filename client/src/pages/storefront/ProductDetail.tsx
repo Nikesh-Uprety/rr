@@ -924,14 +924,14 @@ export default function ProductDetail() {
               <input
                 type="number"
                 min={1}
-                max={selectedVariantStock ?? 99}
+                max={selectedVariantStock ?? 1}
                 value={quantity}
-                onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
+                onChange={(event) => setQuantity(Math.max(1, Math.min(selectedVariantStock ?? 1, Number(event.target.value) || 1)))}
                 className="w-12 bg-transparent text-center text-sm outline-none"
               />
               <button
                 type="button"
-                onClick={() => setQuantity(Math.min(selectedVariantStock ?? 99, quantity + 1))}
+                onClick={() => setQuantity(Math.min(selectedVariantStock ?? 1, quantity + 1))}
                 className="flex h-10 w-10 items-center justify-center hover:bg-gray-50 dark:hover:bg-white/5"
               >
                 <Plus className="h-3 w-3" />

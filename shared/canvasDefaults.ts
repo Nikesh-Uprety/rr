@@ -17,7 +17,7 @@ export const MAISON_NOCTURNE_DEFAULT_HERO_SLIDES: CanvasHeroSlide[] = [
     body: "Sharp silhouettes, quiet luxury, and black-and-white layering built for the Rare Atelier shop floor.",
     ctaLabel: "Shop",
     ctaHref: "/products",
-    image: "/images/maison-nocturne-hero-1.jpg",
+    image: "/images/maison-nocturne-hero-1.webp",
     duration: 6800,
   },
   {

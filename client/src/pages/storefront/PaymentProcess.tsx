@@ -176,7 +176,7 @@ export default function PaymentProcess() {
             </div>
             <div className="w-56 h-56 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 p-2">
               <img
-                src={method === "khalti" ? "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=khalti" : "/esewa-qr.webp"}
+                src={method === "khalti" ? "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=khalti" : "/images/esewa-qr.webp"}
                 alt={`${method} QR Code`}
                 className="w-full h-full object-contain"
               />

@@ -32,7 +32,7 @@ function getHoverImage(product: ProductApi): string {
   const main = product.imageUrl ?? "";
   if (gallery.length === 0) return main;
   if (gallery[0] && gallery[0] !== main) return gallery[0];
-  return gallery[1] ?? main;
+  return (gallery[1] ?? main) as string;
 }
 
 const SORT_LABELS: Record<string, string> = {

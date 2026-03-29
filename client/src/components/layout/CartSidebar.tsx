@@ -160,23 +160,25 @@ export default function CartSidebar() {
                   onClick={() => goTo("/checkout")}
                   className="h-11 rounded-none bg-black text-[10px] font-black uppercase tracking-[0.2em] text-white hover:bg-zinc-900 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
                 >
-                  Buy Now
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => goTo("/checkout")}
-                  variant="outline"
-                  className="h-11 rounded-none text-[10px] font-black uppercase tracking-[0.2em]"
-                >
-                  Checkout
+                  Proceed to Checkout
                 </Button>
                 <Button
                   type="button"
                   onClick={() => goTo("/cart")}
+                  variant="outline"
+                  className="h-11 rounded-none text-[10px] font-black uppercase tracking-[0.2em]"
+                >
+                  View Full Cart
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    closeCartSidebar();
+                  }}
                   variant="ghost"
                   className="h-10 rounded-none text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground"
                 >
-                  View Full Cart
+                  Continue Shopping
                 </Button>
               </div>
             </div>

@@ -180,13 +180,22 @@ export default function Navbar() {
     const isMaisonLight = isMaisonNocturne && theme !== "dark";
     const isHomeRoute = location === "/";
     const isTransparentState = isMaisonNocturne && isHomeRoute && !isScrolled;
+    const useHeroContrastState = isTransparentState;
     const shouldUseChrome = !isTransparentState;
-    const navLinkColor = isTransparentState || isMaisonLight ? "#111111" : "rgba(255,255,255,0.96)";
+    const navLinkColor = useHeroContrastState
+      ? "rgba(255,255,255,0.98)"
+      : isMaisonLight
+        ? "#111111"
+        : "rgba(255,255,255,0.96)";
     const navChrome = getGlassChrome(isMaisonLight ? "light" : "dark", { active: shouldUseChrome });
-    const logoFilter = isTransparentState || isMaisonLight ? "brightness(0)" : "brightness(0) invert(1)";
-    const navUnderlineColor = isTransparentState || isMaisonLight ? "#111111" : "#ffffff";
-    const navTextShadow = isTransparentState
-      ? "0 1px 10px rgba(0,0,0,0.14)"
+    const logoFilter = useHeroContrastState
+      ? "brightness(0) invert(1)"
+      : isMaisonLight
+        ? "brightness(0)"
+        : "brightness(0) invert(1)";
+    const navUnderlineColor = useHeroContrastState ? "#ffffff" : isMaisonLight ? "#111111" : "#ffffff";
+    const navTextShadow = useHeroContrastState
+      ? "0 0 16px rgba(255,255,255,0.34), 0 2px 16px rgba(0,0,0,0.2)"
       : isMaisonLight
         ? "none"
         : "0 0 14px rgba(255,255,255,0.3)";
@@ -281,7 +290,7 @@ export default function Navbar() {
                   type="button"
                   onClick={() => setIsMobileMenuOpen((prev) => !prev)}
                   className="flex h-10 w-10 items-center justify-center"
-                  style={{ color: isTransparentState || isMaisonLight ? "#181411" : "#ffffff" }}
+                  style={{ color: useHeroContrastState ? "#ffffff" : isMaisonLight ? "#181411" : "#ffffff" }}
                   aria-label="Toggle menu"
                 >
                   {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -295,8 +304,10 @@ export default function Navbar() {
                     alt="Rare Atelier"
                     className="mx-auto h-11 w-auto object-contain sm:h-12 lg:h-14"
                     style={{
-                      filter: !isMaisonLight && shouldUseChrome
-                        ? `${logoFilter} drop-shadow(0 0 14px rgba(255,255,255,0.28))`
+                      filter: useHeroContrastState
+                        ? `${logoFilter} drop-shadow(0 0 18px rgba(255,255,255,0.42))`
+                        : !isMaisonLight && shouldUseChrome
+                          ? `${logoFilter} drop-shadow(0 0 14px rgba(255,255,255,0.28))`
                         : `${logoFilter} drop-shadow(0 4px 14px rgba(0,0,0,0.18))`,
                       transition: "filter 0.25s ease, transform 0.25s ease",
                       opacity: 1,
@@ -340,8 +351,12 @@ export default function Navbar() {
                     onClick={() => setTheme(theme === "light" ? "dark" : "light")}
                     className="flex h-10 w-10 items-center justify-center"
                     style={{
-                      color: isTransparentState || isMaisonLight ? "#181411" : "#ffffff",
-                      textShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.28)" : "none",
+                      color: useHeroContrastState ? "#ffffff" : isMaisonLight ? "#181411" : "#ffffff",
+                      textShadow: useHeroContrastState
+                        ? "0 0 14px rgba(255,255,255,0.28)"
+                        : !isMaisonLight && shouldUseChrome
+                          ? "0 0 10px rgba(255,255,255,0.28)"
+                          : "none",
                     }}
                     aria-label="Toggle theme"
                   >
@@ -352,8 +367,12 @@ export default function Navbar() {
                   href="/cart"
                   className="relative flex h-10 w-10 items-center justify-center"
                   style={{
-                    color: isTransparentState || isMaisonLight ? "#181411" : "#ffffff",
-                    textShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.28)" : "none",
+                    color: useHeroContrastState ? "#ffffff" : isMaisonLight ? "#181411" : "#ffffff",
+                    textShadow: useHeroContrastState
+                      ? "0 0 14px rgba(255,255,255,0.28)"
+                      : !isMaisonLight && shouldUseChrome
+                        ? "0 0 10px rgba(255,255,255,0.28)"
+                        : "none",
                   }}
                 >
                   <ShoppingBag className="h-4.5 w-4.5" />
@@ -376,8 +395,12 @@ export default function Navbar() {
                     onClick={() => setIsMobileMenuOpen((prev) => !prev)}
                     className="hidden h-10 w-10 items-center justify-center lg:flex"
                     style={{
-                      color: isTransparentState || isMaisonLight ? "#181411" : "#ffffff",
-                      textShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.28)" : "none",
+                      color: useHeroContrastState ? "#ffffff" : isMaisonLight ? "#181411" : "#ffffff",
+                      textShadow: useHeroContrastState
+                        ? "0 0 14px rgba(255,255,255,0.28)"
+                        : !isMaisonLight && shouldUseChrome
+                          ? "0 0 10px rgba(255,255,255,0.28)"
+                          : "none",
                     }}
                     aria-label="Toggle menu"
                   >

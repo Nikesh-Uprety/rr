@@ -1,8 +1,4 @@
-import { Gem, ArrowRight } from "lucide-react";
-import { Link } from "wouter";
 import { motion } from "framer-motion";
-
-import { Button } from "@/components/ui/button";
 
 interface CampaignBannerProps {
   exploreCollectionImage: string;
@@ -217,11 +213,6 @@ export default function CampaignBanner({
   imageAlt = "Campaign story",
   config,
 }: CampaignBannerProps) {
-  const title = config?.title ?? "Explore the journey behind.";
-  const text =
-    config?.text ?? "Discover the meticulous craftsmanship and story of the Winter '25 collection.";
-  const ctaLabel = config?.ctaLabel ?? "Explore Collection";
-  const ctaHref = config?.ctaHref ?? "/new-collection";
   if (config?.variant === "nikeshdesign-lookbook") {
     return <NikeshDesignLookbook exploreCollectionImage={exploreCollectionImage} config={config} />;
   }
@@ -231,10 +222,10 @@ export default function CampaignBanner({
   }
 
   return (
-    <section className="relative h-[80vh] w-full overflow-hidden my-32 group/banner">
+    <section className="relative h-[72vh] min-h-[420px] w-full overflow-hidden md:h-[100svh] md:min-h-[100svh]">
       <motion.div
         style={{ y: parallaxOffset }}
-        className="absolute inset-0 w-full h-[120%] -top-[10%]"
+        className="absolute inset-x-0 -top-[6%] h-[112%] w-full md:-top-[8%] md:h-[116%]"
       >
         <img
           alt={imageAlt}
@@ -242,55 +233,6 @@ export default function CampaignBanner({
           src={exploreCollectionImage}
         />
       </motion.div>
-
-      <div
-        className="absolute inset-0 z-10 pointer-events-none opacity-0 group-hover/banner:opacity-100 transition-opacity duration-1000"
-        onMouseMove={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const y = e.clientY - rect.top;
-          e.currentTarget.style.setProperty("--mouse-x", `${x}px`);
-          e.currentTarget.style.setProperty("--mouse-y", `${y}px`);
-        }}
-        style={{
-          background:
-            "radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(255,255,255,0.08) 0%, transparent 40%)",
-        }}
-      />
-
-      <div className="absolute inset-0 bg-black/0 dark:bg-black/40 transition-colors duration-700" />
-
-      <div className="absolute inset-0 flex items-center justify-center p-6 sm:p-12 z-20">
-        <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 1, ease: "easeOut" }}
-          className="max-w-xl w-full backdrop-blur-[2px] bg-transparent border border-white/10 p-6 md:p-10 text-center text-white rounded-3xl shadow-2xl overflow-hidden relative"
-        >
-          <div className="absolute top-0 right-0 p-4">
-            <Gem className="w-4 h-4 text-white/10 animate-revolve" />
-          </div>
-
-          <h2 className="text-[14px] md:text-lg font-black mb-4 tracking-[0.4em] uppercase leading-tight italic">
-            {title.split(" ").slice(0, Math.ceil(title.split(" ").length / 2)).join(" ")} <br />
-            <span className="not-italic text-outline-white">{title.split(" ").slice(Math.ceil(title.split(" ").length / 2)).join(" ")}</span>
-          </h2>
-          <p className="text-[10px] md:text-xs opacity-60 font-bold tracking-[0.3em] uppercase max-w-sm mx-auto mb-8 leading-relaxed">
-            {text}
-          </p>
-          <Button
-            variant="outline"
-            className="rounded-full px-8 h-12 border-white/20 text-white hover:bg-white hover:text-black transition-all uppercase text-[8px] tracking-[0.4em] font-black group/btn shadow-xl hover:shadow-white/20 active:scale-95"
-            asChild
-          >
-            <Link href={ctaHref} className="flex items-center gap-3">
-              {ctaLabel}{" "}
-              <ArrowRight className="w-3 h-3 group-hover/btn:translate-x-1.5 transition-transform" />
-            </Link>
-          </Button>
-        </motion.div>
-      </div>
     </section>
   );
 }

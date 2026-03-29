@@ -267,23 +267,6 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
         })}
       </div>
 
-      <div className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2 text-[9px] uppercase tracking-[0.26em] text-white/70">
-        <span style={{ fontFamily: "var(--font-mono)" }}>Scroll</span>
-        <span className="rare-scroll-line block h-8 w-px" style={{ background: progressFillColor }} />
-      </div>
-
-      <div
-        className="absolute bottom-10 right-6 z-30 rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.3em] sm:right-8 lg:right-12"
-        style={{
-          fontFamily: "var(--font-mono)",
-          color: "#ffffff",
-          background: "rgba(0,0,0,0.32)",
-          border: "1px solid rgba(255,255,255,0.12)",
-          backdropFilter: "blur(8px)",
-        }}
-      >
-        {String(activeIndex + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
-      </div>
     </section>
   );
 }
@@ -460,17 +443,6 @@ function NikeshDesignHero({ heroImages, config }: { heroImages: string[]; config
         })}
       </div>
 
-      <div className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2 text-[9px] uppercase tracking-[0.26em] text-[var(--fg-dim)]">
-        <span style={{ fontFamily: "var(--font-mono)" }}>Scroll</span>
-        <span className="rare-scroll-line block h-8 w-px bg-[var(--gold)]" />
-      </div>
-
-      <div
-        className="absolute bottom-8 right-6 z-20 text-[10px] uppercase tracking-[0.3em] text-[var(--fg)] sm:right-8 lg:right-12"
-        style={{ fontFamily: "var(--font-mono)" }}
-      >
-        {String(activeIndex + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
-      </div>
     </section>
   );
 }

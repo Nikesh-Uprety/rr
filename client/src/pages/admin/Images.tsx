@@ -17,7 +17,7 @@ import {
   uploadAdminImage,
   type AdminImageAsset,
 } from "@/lib/adminApi";
-import { Trash2, Upload, Images as ImagesIcon, Copy, Eye } from "lucide-react";
+import { Trash2, Upload, Images as ImagesIcon, Copy, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type ImageCategory =
@@ -59,8 +59,10 @@ export default function AdminImagesPage() {
   const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
   const [totalBatches, setTotalBatches] = useState(0);
   const [completedCount, setCompletedCount] = useState(0);
-  const [previewAsset, setPreviewAsset] = useState<AdminImageAsset | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [assetToDelete, setAssetToDelete] = useState<AdminImageAsset | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const imagesQuery = useQuery<AdminImageAsset[]>({
     queryKey: ["admin", "images", { provider, category }],
@@ -98,6 +100,15 @@ export default function AdminImagesPage() {
     return cleaned || withoutExt || stripped;
   };
 
+  const getAbsoluteAssetUrl = (value?: string | null) => {
+    if (!value) return "";
+    try {
+      return new URL(value, window.location.origin).toString();
+    } catch {
+      return value;
+    }
+  };
+
   const sanitizeFilename = (value: string) => {
     const base = value.split("/").pop() || value;
     const decoded = (() => {
@@ -127,6 +138,41 @@ export default function AdminImagesPage() {
     );
   }, [imagesQuery.data, search]);
 
+  const previewAsset = previewIndex !== null ? filtered[previewIndex] ?? null : null;
+
+  const goToPreview = (index: number) => {
+    if (filtered.length === 0) return;
+    const safeIndex = Math.max(0, Math.min(index, filtered.length - 1));
+    setPreviewIndex(safeIndex);
+  };
+
+  const goPrev = () => {
+    if (filtered.length === 0 || previewIndex === null) return;
+    setPreviewIndex((prev) =>
+      prev === null ? null : (prev - 1 + filtered.length) % filtered.length,
+    );
+  };
+
+  const goNext = () => {
+    if (filtered.length === 0 || previewIndex === null) return;
+    setPreviewIndex((prev) =>
+      prev === null ? null : (prev + 1) % filtered.length,
+    );
+  };
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [provider, category, search]);
+
+  useEffect(() => {
+    if (previewIndex === null) return;
+    if (filtered.length === 0) {
+      setPreviewIndex(null);
+    } else if (previewIndex >= filtered.length) {
+      setPreviewIndex(filtered.length - 1);
+    }
+  }, [filtered.length, previewIndex]);
+
   useEffect(() => {
     return () => {
       bulkFiles.forEach((bf) => URL.revokeObjectURL(bf.previewUrl));
@@ -140,8 +186,31 @@ export default function AdminImagesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
       setAssetToDelete(null);
-      setPreviewAsset(null);
+      setPreviewIndex(null);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (assetToDelete?.id) next.delete(assetToDelete.id);
+        return next;
+      });
       toast({ title: "Image deleted successfully" });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => deleteAdminImage(id)));
+    },
+    onSuccess: (_data, ids) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      toast({ title: `${ids.length} image(s) deleted` });
+    },
+    onError: (err: any) => {
+      toast({ title: "Bulk delete failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -309,6 +378,23 @@ export default function AdminImagesPage() {
               <Upload className="h-4 w-4 mr-2" />
               Upload Multiple
             </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="h-9 min-w-[170px] px-5 transition-transform active:scale-[0.98]"
+              disabled={selectedIds.size === 0 || bulkDeleteMutation.isPending}
+              loading={bulkDeleteMutation.isPending}
+              loadingText="Deleting..."
+              onClick={() => {
+                if (selectedIds.size === 0) return;
+                const ids = Array.from(selectedIds);
+                if (!window.confirm(`Delete ${ids.length} image(s)? This cannot be undone.`)) return;
+                bulkDeleteMutation.mutate(ids);
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Selected
+            </Button>
           </div>
         </div>
 
@@ -445,74 +531,156 @@ export default function AdminImagesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
-            {filtered.map((item: AdminImageAsset) => {
+            {filtered.map((item: AdminImageAsset, index) => {
               const id = item.id;
               const url = item.url;
+              const absoluteUrl = getAbsoluteAssetUrl(url);
               const displayName = getDisplayName(item.filename ?? url);
+              const isSelected = selectedIds.has(id);
 
               return (
-              <div
-                key={id}
-                className="group relative aspect-square rounded-xl border border-muted/40 bg-muted overflow-hidden"
-              >
-                <img
-                  src={url}
-                  alt={displayName ?? ""}
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="lazy"
-                />
-                <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                  <p className="text-[10px] text-white truncate" title={displayName}>
-                    {displayName}
-                  </p>
-                </div>
-                
-                <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    onClick={() => setPreviewAsset(item)}
-                    className="h-8 w-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
-                    aria-label="Preview image"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                        navigator.clipboard.writeText(url);
-                        toast({ title: "URL copied to clipboard" });
+                <div
+                  key={id}
+                  className={cn(
+                    "group relative rounded-xl border bg-muted overflow-hidden",
+                    isSelected ? "border-primary ring-2 ring-primary/40" : "border-muted/40",
+                  )}
+                >
+                  <div
+                    className="relative aspect-square cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => goToPreview(index)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        goToPreview(index);
+                      }
                     }}
-                    className="h-8 w-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
-                    aria-label="Copy URL"
                   >
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAssetToDelete(item)}
-                    disabled={deleteMutation.isPending}
-                    className="h-8 w-8 rounded-full bg-red-500/80 text-white flex items-center justify-center hover:bg-red-600"
-                    aria-label="Delete image"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                    <img
+                      src={url}
+                      alt={displayName ?? ""}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                      <p className="text-[10px] text-white truncate" title={displayName}>
+                        {displayName}
+                      </p>
+                    </div>
+
+                    <label className="absolute top-2 left-2 inline-flex items-center justify-center rounded-full bg-black/60 text-white h-7 w-7">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(id)) next.delete(id);
+                            else next.add(id);
+                            return next;
+                          });
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 accent-primary"
+                        aria-label={`Select ${displayName}`}
+                      />
+                    </label>
+                  </div>
+                  <div className="px-2 py-2 bg-background">
+                    <p className="text-[10px] text-foreground truncate" title={displayName}>
+                      {displayName}
+                    </p>
+                  </div>
+
+                  <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goToPreview(index);
+                      }}
+                      className="h-8 w-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                      aria-label="Preview image"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(absoluteUrl);
+                        toast({ title: "URL copied to clipboard" });
+                      }}
+                      className="h-8 w-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                      aria-label="Copy URL"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAssetToDelete(item);
+                      }}
+                      disabled={deleteMutation.isPending}
+                      className="h-8 w-8 rounded-full bg-red-500/80 text-white flex items-center justify-center hover:bg-red-600"
+                      aria-label="Delete image"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
             )})}
           </div>
         )}
       </section>
 
-      <Dialog open={!!previewAsset} onOpenChange={(open) => !open && setPreviewAsset(null)}>
+      <Dialog open={previewIndex !== null} onOpenChange={(open) => !open && setPreviewIndex(null)}>
         <DialogContent className="max-w-4xl overflow-hidden p-0">
           {previewAsset ? (
             <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="flex min-h-[420px] items-center justify-center bg-black p-6">
+              <div
+                className="relative flex min-h-[420px] items-center justify-center bg-black p-6"
+                onTouchStart={(e) => {
+                  const touch = e.touches[0];
+                  if (!touch) return;
+                  swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+                }}
+                onTouchEnd={(e) => {
+                  const start = swipeStartRef.current;
+                  swipeStartRef.current = null;
+                  const touch = e.changedTouches[0];
+                  if (!start || !touch) return;
+                  const dx = touch.clientX - start.x;
+                  const dy = touch.clientY - start.y;
+                  if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+                  if (dx > 0) goPrev();
+                  else goNext();
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={goPrev}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
                 <img
                   src={previewAsset.url}
                   alt={previewAsset.filename ?? "Preview"}
                   className="max-h-[75vh] w-auto max-w-full rounded-xl object-contain"
                 />
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
               </div>
               <div className="space-y-5 p-6">
                 <DialogHeader>
@@ -533,7 +701,7 @@ export default function AdminImagesPage() {
                   </div>
                   <div>
                     <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">URL</div>
-                    <div className="mt-1 break-all text-xs">{previewAsset.url}</div>
+                    <div className="mt-1 break-all text-xs">{getAbsoluteAssetUrl(previewAsset.url)}</div>
                   </div>
                 </div>
 
@@ -543,7 +711,7 @@ export default function AdminImagesPage() {
                     variant="outline"
                     className="w-full"
                     onClick={() => {
-                      navigator.clipboard.writeText(previewAsset.url);
+                      navigator.clipboard.writeText(getAbsoluteAssetUrl(previewAsset.url));
                       toast({ title: "URL copied to clipboard" });
                     }}
                   >

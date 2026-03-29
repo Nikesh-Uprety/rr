@@ -1102,6 +1102,7 @@ export async function registerRoutes(
         .where(eq(products.homeFeatured, true))
         .orderBy(desc(products.updatedAt))
         .limit(8);
+      res.set("Cache-Control", "public, max-age=300");
       return res.json({ success: true, data: featured });
     } catch (err) {
       console.error("Error in GET /api/products/home-featured", err);

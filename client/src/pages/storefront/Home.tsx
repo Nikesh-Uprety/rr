@@ -266,18 +266,14 @@ export default function Home() {
   useEffect(() => {
     const canRevealPage = isCanvasPreview
       ? !pageConfigLoading
-      : isFeaturedSuccess && isNewArrivalsSuccess && !pageConfigLoading;
+      : isNewArrivalsSuccess && !pageConfigLoading;
 
     if (canRevealPage) {
-      // Small delay to ensure browser paint
-      const timer = setTimeout(() => {
-        if (typeof (window as any).finishLoading === 'function') {
-          (window as any).finishLoading();
-        }
-      }, isCanvasPreview ? 24 : 100);
-      return () => clearTimeout(timer);
+      if (typeof (window as any).finishLoading === 'function') {
+        (window as any).finishLoading();
+      }
     }
-  }, [isCanvasPreview, isFeaturedSuccess, isNewArrivalsSuccess, pageConfigLoading]);
+  }, [isCanvasPreview, isNewArrivalsSuccess, pageConfigLoading]);
 
   // Preload static campaign images
   useEffect(() => {

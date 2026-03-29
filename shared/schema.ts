@@ -461,7 +461,9 @@ export const siteAssets = pgTable("site_assets", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (table) => ({
+  siteAssetsSectionActiveIdx: index("site_assets_section_active_idx").on(table.section, table.active),
+}));
 
 export type SiteAsset = typeof siteAssets.$inferSelect;
 export type InsertSiteAsset = typeof siteAssets.$inferInsert;

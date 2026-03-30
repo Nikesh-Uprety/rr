@@ -209,7 +209,7 @@ export default function AdminLayout({
           "--sidebar-width-icon": `${collapsedSidebarWidth}px`,
         } as React.CSSProperties
       }
-      className="min-h-screen bg-muted dark:bg-neutral-900 text-foreground admin-font overflow-hidden transition-colors duration-200 ease-in-out"
+      className="min-h-screen bg-muted dark:bg-neutral-900 text-foreground admin-font admin-panel-root overflow-hidden"
     >
       {/* Mobile Drawer Backdrop */}
       <AnimatePresence>
@@ -387,8 +387,8 @@ export default function AdminLayout({
         </div>
       </Sidebar>
 
-      <SidebarInset className="flex min-w-0 h-screen overflow-hidden bg-muted dark:bg-neutral-900 transition-colors duration-200 ease-in-out">
-        <header className="sticky top-0 z-20 h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5 transition-colors duration-200 ease-in-out">
+      <SidebarInset className="admin-panel-shell flex min-w-0 h-screen overflow-hidden bg-muted dark:bg-neutral-900">
+        <header className="sticky top-0 z-20 h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5">
           <div className="flex items-center gap-2.5">
             <SidebarTrigger className="text-foreground hover:bg-background/50 hidden lg:flex" />
             <div className="hidden lg:flex items-center gap-1.5 rounded-full border border-border/70 bg-card/55 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-muted-foreground animate-pulse">
@@ -433,7 +433,7 @@ export default function AdminLayout({
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-4 sm:p-6 md:p-8 lg:p-12 transition-colors duration-200 ease-in-out">
+        <div className="admin-panel-content flex-1 overflow-auto p-4 sm:p-6 md:p-8 lg:p-12">
           <Suspense
             fallback={
               <div className="relative w-full">

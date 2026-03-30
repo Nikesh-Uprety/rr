@@ -7,6 +7,26 @@ interface ThemeState {
   setTheme: (theme: Theme) => void;
 }
 
+function applyThemeToRoot(theme: Theme, disableTransitions = true) {
+  if (typeof window === 'undefined') return;
+
+  const root = document.documentElement;
+  if (disableTransitions) root.classList.add('theme-switching');
+
+  root.classList.remove('light', 'dark', 'warm');
+  root.classList.add(theme);
+  root.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+  localStorage.setItem('theme', theme);
+
+  if (disableTransitions) {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        root.classList.remove('theme-switching');
+      });
+    });
+  }
+}
+
 export const useThemeStore = create<ThemeState>((set) => {
   const getInitialTheme = (): Theme => {
     if (typeof window === 'undefined') return 'light';
@@ -21,18 +41,13 @@ export const useThemeStore = create<ThemeState>((set) => {
   const initialTheme = getInitialTheme();
   
   if (typeof window !== 'undefined') {
-    document.documentElement.classList.remove('light', 'dark', 'warm');
-    document.documentElement.classList.add(initialTheme);
+    applyThemeToRoot(initialTheme, false);
   }
 
   return {
     theme: initialTheme,
     setTheme: (theme) => {
-      if (typeof window !== 'undefined') {
-        document.documentElement.classList.remove('light', 'dark', 'warm');
-        document.documentElement.classList.add(theme);
-        localStorage.setItem('theme', theme);
-      }
+      applyThemeToRoot(theme, true);
       set({ theme });
     },
   };

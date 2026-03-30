@@ -2457,7 +2457,7 @@ export class PgStorage implements IStorage {
     const start = new Date(year, 0, 1);
     const end = new Date(year + 1, 0, 1);
 
-    const rows = await db
+    const orderRows = await db
       .select({
         day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
         revenue: sql<number>`sum(${orders.total})`,
@@ -2474,14 +2474,48 @@ export class PgStorage implements IStorage {
       .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
       .orderBy(asc(sql`date_trunc('day', ${orders.createdAt})::date`));
 
+    const posRows = await db
+      .select({
+        day: sql<string>`date_trunc('day', ${bills.createdAt})::date`,
+        revenue: sql<number>`sum(${bills.totalAmount})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(bills)
+      .where(
+        and(
+          eq(bills.status, "issued"),
+          eq(bills.billType, "pos"),
+          isNull(bills.orderId),
+          sql.raw(
+            `"created_at" >= '${year}-01-01'::date AND "created_at" < '${
+              year + 1
+            }-01-01'::date`,
+          ),
+        ),
+      )
+      .groupBy(sql`date_trunc('day', ${bills.createdAt})::date`)
+      .orderBy(asc(sql`date_trunc('day', ${bills.createdAt})::date`));
+
     const byDate = new Map<
       string,
       { revenue: number; orderCount: number }
     >();
-    for (const row of rows) {
-      const d = new Date(row.day);
+
+    const upsertDayAggregate = (day: string, revenue: number, orderCount: number) => {
+      const d = new Date(day);
       const key = d.toISOString().slice(0, 10);
-      byDate.set(key, { revenue: row.revenue, orderCount: row.count });
+      const existing = byDate.get(key) ?? { revenue: 0, orderCount: 0 };
+      byDate.set(key, {
+        revenue: existing.revenue + Number(revenue ?? 0),
+        orderCount: existing.orderCount + Number(orderCount ?? 0),
+      });
+    };
+
+    for (const row of orderRows) {
+      upsertDayAggregate(row.day, row.revenue, row.count);
+    }
+    for (const row of posRows) {
+      upsertDayAggregate(row.day, row.revenue, row.count);
     }
 
     // Hardcoded Nepal public holidays for 2025 (approximate set)

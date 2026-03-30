@@ -3730,7 +3730,7 @@ export async function registerRoutes(
         const analyticsYear =
           typeof year === "string" && /^\d{4}$/.test(year)
             ? Number(year)
-            : 2025;
+            : new Date().getFullYear();
 
         const data = await storage.getAnalyticsCalendar(analyticsYear);
         return res.json({ success: true, data });

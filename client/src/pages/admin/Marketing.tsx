@@ -226,12 +226,47 @@ export default function AdminMarketingPage() {
     [allSubscribers.length],
   );
 
-  const stats = useMemo(() => [
-    { label: "Total Reach", value: allSubscribers.length, icon: Mail, color: "from-[#F3F4F6] to-[#E5E7EB] dark:from-muted/20 dark:to-muted/10" },
-    { label: "Active Campaigns", value: 12, icon: Send, color: "from-[#ECFDF5] to-[#D1FAE5] dark:from-emerald-950/20 dark:to-emerald-900/10" },
-    { label: "Engagement Rate", value: "24.8%", icon: MessageSquare, color: "from-[#EFF6FF] to-[#DBEAFE] dark:from-blue-950/20 dark:to-blue-900/10" },
-    { label: "Growth", value: "+12%", icon: PlusCircle, color: "from-[#FFF7ED] to-[#FFEDD5] dark:from-orange-950/20 dark:to-orange-900/10" },
-  ], [allSubscribers.length]);
+  const stats = useMemo(
+    () => [
+      {
+        label: "Total Reach",
+        value: allSubscribers.length,
+        icon: Mail,
+        color:
+          "from-[#F3E8FF] via-[#E9D5FF] to-[#DDD6FE] dark:from-[#2E1A45] dark:via-[#4A2771] dark:to-[#6334A0]",
+        iconClass: "text-violet-700 dark:text-violet-200",
+        valueClass: "text-violet-950 dark:text-violet-50",
+      },
+      {
+        label: "Active Campaigns",
+        value: 12,
+        icon: Send,
+        color:
+          "from-[#DCFCE7] via-[#BBF7D0] to-[#86EFAC] dark:from-[#183C2D] dark:via-[#226746] dark:to-[#2FA95D]",
+        iconClass: "text-emerald-700 dark:text-emerald-200",
+        valueClass: "text-emerald-950 dark:text-emerald-50",
+      },
+      {
+        label: "Engagement Rate",
+        value: "24.8%",
+        icon: MessageSquare,
+        color:
+          "from-[#DBEAFE] via-[#BFDBFE] to-[#93C5FD] dark:from-[#172C4F] dark:via-[#224579] dark:to-[#2C63AC]",
+        iconClass: "text-blue-700 dark:text-blue-200",
+        valueClass: "text-blue-950 dark:text-blue-50",
+      },
+      {
+        label: "Growth",
+        value: "+12%",
+        icon: PlusCircle,
+        color:
+          "from-[#FFEDD5] via-[#FED7AA] to-[#FDBA74] dark:from-[#4A2A16] dark:via-[#7A431E] dark:to-[#A85A25]",
+        iconClass: "text-orange-700 dark:text-orange-200",
+        valueClass: "text-orange-950 dark:text-orange-50",
+      },
+    ],
+    [allSubscribers.length],
+  );
 
   const addEmailMutation = useMutation({
     mutationFn: async () => {
@@ -399,12 +434,15 @@ export default function AdminMarketingPage() {
       {/* 7.2: Marketing Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, i) => (
-          <div key={i} className={`p-6 rounded-2xl border border-border bg-gradient-to-br ${stat.color} hover:scale-[1.02] transition-transform cursor-default group`}>
+          <div
+            key={i}
+            className={`cursor-default rounded-2xl border border-white/70 dark:border-white/10 bg-gradient-to-br p-6 shadow-[0_14px_30px_-20px_rgba(15,23,42,0.35)] dark:shadow-[0_16px_34px_-22px_rgba(0,0,0,0.7)] transition-transform hover:scale-[1.02] ${stat.color} group`}
+          >
             <div className="flex items-center justify-between">
-              <stat.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-              <span className="text-2xl font-bold tracking-tight">{stat.value}</span>
+              <stat.icon className={`h-5 w-5 transition-colors ${stat.iconClass}`} />
+              <span className={`text-2xl font-bold tracking-tight ${stat.valueClass}`}>{stat.value}</span>
             </div>
-            <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-black/70 dark:text-white/80">
               {stat.label}
             </p>
           </div>

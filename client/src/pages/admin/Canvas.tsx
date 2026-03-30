@@ -144,6 +144,21 @@ const THEME_FONT_OPTIONS = [
   { id: "ibm-plex-sans", label: "IBM Plex Sans", description: "Structured SaaS-style reading rhythm." },
 ] as const;
 
+type ThemeFontPreset = (typeof THEME_FONT_OPTIONS)[number]["id"];
+
+const THEME_FONT_FAMILIES: Record<ThemeFontPreset, string> = {
+  inter: "'Inter', ui-sans-serif, system-ui, sans-serif",
+  "roboto-slab": "'Roboto Slab', ui-serif, Georgia, serif",
+  "space-grotesk": "'Space Grotesk', 'Inter', ui-sans-serif, sans-serif",
+  "ibm-plex-sans": "'IBM Plex Sans', 'Inter', ui-sans-serif, sans-serif",
+};
+
+const CANVAS_ELEVATED_CARD_CLASS =
+  "rounded-3xl border border-black/10 bg-gradient-to-b from-white/95 via-white to-slate-50/80 shadow-[0_14px_32px_rgba(15,23,42,0.12)] dark:border-white/[0.10] dark:bg-gradient-to-b dark:from-neutral-950/95 dark:via-neutral-950 dark:to-neutral-900/70 dark:shadow-[0_20px_45px_rgba(0,0,0,0.55)]";
+
+const CANVAS_ELEVATED_PANEL_CLASS =
+  "rounded-2xl border border-black/10 bg-gradient-to-b from-white/90 to-slate-50/70 shadow-[0_8px_20px_rgba(15,23,42,0.08)] dark:border-white/[0.10] dark:bg-gradient-to-b dark:from-white/[0.05] dark:to-white/[0.02] dark:shadow-[0_12px_28px_rgba(0,0,0,0.4)]";
+
 const MAX_CANVAS_IMAGE_UPLOAD_BYTES = 30 * 1024 * 1024;
 const MAX_CANVAS_IMAGE_UPLOAD_LABEL = "30MB";
 
@@ -252,7 +267,7 @@ export default function Canvas() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
   const [draggedSectionId, setDraggedSectionId] = useState<number | null>(null);
-  const [previewFontPreset, setPreviewFontPreset] = useState<string>("inter");
+  const [previewFontPreset, setPreviewFontPreset] = useState<ThemeFontPreset>("inter");
   const [draggedHeroSlideIndex, setDraggedHeroSlideIndex] = useState<number | null>(null);
   const [draggedCampaignImageIndex, setDraggedCampaignImageIndex] = useState<number | null>(null);
   const [openSectionGroups, setOpenSectionGroups] = useState<Record<string, boolean>>({
@@ -933,6 +948,8 @@ export default function Canvas() {
   };
 
   const previewTemplateId = effectiveTemplateId ?? visibleTemplates[0]?.id ?? settings?.activeTemplateId ?? null;
+  const selectedThemeFont = THEME_FONT_OPTIONS.find((font) => font.id === previewFontPreset) ?? THEME_FONT_OPTIONS[0];
+  const selectedThemeFontFamily = THEME_FONT_FAMILIES[selectedThemeFont.id];
   const buildPreviewUrl = (templateId: number) =>
     typeof window !== "undefined"
       ? `${window.location.origin}/?${new URLSearchParams(
@@ -1805,7 +1822,7 @@ export default function Canvas() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
+        <Card className={CANVAS_ELEVATED_CARD_CLASS}>
           <CardContent className="p-4">
             <Tabs
               value={activeTab}
@@ -1813,14 +1830,14 @@ export default function Canvas() {
               orientation="vertical"
               className="grid gap-4 md:grid-cols-[152px_minmax(0,1fr)] xl:grid-cols-1"
             >
-              <TabsList className="grid h-auto grid-cols-1 gap-2 rounded-3xl border border-border/40 bg-white/70 p-2 shadow-sm dark:border-white/[0.06] dark:bg-white/[0.02] dark:shadow-none">
+              <TabsList className="grid h-auto grid-cols-1 gap-2 rounded-3xl border border-black/10 bg-white/80 p-2 shadow-[0_8px_18px_rgba(15,23,42,0.08)] dark:border-white/[0.10] dark:bg-white/[0.03] dark:shadow-[0_10px_24px_rgba(0,0,0,0.35)]">
                 {CANVAS_TAB_ITEMS.map((item) => {
                   const Icon = item.icon;
                   return (
                     <TabsTrigger
                       key={item.value}
                       value={item.value}
-                      className="group justify-start rounded-2xl border border-transparent px-3 py-3 text-left data-[state=active]:border-border/50 data-[state=active]:bg-white data-[state=active]:shadow-sm dark:data-[state=active]:border-white/[0.06] dark:data-[state=active]:bg-white/[0.04] dark:data-[state=active]:shadow-none"
+                      className="group justify-start rounded-2xl border border-transparent px-3 py-3 text-left data-[state=active]:border-black/10 data-[state=active]:bg-white/95 data-[state=active]:shadow-[0_8px_18px_rgba(15,23,42,0.08)] dark:data-[state=active]:border-white/[0.10] dark:data-[state=active]:bg-white/[0.05] dark:data-[state=active]:shadow-[0_10px_24px_rgba(0,0,0,0.38)]"
                     >
                       <div className="flex items-center gap-3">
                         <div
@@ -2061,10 +2078,10 @@ export default function Canvas() {
                           setDraggedSectionId(null);
                         }}
                         onDragEnd={() => setDraggedSectionId(null)}
-                        className={`w-full rounded-2xl border p-3 text-left transition-all ${
+                        className={`w-full rounded-2xl p-3 text-left transition-all ${
                           selectedSection?.id === section.id
-                            ? "border-sky-400 bg-sky-50/60 dark:bg-sky-950/20"
-                            : "border-border/60 bg-card hover:border-border"
+                            ? "border border-sky-400 bg-sky-50/70 shadow-[0_10px_22px_rgba(14,165,233,0.16)] dark:bg-sky-950/25 dark:shadow-[0_14px_28px_rgba(2,132,199,0.2)]"
+                            : `${CANVAS_ELEVATED_PANEL_CLASS} hover:border-black/20 dark:hover:border-white/20`
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -2211,37 +2228,56 @@ export default function Canvas() {
                 </TabsContent>
 
                 <TabsContent value="theme" className="mt-0 space-y-4">
-                  <Card className="rounded-2xl border-border/70">
+                  <Card className={cn(CANVAS_ELEVATED_PANEL_CLASS, "rounded-2xl")}>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-base">
                         <Palette className="h-4 w-4" />
                         Preview Fonts
                       </CardTitle>
                       <CardDescription>
-                        Test 4 admin-profile fonts inside the live preview before we persist theme controls.
+                        Pick a font preset and inspect its style in a focused text preview.
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="grid gap-3">
-                      {THEME_FONT_OPTIONS.map((font) => (
-                        <button
-                          key={font.id}
-                          type="button"
-                          onClick={() => setPreviewFontPreset(font.id)}
-                          className={`rounded-2xl border p-4 text-left transition-all ${
-                            previewFontPreset === font.id
-                              ? "border-sky-400 bg-sky-50/60 dark:bg-sky-950/20"
-                              : "border-border/60 bg-card hover:border-border"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold">{font.label}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">{font.description}</p>
+                    <CardContent className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+                      <div className="grid gap-3">
+                        {THEME_FONT_OPTIONS.map((font) => (
+                          <button
+                            key={font.id}
+                            type="button"
+                            onClick={() => setPreviewFontPreset(font.id)}
+                            className={`rounded-2xl p-4 text-left transition-all ${
+                              previewFontPreset === font.id
+                                ? "border border-sky-400 bg-sky-50/70 shadow-[0_8px_20px_rgba(56,189,248,0.16)] dark:bg-sky-950/25 dark:shadow-[0_12px_24px_rgba(14,116,144,0.25)]"
+                                : `${CANVAS_ELEVATED_PANEL_CLASS} hover:border-black/20 dark:hover:border-white/20`
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold">{font.label}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">{font.description}</p>
+                              </div>
+                              {previewFontPreset === font.id ? <Badge className="bg-sky-600 hover:bg-sky-600">Previewing</Badge> : null}
                             </div>
-                            {previewFontPreset === font.id ? <Badge className="bg-sky-600 hover:bg-sky-600">Previewing</Badge> : null}
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        ))}
+                      </div>
+                      <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "p-4")}>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                          Live Font Preview
+                        </p>
+                        <div
+                          className="mt-3 rounded-xl border border-black/10 bg-white/85 p-4 dark:border-white/[0.10] dark:bg-black/25"
+                          style={{ fontFamily: selectedThemeFontFamily }}
+                        >
+                          <p className="text-2xl font-semibold text-foreground">The quick brown fox</p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            Jumps over the lazy dog. 0123456789
+                          </p>
+                          <p className="mt-4 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                            {selectedThemeFont.label}
+                          </p>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -2297,7 +2333,7 @@ export default function Canvas() {
           </Card>
         ) : activeTab === "sections" ? (
           <div className="space-y-6">
-            <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
+            <Card className={CANVAS_ELEVATED_CARD_CLASS}>
               <CardHeader>
                 <CardTitle>Section Workspace</CardTitle>
                 <CardDescription>
@@ -2309,7 +2345,7 @@ export default function Canvas() {
 
             {selectedSection ? (
               <>
-                <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
+                <Card className={CANVAS_ELEVATED_CARD_CLASS}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0">
                     <div>
                       <CardTitle>{selectedSection.label ?? selectedSection.sectionType}</CardTitle>
@@ -2361,20 +2397,20 @@ export default function Canvas() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="rounded-2xl border border-border/60 bg-card p-4">
+                    <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "p-4")}>
                       <div className="mx-auto max-w-xl">
                         {renderSectionMiniPreview(selectedSection)}
                       </div>
                       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+                        <div className="rounded-xl border border-black/10 bg-background/60 p-3 dark:border-white/[0.10]">
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Visibility</p>
                           <p className="mt-2 text-sm font-semibold">{selectedSection.isVisible ? "Visible" : "Hidden"}</p>
                         </div>
-                        <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+                        <div className="rounded-xl border border-black/10 bg-background/60 p-3 dark:border-white/[0.10]">
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Order</p>
                           <p className="mt-2 text-sm font-semibold">#{selectedSection.orderIndex}</p>
                         </div>
-                        <div className="rounded-xl border border-border/60 bg-background/60 p-3">
+                        <div className="rounded-xl border border-black/10 bg-background/60 p-3 dark:border-white/[0.10]">
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Type</p>
                           <p className="mt-2 text-sm font-semibold">{selectedSection.sectionType}</p>
                         </div>
@@ -2386,7 +2422,7 @@ export default function Canvas() {
                   </CardContent>
                 </Card>
 
-                <Card className="rounded-3xl border-border/60">
+                <Card className={CANVAS_ELEVATED_CARD_CLASS}>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-base">{sectionEditorTitle}</CardTitle>
                     <CardDescription>
@@ -3065,7 +3101,7 @@ export default function Canvas() {
                 </Card>
               </>
             ) : (
-              <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
+              <Card className={CANVAS_ELEVATED_CARD_CLASS}>
                 <CardContent className="p-8 text-sm text-muted-foreground">
                   Select a section from the left to edit it.
                 </CardContent>
@@ -3073,20 +3109,41 @@ export default function Canvas() {
             )}
           </div>
         ) : (
-          <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
+          <Card className={CANVAS_ELEVATED_CARD_CLASS}>
             <CardHeader>
               <CardTitle>Theme Controls</CardTitle>
               <CardDescription>
-                Keep theme testing lightweight here. Use the Templates tab for full-page preview after you pick a font direction.
+                Theme controls now include a live font preview that tracks your selected preset.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-dashed border-border/50 bg-muted/20 p-5 text-sm text-muted-foreground dark:border-white/[0.08] dark:bg-white/[0.02]">
-                Preview is intentionally disabled in this tab so typography and future theme controls stay focused and fast.
+            <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+              <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "p-5")}>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                  Active Font Preset
+                </p>
+                <p className="mt-2 text-lg font-semibold text-foreground">{selectedThemeFont.label}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{selectedThemeFont.description}</p>
+                <p className="mt-4 text-xs text-muted-foreground">
+                  Use the Theme tab on the left to switch font presets. This panel updates instantly.
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Good next additions here: color palettes, navbar style toggles, spacing density, button radius, and section spacing presets.
-              </p>
+              <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "p-5")}>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                  Font Preview
+                </p>
+                <div
+                  className="mt-3 rounded-xl border border-black/10 bg-white/85 p-4 dark:border-white/[0.10] dark:bg-black/25"
+                  style={{ fontFamily: selectedThemeFontFamily }}
+                >
+                  <p className="text-2xl font-semibold text-foreground">The quick brown fox</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Jumps over the lazy dog. 0123456789
+                  </p>
+                  <p className="mt-4 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Live typography sample
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

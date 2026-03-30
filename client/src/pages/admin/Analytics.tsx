@@ -163,7 +163,11 @@ const Skel = ({ w = "100%", h = 16 }: { w?: string | number; h?: number }) => (
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 
-const cardStyles = "bg-card border border-border rounded-2xl p-6 relative overflow-hidden shadow-sm";
+const cardStyles =
+  "bg-gradient-to-b from-card via-card to-muted/20 dark:from-card dark:via-card dark:to-black/30 rounded-2xl p-6 relative overflow-hidden ring-1 ring-black/10 dark:ring-white/10 shadow-[0_12px_28px_rgba(15,23,42,0.10)] dark:shadow-[0_18px_36px_rgba(0,0,0,0.5)]";
+
+const elevatedPanelStyles =
+  "rounded-2xl bg-gradient-to-b from-background/95 to-muted/20 dark:from-card/90 dark:to-black/35 ring-1 ring-black/10 dark:ring-white/10 shadow-[0_8px_22px_rgba(15,23,42,0.08)] dark:shadow-[0_12px_28px_rgba(0,0,0,0.45)]";
 
 const monoLabelStyles = "text-[10px] tracking-[0.2em] text-muted-foreground uppercase block mb-1 font-black";
 
@@ -244,7 +248,7 @@ export default function AdminAnalytics() {
   const [range, setRange] = useState<RangeKey>("30d");
   const { data, isLoading } = useAnalytics(range);
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
-  const [calendarView, setCalendarView] = useState<CalendarView>("year");
+  const [calendarView, setCalendarView] = useState<CalendarView>("month");
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const { data: calendar, isLoading: isCalendarLoading } = useAnalyticsCalendar(calendarYear);
 
@@ -354,6 +358,34 @@ export default function AdminAnalytics() {
     return { dates, weeksCount: Math.ceil(dates.length / 7), maxRevenue: calendarLayout.maxRevenue };
   }, [calendarLayout, calendarYear, calendarMonth]);
 
+  const monthSummaries = useMemo(() => {
+    const summaries = Array.from({ length: 12 }).map((_, monthIndex) => ({
+      monthIndex,
+      label: new Date(calendarYear, monthIndex, 1).toLocaleString("default", { month: "long" }),
+      revenue: 0,
+      orders: 0,
+      daysWithSales: 0,
+    }));
+
+    for (const day of calendar ?? []) {
+      const dateObj = new Date(day.date);
+      if (dateObj.getFullYear() !== calendarYear) continue;
+      const monthIndex = dateObj.getMonth();
+      const revenue = toSafeNum(day.revenue);
+      const orders = toSafeNum(day.orderCount);
+      summaries[monthIndex].revenue += revenue;
+      summaries[monthIndex].orders += orders;
+      if (revenue > 0) summaries[monthIndex].daysWithSales += 1;
+    }
+
+    return summaries;
+  }, [calendar, calendarYear]);
+
+  const previousMonthSummaries = useMemo(
+    () => monthSummaries.filter((month) => month.monthIndex < calendarMonth),
+    [monthSummaries, calendarMonth],
+  );
+
   // ── KPI cards data ───────────────────────────────────────────────────────
 
   const kpis = data?.kpis;
@@ -367,13 +399,13 @@ export default function AdminAnalytics() {
   // ── Heat colour ──────────────────────────────────────────────────────────
 
   const heatColor = (revenue: number, max: number, isHoliday: boolean) => {
-    if (revenue <= 0 && isHoliday) return "hsl(var(--muted)/0.3)";
-    if (revenue <= 0)              return "hsl(var(--muted)/0.1)";
-    const r = max > 0 ? revenue / max : 0;
-    if (r > 0.75) return COLOR_TOKENS.heatPeak;
-    if (r > 0.5)  return COLOR_TOKENS.heatHigh;
-    if (r > 0.25) return COLOR_TOKENS.heatMedium;
-    return COLOR_TOKENS.heatLow;
+    if (revenue <= 0) {
+      return isHoliday ? "hsl(var(--destructive) / 0.9)" : "hsl(var(--destructive) / 0.75)";
+    }
+
+    const ratio = max > 0 ? Math.min(1, revenue / max) : 1;
+    const alpha = 0.35 + ratio * 0.6;
+    return `hsl(var(--foreground) / ${alpha.toFixed(2)})`;
   };
 
   // ────────────────────────────────────────────────────────────────────────
@@ -384,12 +416,12 @@ export default function AdminAnalytics() {
     <div className="min-h-screen bg-muted dark:bg-neutral-900 pb-20 admin-font">
 
       {/* Header */}
-      <div className="flex items-center justify-between p-8 border-b border-border/50 mb-8 bg-card/30 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-8 py-6 mb-8 bg-card/40 backdrop-blur-sm rounded-2xl ring-1 ring-black/5 dark:ring-white/10 shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:shadow-[0_14px_28px_rgba(0,0,0,0.45)]">
         <div>
-          <h1 className="text-2xl font-black uppercase tracking-[0.2em] text-foreground leading-none">
+          <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
             Analytics
           </h1>
-          <p className="text-[10px] text-muted-foreground mt-2 font-black uppercase tracking-[0.2em]">
+          <p className="mt-1 text-sm text-muted-foreground">
             {RANGE_LABELS[range]} — performance overview
           </p>
         </div>
@@ -440,7 +472,7 @@ export default function AdminAnalytics() {
                   <stop offset="95%" stopColor={COLOR_TOKENS.emerald} stopOpacity={0}    />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.5} />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.18} />
               <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={12} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} interval="preserveStartEnd" />
               <YAxis yAxisId="orders"  orientation="left"  tickLine={false} axisLine={false} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} allowDecimals={false} />
               <YAxis yAxisId="revenue" orientation="right" tickLine={false} axisLine={false} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} tickFormatter={(v) => `Rs.${v >= 1000 ? (v / 1000).toFixed(0) + "k" : v}`} />
@@ -505,7 +537,7 @@ export default function AdminAnalytics() {
           <div className={sectionTitleStyles}>Orders by Day</div>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={ordersByDayOfWeekData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.5} />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.18} />
               <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={10} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} />
               <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${p.value.toLocaleString("en-NP")} orders`} />} />
@@ -532,14 +564,14 @@ export default function AdminAnalytics() {
           <div className={sectionTitleStyles}>Revenue by Platform</div>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={(data?.revenueByPlatform ?? []).slice(0, 8)} margin={{ left: 0, right: 10, top: 10, bottom: 0 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.5} />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.18} />
               <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} tickFormatter={(v) => v >= 1000 ? `Rs.${Math.round(v / 1000)}k` : `Rs.${v}`} />
               <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${formatPrice(p.value)} · ${p.payload?.percent?.toFixed(1)}%`} />} />
               <Bar dataKey="revenue" radius={[6,6,0,0]} fill={COLOR_TOKENS.emerald} fillOpacity={0.2} stroke={COLOR_TOKENS.emerald} strokeWidth={1} barSize={40} />
             </BarChart>
           </ResponsiveContainer>
-          <Collapsible className="mt-6 pt-6 border-t border-border/50">
+          <Collapsible className="mt-6 pt-6 border-t border-black/5 dark:border-white/10">
             <CollapsibleTrigger asChild>
               <Button variant="ghost" className="w-full flex items-center justify-between h-9 px-4 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground hover:bg-muted/50 rounded-xl">
                 Platform management <ChevronDown size={14} className="ml-2" />
@@ -622,7 +654,7 @@ export default function AdminAnalytics() {
                   <stop offset="95%" stopColor={COLOR_TOKENS.purple} stopOpacity={0}    />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.5} />
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={COLOR_TOKENS.border} opacity={0.18} />
               <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={10} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} interval="preserveStartEnd" />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: COLOR_TOKENS.muted, fontSize: 10, fontWeight: "bold" }} allowDecimals={false} />
               <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${p.value} signups`} />} />
@@ -668,6 +700,9 @@ export default function AdminAnalytics() {
               )}
             </div>
           </div>
+          <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+            Includes website orders, POS orders, and direct POS sales.
+          </p>
 
           {isCalendarLoading || !calendarLayout ? (
             <div className="h-40 flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground animate-pulse">Loading dataset…</div>
@@ -696,7 +731,7 @@ export default function AdminAnalytics() {
                               if (!cell) return <div key={wd} className="w-3.5 h-3.5 rounded-sm bg-transparent" />;
                               return (
                                 <div key={wd} title={cell.revenue > 0 ? `${cell.date} · ${formatPrice(cell.revenue)}` : `${cell.date} · No sales`}
-                                  className="w-3.5 h-3.5 rounded-sm border border-border/50 transition-all hover:scale-125 hover:z-10 cursor-pointer"
+                                  className="w-3.5 h-3.5 rounded-sm ring-1 ring-black/15 dark:ring-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)] transition-all hover:scale-125 hover:z-10 cursor-pointer"
                                   style={{ background: heatColor(cell.revenue, calendarLayout.maxRevenue, cell.isHoliday) }}
                                 />
                               );
@@ -707,41 +742,94 @@ export default function AdminAnalytics() {
                     </div>
                   </div>
                 ) : (
-                  <div className="inline-flex gap-4 pt-4">
-                    <div className="flex flex-col justify-between py-2 pr-4 text-[9px] font-black uppercase tracking-tighter text-muted-foreground h-[105px]">
-                      <span>Mon</span>
-                      <span>Wed</span>
-                      <span>Fri</span>
+                  <div className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+                    <div className={cn(elevatedPanelStyles, "p-4")}>
+                      <div className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+                        Previous Months
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Revenue and order totals before{" "}
+                        {new Date(calendarYear, calendarMonth, 1).toLocaleString("default", { month: "long" })}.
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {previousMonthSummaries.length === 0 ? (
+                          <div className="rounded-xl bg-background/60 ring-1 ring-black/10 dark:ring-white/10 px-3 py-2 text-[11px] text-muted-foreground">
+                            No previous months for this selection.
+                          </div>
+                        ) : (
+                          previousMonthSummaries.map((month) => (
+                            <button
+                              key={month.monthIndex}
+                              type="button"
+                              className="w-full rounded-xl bg-background/70 ring-1 ring-black/10 dark:ring-white/10 px-3 py-2 text-left transition hover:bg-background shadow-[0_4px_14px_rgba(15,23,42,0.06)] dark:shadow-[0_8px_20px_rgba(0,0,0,0.3)]"
+                              onClick={() => setCalendarMonth(month.monthIndex)}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-black uppercase tracking-[0.12em] text-foreground">
+                                  {month.label}
+                                </span>
+                                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">
+                                  {month.orders.toLocaleString("en-NP")} orders
+                                </span>
+                              </div>
+                              <div className="mt-1 text-sm font-semibold text-foreground">
+                                {formatPrice(month.revenue)}
+                              </div>
+                              <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                                {month.daysWithSales} selling days
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
                     </div>
-                    <div className="flex gap-1.5">
-                      {Array.from({ length: monthLayout?.weeksCount ?? 0 }).map((_, wi) => (
-                        <div key={wi} className="flex flex-col gap-1.5">
-                          {Array.from({ length: 7 }, (_, wd) => {
-                            const idx = wi * 7 + wd;
-                            const entry = monthLayout?.dates[idx];
-                            const cell = entry?.cell;
-                            const inMonth = entry && new Date(entry.date).getFullYear() === calendarYear && new Date(entry.date).getMonth() === calendarMonth;
-                            return (
-                              <div key={wd} title={cell?.revenue && cell.revenue > 0 ? `${entry?.date} · ${formatPrice(cell.revenue)}` : `${entry?.date ?? ""} · No sales`}
-                                className="w-4 h-4 rounded-[4px] border border-border/50 transition-all hover:scale-125 hover:z-10 cursor-pointer"
-                                style={{ 
-                                  background: heatColor(cell?.revenue ?? 0, monthLayout?.maxRevenue ?? 0, cell?.isHoliday ?? false),
-                                  opacity: inMonth ? 1 : 0.1
-                                }}
-                              />
-                            );
-                          })}
+
+                    <div className={cn(elevatedPanelStyles, "p-4")}>
+                      <div className="mb-3">
+                        <div className="text-xs font-black uppercase tracking-[0.16em] text-foreground">
+                          {new Date(calendarYear, calendarMonth, 1).toLocaleString("default", { month: "long" })} {calendarYear}
                         </div>
-                      ))}
+                        <p className="text-[11px] text-muted-foreground">Current month calendar</p>
+                      </div>
+                      <div className="inline-flex gap-4">
+                        <div className="flex flex-col justify-between py-2 pr-4 text-[9px] font-black uppercase tracking-tighter text-muted-foreground h-[105px]">
+                          <span>Mon</span>
+                          <span>Wed</span>
+                          <span>Fri</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          {Array.from({ length: monthLayout?.weeksCount ?? 0 }).map((_, wi) => (
+                            <div key={wi} className="flex flex-col gap-1.5">
+                              {Array.from({ length: 7 }, (_, wd) => {
+                                const idx = wi * 7 + wd;
+                                const entry = monthLayout?.dates[idx];
+                                const cell = entry?.cell;
+                                const inMonth = entry && new Date(entry.date).getFullYear() === calendarYear && new Date(entry.date).getMonth() === calendarMonth;
+                                return (
+                                  <div
+                                    key={wd}
+                                    title={cell?.revenue && cell.revenue > 0 ? `${entry?.date} · ${formatPrice(cell.revenue)} · ${cell.orderCount.toLocaleString("en-NP")} orders` : `${entry?.date ?? ""} · No sales`}
+                                    className="w-4 h-4 rounded-[4px] ring-1 ring-black/15 dark:ring-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] dark:shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)] transition-all hover:scale-125 hover:z-10 cursor-pointer"
+                                    style={{
+                                      background: heatColor(cell?.revenue ?? 0, monthLayout?.maxRevenue ?? 0, cell?.isHoliday ?? false),
+                                      opacity: inMonth ? 1 : 0.14,
+                                    }}
+                                  />
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
-              <div className="flex items-center justify-between pt-4 border-t border-border/50 text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+              <div className="flex items-center justify-between pt-4 border-t border-black/5 dark:border-white/10 text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground">
                 <div className="flex items-center gap-6">
-                  {[{ label: "No sales", bg: "hsl(var(--muted)/0.1)" },{ label: "Low", bg: COLOR_TOKENS.heatLow },{ label: "Medium", bg: COLOR_TOKENS.heatMedium },{ label: "High", bg: COLOR_TOKENS.heatHigh },{ label: "Peak", bg: COLOR_TOKENS.heatPeak }].map((s) => (
+                  {[{ label: "No sales", bg: "hsl(var(--destructive) / 0.78)" },{ label: "Sales", bg: "hsl(var(--foreground) / 0.86)" }].map((s) => (
                     <span key={s.label} className="flex items-center gap-2">
-                      <span className="w-3.5 h-3.5 rounded-sm border border-border/50" style={{ background: s.bg }} />
+                      <span className="w-3.5 h-3.5 rounded-sm ring-1 ring-black/20 dark:ring-white/20" style={{ background: s.bg }} />
                       {s.label}
                     </span>
                   ))}
@@ -787,14 +875,14 @@ function TopProductsSection({ analytics, isLoading, className }: { analytics: Ad
           {isLoading ? (
             <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skel key={i} h={48} />)}</div>
           ) : products.length === 0 ? (
-            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest py-10 text-center bg-muted/20 rounded-2xl border border-dashed border-border">No sales records found.</p>
+            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest py-10 text-center bg-muted/20 rounded-2xl ring-1 ring-black/10 dark:ring-white/10">No sales records found.</p>
           ) : (
-            <div className="divide-y divide-border/50">
+            <div className="divide-y divide-black/5 dark:divide-white/10">
               {products.slice(0, 10).map((p, idx) => {
                 const calcPct = totalRevenue > 0 ? (toSafeNum(p.revenue) / totalRevenue * 100) : 0;
                 return (
                   <div key={`${p.name}-${idx}`} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
-                    <div className="w-12 h-12 rounded-xl bg-muted/50 border border-border flex-shrink-0 overflow-hidden shadow-sm">
+                    <div className="w-12 h-12 rounded-xl bg-muted/50 ring-1 ring-black/10 dark:ring-white/10 flex-shrink-0 overflow-hidden shadow-sm">
                       {p.imageUrl ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" /> : null}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -824,7 +912,7 @@ function TopProductsSection({ analytics, isLoading, className }: { analytics: Ad
             </div>
           )}
         </div>
-        <div className="xl:col-span-2 bg-muted/20 rounded-2xl border border-border/50 p-6 flex flex-col items-center justify-center">
+        <div className={cn("xl:col-span-2 p-6 flex flex-col items-center justify-center", elevatedPanelStyles)}>
           <div className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground mb-8">Revenue Distribution</div>
           <div className="w-full aspect-square max-w-[200px] mb-8">
             {top3.length > 0 && (

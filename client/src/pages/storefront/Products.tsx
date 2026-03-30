@@ -253,7 +253,6 @@ export default function Products() {
                               : "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
                           }`}
                         >
-                          <Sparkles className="h-3.5 w-3.5" />
                           <span>More</span>
                           <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/90 px-1.5 text-[9px] font-black tracking-normal text-black">
                             {overflowCategories.length}

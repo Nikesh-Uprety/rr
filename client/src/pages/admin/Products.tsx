@@ -692,6 +692,16 @@ export default function AdminProducts() {
     setMoveSelectionIds(new Set());
   };
 
+  const clearSearchInput = () => {
+    setSearch("");
+  };
+
+  const openEditOverlay = (product: ProductApi) => {
+    clearSearchInput();
+    setEditProduct(product);
+    setEditOpen(true);
+  };
+
   const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth < 640 ? "list" : "grid";
@@ -724,10 +734,16 @@ export default function AdminProducts() {
             />
             {search && (
               <Button 
+                type="button"
                 variant="ghost" 
                 size="icon" 
                 className="h-7 w-7 shrink-0 rounded-full hover:bg-muted"
-                onClick={() => setSearch("")}
+                aria-label="Clear search"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  clearSearchInput();
+                }}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -750,8 +766,7 @@ export default function AdminProducts() {
                     key={p.id} 
                     className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
                     onClick={() => {
-                      setEditProduct(p);
-                      setEditOpen(true);
+                      openEditOverlay(p);
                     }}
                   >
                     <img src={p.imageUrl || "/placeholder.png"} className="w-8 h-8 rounded-lg object-cover" alt="" />
@@ -1862,8 +1877,7 @@ export default function AdminProducts() {
                       className="flex-1 text-xs font-bold uppercase tracking-wider h-9"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setEditProduct(product);
-                        setEditOpen(true);
+                        openEditOverlay(product);
                       }}
                     >
                       <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
@@ -2049,8 +2063,7 @@ export default function AdminProducts() {
                             className="h-8 w-8"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setEditProduct(product);
-                              setEditOpen(true);
+                              openEditOverlay(product);
                             }}
                           >
                             <Pencil className="w-3.5 h-3.5" />

@@ -291,12 +291,12 @@ export default function Products() {
                     <button
                       type="button"
                       style={{ fontFamily: "Roboto, sans-serif" }}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-cyan-400/40 bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500 px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-white shadow-[0_10px_30px_rgba(37,99,235,0.28)] transition-all hover:brightness-110 dark:border-cyan-300/40 dark:from-cyan-400 dark:via-blue-500 dark:to-indigo-500"
+                      className="inline-flex h-10 items-center gap-2 rounded-full border border-[#1f3150]/45 bg-gradient-to-r from-[#1b2d49] via-[#223b5f] to-[#2a476f] px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f3f7ff] shadow-[0_10px_28px_rgba(22,40,73,0.34)] transition-all hover:brightness-105 dark:border-[#95afd9]/35 dark:from-[#18263e] dark:via-[#1f3455] dark:to-[#274264] dark:text-[#edf3ff]"
                     >
                       <ArrowDownWideNarrow className="h-3.5 w-3.5" />
                       <span>{SORT_LABELS[sortBy] ? `Sort: ${SORT_LABELS[sortBy]}` : "Sort By"}</span>
                       {activeFilterCount > 0 ? (
-                        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/90 px-1.5 text-[9px] font-black tracking-normal text-blue-700">
+                        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[#f3f6ff] px-1.5 text-[9px] font-black tracking-normal text-[#1d3150]">
                           {activeFilterCount}
                         </span>
                       ) : null}

@@ -721,69 +721,6 @@ export default function AdminProducts() {
           </p>
         </div>
         
-        {/* Search bar inside the section - flexible width */}
-        <div className="flex-1 w-full max-w-sm relative group">
-          <div className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full h-10 px-4 transition-all duration-300 focus-within:border-primary/50 shadow-inner">
-            <Search className={`h-4 w-4 shrink-0 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
-            <Input 
-              placeholder="Search products..." 
-              data-testid="admin-products-search"
-              className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50 px-3 w-full"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            {search && (
-              <Button 
-                type="button"
-                variant="ghost" 
-                size="icon" 
-                className="h-7 w-7 shrink-0 rounded-full hover:bg-muted"
-                aria-label="Clear search"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  clearSearchInput();
-                }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-
-          <AnimatePresence>
-            {search.length > 1 && (
-              <motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute top-full left-0 right-0 mt-3 p-2 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-2xl shadow-2xl z-[50] max-h-[300px] overflow-auto"
-              >
-                <div className="px-3 py-1.5 text-[9px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 border-b border-muted/30 mb-2">
-                  Quick Results
-                </div>
-                {filteredProducts.slice(0, 5).map(p => (
-                   <div 
-                    key={p.id} 
-                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => {
-                      openEditOverlay(p);
-                    }}
-                  >
-                    <img src={p.imageUrl || "/placeholder.png"} className="w-8 h-8 rounded-lg object-cover" alt="" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold truncate">{p.name}</p>
-                      <p className="text-[9px] text-muted-foreground uppercase">{p.category}</p>
-                    </div>
-                    <div className="text-right shrink-0">
-                       <p className="text-[10px] font-bold">{formatPrice(p.price)}</p>
-                    </div>
-                   </div>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-        
         <div className="hidden sm:flex items-center gap-2 w-full sm:w-auto justify-end">
           <Button 
             data-testid="admin-products-add-open"
@@ -1530,10 +1467,12 @@ export default function AdminProducts() {
         }}
       />
 
-      <div className="sticky top-16 z-30 -mx-1 px-1 pb-2 backdrop-blur-[6px]">
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-[#F8FCF8] to-white dark:from-[#151E17] dark:to-[#111915] p-4 rounded-2xl border border-[#DCE8DB] dark:border-[#2E3B32] shadow-[0_8px_20px_rgba(34,63,41,0.08)] dark:shadow-[0_10px_22px_rgba(0,0,0,0.35)] overflow-hidden">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1 w-full">
+      {/* Fixed Filter & Category Section with Search Bar */}
+      <div className="fixed left-0 right-0 z-30 backdrop-blur-[6px]" style={{ top: '64px', width: '100%' }}>
+        <div className="space-y-3 px-1 pb-2 max-w-[calc(100%-8px)] mx-auto">
+          <div className="flex flex-col gap-4 bg-gradient-to-r from-[#F8FCF8] to-white dark:from-[#151E17] dark:to-[#111915] p-4 rounded-2xl border border-[#DCE8DB] dark:border-[#2E3B32] shadow-[0_8px_20px_rgba(34,63,41,0.08)] dark:shadow-[0_10px_22px_rgba(0,0,0,0.35)] overflow-hidden">
+            {/* Top row: Select All + Search Bar + Items Count */}
+            <div className="flex flex-col xl:flex-row items-center gap-4 w-full">
               <div className="flex items-center gap-3 shrink-0">
                 <Checkbox 
                   id="select-all"
@@ -1630,13 +1569,77 @@ export default function AdminProducts() {
                   )}
                 </AnimatePresence>
               </div>
-            </div>
-            
-            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end shrink-0">
-              <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest whitespace-nowrap dark:text-[#CFE0D1]">
-                {filteredProducts.length} Items
-              </p>
-              <ViewToggle view={viewMode} onViewChange={setViewMode} />
+
+              {/* Search Bar - Centered and Full Width on XL */}
+              <div className="w-full max-w-sm relative group flex-1 xl:flex-none">
+                <div className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full h-10 px-4 transition-all duration-300 focus-within:border-primary/50 shadow-inner">
+                  <Search className={`h-4 w-4 shrink-0 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <Input 
+                    placeholder="Search products..." 
+                    data-testid="admin-products-search"
+                    className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50 px-3 w-full"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                  {search && (
+                    <Button 
+                      type="button"
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 shrink-0 rounded-full hover:bg-muted"
+                      aria-label="Clear search"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        clearSearchInput();
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                <AnimatePresence>
+                  {search.length > 1 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute top-full left-0 right-0 mt-3 p-2 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-2xl shadow-2xl z-50 max-h-[300px] overflow-auto"
+                    >
+                      <div className="px-3 py-1.5 text-[9px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 border-b border-muted/30 mb-2">
+                        Quick Results
+                      </div>
+                      {filteredProducts.slice(0, 5).map(p => (
+                         <div 
+                          key={p.id} 
+                          className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={() => {
+                            openEditOverlay(p);
+                          }}
+                        >
+                          <img src={p.imageUrl || "/placeholder.png"} className="w-8 h-8 rounded-lg object-cover" alt="" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold truncate">{p.name}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase">{p.category}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                             <p className="text-[10px] font-bold">{formatPrice(p.price)}</p>
+                          </div>
+                         </div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Items Count and View Toggle */}
+              <div className="flex items-center gap-4 shrink-0">
+                <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest whitespace-nowrap dark:text-[#CFE0D1]">
+                  {filteredProducts.length} Items
+                </p>
+                <ViewToggle view={viewMode} onViewChange={setViewMode} />
+              </div>
             </div>
           </div>
 
@@ -1686,6 +1689,9 @@ export default function AdminProducts() {
           </div>
         </div>
       </div>
+
+      {/* Spacer for fixed header - adjust based on visible content */}
+      <div className="h-32 xl:h-24" />
 
 
       <AnimatePresence mode="wait">

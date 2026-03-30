@@ -56,8 +56,8 @@ function MaisonNocturneFeatured({
   const hint = config?.hint ?? "Drag to explore";
 
   return (
-    <section className="px-5 py-24 sm:px-8 lg:px-10" style={{ background: "var(--bg2)" }}>
-      <div className="mx-auto max-w-[1440px]">
+    <section className="py-20 sm:py-24" style={{ background: "var(--bg2)" }}>
+      <div className="w-full px-2 sm:px-3 lg:px-4 xl:px-6">
         <div className="reveal mx-auto max-w-3xl text-center">
           <p
             className="text-[10px] uppercase tracking-[0.28em] text-[var(--gold)]"
@@ -100,12 +100,12 @@ function MaisonNocturneFeatured({
                   href={`/product/${product.id}`}
                   className="group p-card block shrink-0"
                   style={{
-                    width: "clamp(240px, 25vw, 300px)",
+                    width: "clamp(320px, 33vw, 500px)",
                     scrollSnapAlign: "start",
                   }}
                 >
                   <div className="relative overflow-hidden border border-[var(--border)] bg-black/20">
-                    <div className="aspect-[2/3] overflow-hidden">
+                    <div className="aspect-[3/4] overflow-hidden">
                       <img
                         src={product.imageUrl ?? ""}
                         alt={product.name}
@@ -194,8 +194,8 @@ function NikeshDesignFeatured({
   const hint = config?.hint ?? "Drag to explore →";
 
   return (
-    <section className="products-wrap px-5 py-24 sm:px-8 lg:px-10" style={{ background: "var(--bg2)" }}>
-      <div className="mx-auto max-w-[1440px]">
+    <section className="products-wrap py-20 sm:py-24" style={{ background: "var(--bg2)" }}>
+      <div className="w-full px-2 sm:px-3 lg:px-4 xl:px-6">
         <div className="products-head reveal mb-12 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <p
@@ -239,10 +239,10 @@ function NikeshDesignFeatured({
                   key={product.id}
                   href={`/product/${product.id}`}
                   className="group p-card block shrink-0"
-                  style={{ width: "clamp(240px, 25vw, 300px)", scrollSnapAlign: "start" }}
+                  style={{ width: "clamp(320px, 33vw, 500px)", scrollSnapAlign: "start" }}
                 >
                   <div className="relative overflow-hidden border border-[var(--border)] bg-black/20">
-                    <div className="aspect-[2/3] overflow-hidden">
+                    <div className="aspect-[3/4] overflow-hidden">
                       <img
                         src={product.imageUrl ?? ""}
                         alt={product.name}
@@ -345,8 +345,9 @@ export default function FeaturedCollection({
   }
 
   return (
-    <section className="py-24 container mx-auto px-6 max-w-7xl">
-      <div className="flex justify-between items-end mb-16">
+    <section className="py-20 sm:py-24">
+      <div className="w-full px-2 sm:px-3 lg:px-4 xl:px-6">
+        <div className="mb-16 flex items-end justify-between">
         <div>
           <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2">
             Editor's Choice
@@ -359,10 +360,10 @@ export default function FeaturedCollection({
         >
           View All
         </Link>
-      </div>
+        </div>
 
-      <div
-        className="relative aspect-video md:aspect-[21/9] overflow-hidden rounded-sm mb-16 bg-neutral-100 dark:bg-neutral-900 cursor-grab active:cursor-grabbing select-none group/carousel"
+        <div
+          className="group/carousel relative mb-16 aspect-[16/10] overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-900 md:aspect-[2/1] xl:aspect-[21/9] cursor-grab active:cursor-grabbing select-none"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -370,21 +371,21 @@ export default function FeaturedCollection({
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseLeave}
-      >
-        <div
-          className="flex h-full transition-transform duration-600 ease-in-out"
-          style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
         >
-          {featureCollectionImages.map((src, i) => (
-            <img
-              key={src}
-              src={src}
-              alt={`Featured collection image ${i + 1}`}
-              className="w-full h-full object-cover object-center flex-shrink-0"
-              draggable={false}
-            />
-          ))}
-        </div>
+          <div
+            className="flex h-full transition-transform duration-600 ease-in-out"
+            style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
+          >
+            {featureCollectionImages.map((src, i) => (
+              <img
+                key={src}
+                src={src}
+                alt={`Featured collection image ${i + 1}`}
+                className="h-full w-full shrink-0 object-cover object-center"
+                draggable={false}
+              />
+            ))}
+          </div>
 
         <button
           onClick={(e) => {
@@ -425,12 +426,13 @@ export default function FeaturedCollection({
             />
           ))}
         </div>
-      </div>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {products.map((product, i) => (
-          <FeaturedProductCard key={product.id} product={product} index={i} />
-        ))}
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+          {products.map((product, i) => (
+            <FeaturedProductCard key={product.id} product={product} index={i} />
+          ))}
+        </div>
       </div>
     </section>
   );

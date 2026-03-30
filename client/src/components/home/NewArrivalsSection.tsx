@@ -15,22 +15,24 @@ export default function NewArrivalsSection({
   void config;
 
   return (
-    <section className="py-24 container mx-auto px-6 max-w-7xl">
-      <h2 className="text-[11px] font-bold uppercase tracking-[0.34em] text-center text-zinc-500 dark:text-zinc-400 mb-3">
-        Latest Drops
-      </h2>
-      <h3 className="text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-center text-zinc-900 dark:text-zinc-100 mb-4">
-        New Arrivals
-      </h3>
-      <p className="mx-auto mb-14 max-w-2xl text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
-        Curated originals from Rare Atelier, crafted to elevate everyday wear.
-      </p>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10">
-        {newArrivals.map((product) => (
-          <div key={product.id}>
-            <NewArrivalCard product={product} imageAspectClass="aspect-[4/5]" />
-          </div>
-        ))}
+    <section className="py-20 sm:py-24">
+      <div className="w-full px-2 sm:px-3 lg:px-4 xl:px-6">
+        <h2 className="mb-3 text-center text-[11px] font-bold uppercase tracking-[0.34em] text-zinc-500 dark:text-zinc-400">
+          Latest Drops
+        </h2>
+        <h3 className="mb-4 text-center text-4xl font-black uppercase tracking-[-0.02em] text-zinc-900 dark:text-zinc-100 md:text-5xl">
+          New Arrivals
+        </h3>
+        <p className="mx-auto mb-14 max-w-2xl text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+          Curated originals from Rare Atelier, crafted to elevate everyday wear.
+        </p>
+        <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {newArrivals.map((product) => (
+            <div key={product.id}>
+              <NewArrivalCard product={product} imageAspectClass="aspect-[3/4]" />
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

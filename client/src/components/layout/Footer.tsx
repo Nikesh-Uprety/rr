@@ -206,11 +206,13 @@ export default function Footer() {
           <div className="container mx-auto px-6 max-w-7xl">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-16 mb-20">
               <div className="col-span-1">
-                <img
-                  src="https://cdn2.blanxer.com/brand_logo/67cd36dcf133882caba612b4/67d00c07ef86879da12106aa.webp"
-                  alt="RARE"
-                  className="h-12 w-auto mb-8 object-contain brightness-0 invert"
-                />
+                <Link href="/" className="inline-block">
+                  <img
+                    src="/images/logo.webp"
+                    alt="Rare Atelier"
+                    className="mb-8 h-12 w-auto object-contain brightness-0 invert"
+                  />
+                </Link>
                 <p className="text-gray-500 text-sm leading-relaxed tracking-wide">
                   Khusibu, Nayabazar, Kathmandu
                   <br />

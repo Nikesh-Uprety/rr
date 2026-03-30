@@ -101,11 +101,11 @@ function MaisonNocturneLookbook({
 
   return (
     <section
-      className="px-5 py-24 sm:px-8 lg:px-10"
+      className="py-20 sm:py-24"
       style={{ background: "var(--bg)" }}
       data-navbar-trigger="maison-nocturne"
     >
-      <div className="mx-auto max-w-[1440px]">
+      <div className="w-full px-2 sm:px-3 lg:px-4 xl:px-6">
         <div className="reveal mb-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p
@@ -133,7 +133,7 @@ function MaisonNocturneLookbook({
           </p>
         </div>
 
-        <div className="grid auto-rows-[180px] grid-cols-1 gap-[5px] md:grid-cols-12 md:auto-rows-[200px]">
+        <div className="grid auto-rows-[230px] grid-cols-1 gap-[6px] md:grid-cols-12 md:auto-rows-[300px] xl:auto-rows-[340px]">
           {images.slice(0, 8).map((item: any, index: number) => (
             <div
               key={`${item.label}-${index}`}
@@ -190,9 +190,9 @@ function NikeshDesignLookbook({
   const gridClasses = getLookbookGridClasses(config?.layoutPreset);
 
   return (
-    <section className="px-5 py-24 sm:px-8 lg:px-10" style={{ background: "var(--bg)" }}>
-      <div className="mx-auto max-w-[1440px]">
-        <div className="editorial-grid grid auto-rows-[180px] grid-cols-1 gap-[5px] md:grid-cols-12 md:auto-rows-[200px]">
+    <section className="py-20 sm:py-24" style={{ background: "var(--bg)" }}>
+      <div className="w-full px-2 sm:px-3 lg:px-4 xl:px-6">
+        <div className="editorial-grid grid auto-rows-[230px] grid-cols-1 gap-[6px] md:grid-cols-12 md:auto-rows-[300px] xl:auto-rows-[340px]">
           {images.slice(0, 8).map((item: any, index: number) => (
             <div
               key={`${item.label}-${index}`}

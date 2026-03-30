@@ -7,6 +7,26 @@ interface CampaignBannerProps {
   config?: Record<string, any>;
 }
 
+const CAMPAIGN_IMAGE_HARD_FALLBACK = "/images/home-campaign-editorial.webp";
+
+function handleCampaignImageError(
+  event: React.SyntheticEvent<HTMLImageElement>,
+  preferredFallback: string,
+) {
+  const image = event.currentTarget;
+  const current = image.getAttribute("src") ?? "";
+  const fallback = preferredFallback || CAMPAIGN_IMAGE_HARD_FALLBACK;
+
+  if (current !== fallback) {
+    image.setAttribute("src", fallback);
+    return;
+  }
+
+  if (current !== CAMPAIGN_IMAGE_HARD_FALLBACK) {
+    image.setAttribute("src", CAMPAIGN_IMAGE_HARD_FALLBACK);
+  }
+}
+
 const DEFAULT_LOOKBOOK_LABELS = [
   "Vol. I — Essentials",
   "Outerwear",
@@ -123,10 +143,12 @@ function MaisonNocturneLookbook({
                 <img
                   src={item.image || exploreCollectionImage}
                   alt={item.label}
-                  className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.06]"
-                  style={{ filter: "brightness(0.6) grayscale(20%)" }}
+                  className="h-full w-full object-cover brightness-[0.96] saturate-[1.22] contrast-[1.03] dark:brightness-[0.6] dark:saturate-[0.95] dark:contrast-[1] transition duration-700 group-hover:scale-[1.06]"
+                  onError={(event) =>
+                    handleCampaignImageError(event, exploreCollectionImage)
+                  }
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/15" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/42 via-black/6 to-transparent dark:from-black/80 dark:via-black/30 dark:to-black/15" />
               </div>
               <span
                 className="absolute right-4 top-4 text-[9px] uppercase tracking-[0.24em] text-[rgba(232,228,219,0.32)]"
@@ -180,10 +202,12 @@ function NikeshDesignLookbook({
                 <img
                   src={item.image || exploreCollectionImage}
                   alt={item.label}
-                  className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.06]"
-                  style={{ filter: "brightness(0.6) grayscale(20%)" }}
+                  className="h-full w-full object-cover brightness-[0.96] saturate-[1.22] contrast-[1.03] dark:brightness-[0.6] dark:saturate-[0.95] dark:contrast-[1] transition duration-700 group-hover:scale-[1.06]"
+                  onError={(event) =>
+                    handleCampaignImageError(event, exploreCollectionImage)
+                  }
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/15" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/42 via-black/6 to-transparent dark:from-black/80 dark:via-black/30 dark:to-black/15" />
               </div>
               <span
                 className="absolute right-4 top-4 text-[9px] uppercase tracking-[0.24em] text-[rgba(232,228,219,0.32)]"
@@ -231,6 +255,9 @@ export default function CampaignBanner({
           alt={imageAlt}
           className="w-full h-full object-cover object-center"
           src={exploreCollectionImage}
+          onError={(event) =>
+            handleCampaignImageError(event, CAMPAIGN_IMAGE_HARD_FALLBACK)
+          }
         />
       </motion.div>
     </section>

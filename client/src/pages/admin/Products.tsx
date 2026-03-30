@@ -1530,7 +1530,7 @@ export default function AdminProducts() {
         }}
       />
 
-      <div className="sticky top-2 z-30 -mx-1 px-1 pb-2 backdrop-blur-[2px]">
+      <div className="sticky top-16 z-30 -mx-1 px-1 pb-2 backdrop-blur-[6px]">
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-[#F8FCF8] to-white dark:from-[#151E17] dark:to-[#111915] p-4 rounded-2xl border border-[#DCE8DB] dark:border-[#2E3B32] shadow-[0_8px_20px_rgba(34,63,41,0.08)] dark:shadow-[0_10px_22px_rgba(0,0,0,0.35)] overflow-hidden">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1 w-full">

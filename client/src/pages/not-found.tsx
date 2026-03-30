@@ -1,40 +1,70 @@
 import { useEffect, useRef } from "react";
 import notFoundSound from "../../../faah.mp3";
+import { StarsBackground } from "@/components/backgrounds/StarsBackground";
 
 const NOT_FOUND_PLAYBACK_RATE = 1.28;
+let cachedNotFoundAudio: HTMLAudioElement | null = null;
+
+const getNotFoundAudio = () => {
+  if (!cachedNotFoundAudio) {
+    cachedNotFoundAudio = new Audio(notFoundSound);
+    cachedNotFoundAudio.preload = "auto";
+    cachedNotFoundAudio.volume = 1;
+    cachedNotFoundAudio.playbackRate = NOT_FOUND_PLAYBACK_RATE;
+    cachedNotFoundAudio.defaultPlaybackRate = NOT_FOUND_PLAYBACK_RATE;
+    cachedNotFoundAudio.load();
+  }
+  return cachedNotFoundAudio;
+};
 
 export default function NotFound() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Removed heavy canvas/particle animation per user request
   useEffect(() => {
-    const audio = new Audio(notFoundSound);
+    const audio = getNotFoundAudio();
     audioRef.current = audio;
-    audio.preload = "auto";
-    audio.volume = 1;
     audio.playbackRate = NOT_FOUND_PLAYBACK_RATE;
     audio.defaultPlaybackRate = NOT_FOUND_PLAYBACK_RATE;
+    audio.currentTime = 0;
 
-    const safePlay = () => {
+    const playInstant = () => {
       const playPromise = audio.play();
-      if (playPromise && typeof playPromise.catch === "function") {
-        playPromise.catch(() => {
-          // Ignore autoplay restrictions. The 404 page still renders correctly.
-        });
+      return playPromise && typeof playPromise.then === "function"
+        ? playPromise.then(() => true).catch(() => false)
+        : Promise.resolve(true);
+    };
+
+    let cleanupRetry: (() => void) | null = null;
+    playInstant().then((started) => {
+      if (started) return;
+
+      const retryPlay = () => {
+        audio.currentTime = 0;
+        void playInstant();
+      };
+
+      audio.addEventListener("canplaythrough", retryPlay, { once: true });
+      window.addEventListener("pointerdown", retryPlay, { once: true });
+      window.addEventListener("keydown", retryPlay, { once: true });
+
+      cleanupRetry = () => {
+        audio.removeEventListener("canplaythrough", retryPlay);
+        window.removeEventListener("pointerdown", retryPlay);
+        window.removeEventListener("keydown", retryPlay);
+      };
+    });
+
+    const visibilityPlay = () => {
+      if (document.visibilityState === "visible") {
+        audio.currentTime = 0;
+        void playInstant();
       }
     };
-
-    const handleCanPlay = () => {
-      audio.currentTime = 0;
-      safePlay();
-    };
-
-    audio.addEventListener("canplay", handleCanPlay, { once: true });
-    audio.load();
+    document.addEventListener("visibilitychange", visibilityPlay);
 
     return () => {
-      audio.removeEventListener("canplay", handleCanPlay);
+      document.removeEventListener("visibilitychange", visibilityPlay);
+      if (cleanupRetry) cleanupRetry();
       audio.pause();
       audio.currentTime = 0;
       audioRef.current = null;
@@ -47,21 +77,20 @@ export default function NotFound() {
       {/* Premium Styles */}
       <style>{`
         *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-        
-        canvas#canvas-bg { position:fixed; inset:0; pointer-events:none; z-index:1; }
 
         .grain { position:fixed; inset:-100%; width:300%; height:300%;
           background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E");
-          background-size:180px; animation:grain .35s steps(4) infinite; pointer-events:none; z-index:3; opacity:.55; }
-        @keyframes grain { 0%{transform:translate(0,0)} 25%{transform:translate(-3%,2%)} 50%{transform:translate(2%,-3%)} 75%{transform:translate(-1%,3%)} 100%{transform:translate(3%,-1%)} }
+          background-size:180px; animation:grain .55s steps(2) infinite; pointer-events:none; z-index:3; opacity:.34; }
+        @keyframes grain { 0%{transform:translate(0,0)} 25%{transform:translate(-2%,1%)} 50%{transform:translate(2%,-2%)} 75%{transform:translate(-1%,2%)} 100%{transform:translate(2%,-1%)} }
 
         .vignette { position:fixed; inset:0; z-index:4; pointer-events:none;
           background:radial-gradient(ellipse 80% 70% at 50% 50%, transparent 25%, rgba(7,6,10,0.9) 100%); }
 
-        .stage { position:relative; z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; width:100%; padding:0 20px; }
+        .stage { position:relative; z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; width:100%; padding:0 20px; animation:stageIn .38s ease-out both; }
+        @keyframes stageIn { from { opacity:0; transform:translateY(8px) scale(.992); } to { opacity:1; transform:translateY(0) scale(1); } }
 
         .mono-wrap { position:relative; width:clamp(96px,16vw,132px); height:clamp(96px,16vw,132px); margin-bottom:28px; }
-        .mono-ring { width:100%; height:100%; animation:spinSlow 20s linear infinite; }
+        .mono-ring { width:100%; height:100%; animation:spinSlow 14s linear infinite; }
         @keyframes spinSlow { to{transform:rotate(360deg)} }
         .mono-inner { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
         .mono-letter { font-family:'Cinzel',serif; font-size:clamp(1.8rem,5vw,2.8rem); font-weight:600; color:#c8a96d; text-shadow:0 0 28px rgba(200,169,109,.55); letter-spacing:.04em; }
@@ -72,13 +101,11 @@ export default function NotFound() {
         .tagline { font-family:'Cormorant Garamond',serif; font-style:italic; font-weight:300; font-size:clamp(.68rem,1.8vw,.92rem); color:rgba(242,239,232,0.8); letter-spacing:.22em; text-align:center; margin-top:20px; }
         .not-found-msg { font-family:'DM Mono',monospace; font-size:clamp(.55rem,1.2vw,.8rem); letter-spacing:.32em; text-transform:uppercase; color:rgba(200,169,109,.5); margin-top:15px; }
 
-        .star { position:absolute; width:1px; pointer-events:none; z-index:15; background:linear-gradient(180deg,transparent,rgba(255,255,255,.85),transparent); animation:starFall linear forwards; opacity:0; }
-        @keyframes starFall { 0%{opacity:0;transform:translateY(-50px) scaleY(0)} 10%{opacity:1} 85%{opacity:.7} 100%{opacity:0;transform:translateY(80px) scaleY(1)} }
-
         .back-link { position:relative; margin-top:40px; padding:12px 30px; border:1px solid rgba(200,169,109,0.3); font-family:'DM Mono',monospace; color:#c8a96d; text-transform:uppercase; letter-spacing:0.3em; font-size:0.7rem; cursor:pointer; transition:all 0.3s; z-index:30; pointer-events: auto; }
         .back-link:hover { background: rgba(200,169,109,0.1); border-color: #c8a96d; }
       `}</style>
-      
+
+      <StarsBackground className="z-[2] opacity-85" />
       <div className="grain"></div>
       <div className="vignette"></div>
 

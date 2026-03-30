@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { ShoppingBag, Sun, Moon, LayoutDashboard, Menu, X, Search } from "lucide-react";
+import { ShoppingBag, LayoutDashboard, Menu, X, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useThemeStore } from "@/store/theme";
 import { useCartStore } from "@/store/cart";
@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import SearchBar from "./SearchBar";
 import { canAccessAdminPanel } from "@shared/auth-policy";
 import { getDefaultAdminPath } from "@/lib/adminAccess";
+import { ThemeTogglerButton } from "@/components/ui/theme-toggler-button";
 
 const ANNOUNCEMENT_ITEMS = [
   "Free shipping on orders over NPR 5,000",
@@ -359,9 +360,9 @@ export default function Navbar() {
                   <SearchBar />
                 </div>
                 {isNikeshDesign ? null : (
-                  <button
-                    type="button"
-                    onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+                  <ThemeTogglerButton
+                    theme={theme}
+                    onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
                     className="flex h-10 w-10 items-center justify-center"
                     style={{
                       color: useHeroContrastState ? "#ffffff" : isMaisonLight ? "#181411" : "#ffffff",
@@ -371,10 +372,8 @@ export default function Navbar() {
                           ? "0 0 10px rgba(255,255,255,0.28)"
                           : "none",
                     }}
-                    aria-label="Toggle theme"
-                  >
-                    {theme === "light" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
-                  </button>
+                    iconClassName="h-4.5 w-4.5"
+                  />
                 )}
                 <button
                   type="button"
@@ -603,12 +602,12 @@ export default function Navbar() {
           <div className="flex items-center space-x-2 sm:space-x-4">
             <SearchBar />
 
-            <button
-              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            <ThemeTogglerButton
+              theme={theme}
+              onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
               className="w-10 h-10 flex items-center justify-center rounded-full border border-white/35 bg-white/45 text-zinc-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-white/55 dark:border-white/12 dark:bg-white/[0.08] dark:text-white dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-white/[0.12]"
-            >
-              {theme === "light" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
+              iconClassName="w-5 h-5"
+            />
 
             {isAuthenticated && user && (
               <button
@@ -761,12 +760,12 @@ export default function Navbar() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+                    <ThemeTogglerButton
+                      theme={theme}
+                      onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
                       className="w-12 h-12 flex items-center justify-center rounded-2xl bg-gray-50 dark:bg-neutral-900 hover:scale-105 transition-transform"
-                    >
-                      {theme === "light" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                    </button>
+                      iconClassName="w-5 h-5"
+                    />
                   </div>
                 </div>
               </div>

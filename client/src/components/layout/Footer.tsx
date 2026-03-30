@@ -3,6 +3,12 @@ import { Link, useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import {
+  PreviewLinkCard,
+  PreviewLinkCardContent,
+  PreviewLinkCardImage,
+  PreviewLinkCardTrigger,
+} from "@/components/ui/preview-link-card";
 
 export default function Footer() {
   const { toast } = useToast();
@@ -58,7 +64,10 @@ export default function Footer() {
   const isHomePage = location === "/";
   const isMaisonNocturne = pageConfig?.template?.slug === "maison-nocturne";
   const isNikeshDesign = pageConfig?.template?.slug === "nikeshdesign";
-  const TIKTOK_URL = "#";
+  const INSTAGRAM_URL = "https://www.instagram.com/rare.np/";
+  const TIKTOK_URL = "https://www.tiktok.com/@rare.np";
+  const FACEBOOK_URL = "https://www.facebook.com/rarenp";
+  const BUILDER_WEBSITE_URL = "https://nikeshuprety.com.np";
 
   if (isNikeshDesign) {
     return (
@@ -110,9 +119,9 @@ export default function Footer() {
         <div className="footer-bottom footer-inner mx-auto mt-10 flex max-w-[1440px] flex-col gap-4 border-t pt-6 text-[10px] uppercase sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "var(--border)", fontFamily: "var(--font-mono)", letterSpacing: "0.2em", color: "var(--fg-dim)" }}>
           <p className="footer-copy">© 2026 Rare Atelier. All rights reserved.</p>
           <div className="footer-socials flex gap-5">
-            <a href="https://www.instagram.com/rare.np/" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--fg)]">Instagram</a>
+            <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="hover:text-[var(--fg)]">Instagram</a>
             <a href={TIKTOK_URL} target="_blank" rel="noopener noreferrer" className="hover:text-[var(--fg)]">TikTok</a>
-            <a href="https://www.facebook.com/rarenp" target="_blank" rel="noopener noreferrer" className="hover:text-[var(--fg)]">Facebook</a>
+            <a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer" className="hover:text-[var(--fg)]">Facebook</a>
           </div>
         </div>
       </footer>
@@ -154,9 +163,9 @@ export default function Footer() {
             <div>
               <h4 className="mb-8 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Social</h4>
               <ul className="space-y-4 text-xs tracking-widest">
-                <li><a href="https://www.instagram.com/rare.np/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 transition-colors hover:text-gray-400">Instagram</a></li>
+                <li><a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 transition-colors hover:text-gray-400">Instagram</a></li>
                 <li><a href={TIKTOK_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 transition-colors hover:text-gray-400">TikTok</a></li>
-                <li><a href="https://www.facebook.com/rarenp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 transition-colors hover:text-gray-400">Facebook</a></li>
+                <li><a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 transition-colors hover:text-gray-400">Facebook</a></li>
               </ul>
             </div>
 
@@ -188,10 +197,41 @@ export default function Footer() {
           <div className="flex flex-col gap-4 border-t border-gray-900 pt-6 text-[10px] uppercase tracking-[0.2em] text-gray-500 sm:flex-row sm:items-center sm:justify-between">
             <span>© 2026 Rare Atelier. All rights reserved.</span>
             <div className="flex flex-wrap gap-5">
-              <span>Built by 0xnikuhacks</span>
-              <a href="https://www.instagram.com/rare.np/" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-gray-400">Instagram</a>
+              <PreviewLinkCard
+                href={BUILDER_WEBSITE_URL}
+                colorScheme="dark"
+                openDelay={100}
+                closeDelay={100}
+              >
+                <PreviewLinkCardTrigger asChild>
+                  <a
+                    href={BUILDER_WEBSITE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="built-by-link transition-colors hover:text-white"
+                    data-text="Built by 0xnikuhacks"
+                  >
+                    <span className="built-by-link__text">Built by 0xnikuhacks</span>
+                  </a>
+                </PreviewLinkCardTrigger>
+                <PreviewLinkCardContent className="w-[280px] overflow-hidden rounded-xl border border-white/20 bg-black/95 p-0 shadow-[0_20px_45px_rgba(0,0,0,0.5)]">
+                  <PreviewLinkCardImage
+                    alt="nikeshuprety.com.np preview"
+                    className="h-[158px] w-full object-cover"
+                  />
+                  <div className="px-3 py-2">
+                    <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400">
+                      Portfolio
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold tracking-wide text-white">
+                      nikeshuprety.com.np
+                    </p>
+                  </div>
+                </PreviewLinkCardContent>
+              </PreviewLinkCard>
+              <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-gray-400">Instagram</a>
               <a href={TIKTOK_URL} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-gray-400">TikTok</a>
-              <a href="https://www.facebook.com/rarenp" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-gray-400">Facebook</a>
+              <a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-gray-400">Facebook</a>
             </div>
           </div>
         </div>
@@ -233,9 +273,9 @@ export default function Footer() {
               <div>
                 <h4 className="font-bold mb-8 uppercase tracking-[0.2em] text-[10px] text-gray-400">Social</h4>
                 <ul className="space-y-4 text-xs tracking-widest">
-                  <li><a href="https://www.instagram.com/rare.np/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">Instagram</a></li>
+                  <li><a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">Instagram</a></li>
                   <li><a href={TIKTOK_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">TikTok</a></li>
-                  <li><a href="https://www.facebook.com/rarenp" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">Facebook</a></li>
+                  <li><a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 hover:text-gray-400 transition-colors">Facebook</a></li>
                 </ul>
               </div>
               <div>

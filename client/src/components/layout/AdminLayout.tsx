@@ -18,7 +18,7 @@ import {
   applyAdminFontSettings,
   readAdminFontSettings,
 } from "@/lib/adminFont";
-import { getAdminNavigation, getRoleLabel } from "@/lib/adminAccess";
+import { getAdminNavigation } from "@/lib/adminAccess";
 import {
   SidebarProvider,
   Sidebar,
@@ -190,9 +190,8 @@ export default function AdminLayout({
   const isVisuallyExpanded =
     !sidebarCollapsed || collapsedSidebarWidth >= ADMIN_SIDEBAR_VISUAL_EXPAND_THRESHOLD;
   const collapsedThemeSidebarClass = !isVisuallyExpanded
-    ? "[&_[data-sidebar=sidebar-inner]]:bg-[#101A22] [&_[data-sidebar=sidebar-inner]]:text-white [&_[data-sidebar=sidebar-container]]:border-[#2D3A45] dark:[&_[data-sidebar=sidebar-inner]]:bg-[#F8FAFC] dark:[&_[data-sidebar=sidebar-inner]]:text-[#111827] dark:[&_[data-sidebar=sidebar-container]]:border-[#D7DEE7]"
+    ? "[&_[data-slot=sidebar-inner]]:bg-[#101A22] [&_[data-slot=sidebar-inner]]:text-white [&_[data-slot=sidebar-container]]:border-[#2D3A45] dark:[&_[data-slot=sidebar-inner]]:bg-[#F8FAFC] dark:[&_[data-slot=sidebar-inner]]:text-[#111827] dark:[&_[data-slot=sidebar-container]]:border-[#D7DEE7]"
     : "";
-  const roleLabel = getRoleLabel(user?.role);
   const adminNav = getAdminNavigation(user?.role);
 
   return (
@@ -254,30 +253,6 @@ export default function AdminLayout({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          <Link
-            href="/admin/profile"
-            className="mb-6 flex items-center gap-3 rounded-xl border border-border bg-card/60 p-3 shadow-sm hover:bg-muted/60 transition-colors"
-          >
-            <div className="h-11 w-11 rounded-full border border-border overflow-hidden shrink-0">
-              {user?.profileImageUrl ? (
-                <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-card flex items-center justify-center text-sm font-bold text-foreground">
-                  {initials}
-                </div>
-              )}
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-foreground truncate">
-                {displayName}
-              </h3>
-              <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">{roleLabel}</p>
-              <p className="text-[9px] text-muted-foreground/80 uppercase font-bold tracking-[0.14em] mt-1">
-                Account Settings
-              </p>
-            </div>
-          </Link>
-
           <nav className="space-y-1">
             {adminNav.map((item) => {
               const isActive = pathname === item.href;
@@ -329,30 +304,6 @@ export default function AdminLayout({
         </SidebarHeader>
 
         <SidebarContent className="sidebar-scrollbar p-4 group-data-[collapsible=icon]:overflow-y-auto">
-          {isVisuallyExpanded ? (
-            <Link
-              href="/admin/profile"
-              className="mb-4 flex items-center gap-3 rounded-xl border border-sidebar-border/60 bg-card/50 p-3 hover:bg-muted/50 transition-all duration-300 ease-out"
-            >
-              <div className="h-10 w-10 overflow-hidden rounded-full border border-sidebar-border shrink-0">
-                {user?.profileImageUrl ? (
-                  <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-neutral-100 dark:bg-neutral-800 text-xs font-bold">
-                    {initials}
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1 overflow-hidden">
-                <p className="truncate text-[11px] font-bold uppercase tracking-wider">{displayName}</p>
-                <p className="text-[9px] text-muted-foreground uppercase font-black tracking-[0.2em]">{roleLabel}</p>
-                <p className="mt-1 text-[9px] text-muted-foreground/80 uppercase font-bold tracking-[0.14em]">
-                  Account Settings
-                </p>
-              </div>
-            </Link>
-          ) : null}
-
           <SidebarGroup className="p-0">
             <SidebarMenu>
               {adminNav.map((item) => {
@@ -368,7 +319,6 @@ export default function AdminLayout({
                         "h-10 rounded-lg text-[10px] font-semibold tracking-[0.08em] transition-all duration-300 ease-out",
                         isVisuallyExpanded ? "px-3" : "justify-center px-2",
                         !isVisuallyExpanded &&
-                          !isActive &&
                           "text-white hover:bg-white/12 hover:text-white dark:text-[#111827] dark:hover:bg-[#E6EBF2] dark:hover:text-[#111827]",
                         isActive &&
                           "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
@@ -378,7 +328,7 @@ export default function AdminLayout({
                         href={item.href}
                         className={cn(
                           "flex w-full items-center",
-                          !isVisuallyExpanded && !isActive && "text-white dark:text-[#111827]",
+                          !isVisuallyExpanded && "text-white dark:text-[#111827]",
                         )}
                         onClick={() => {
                           if (count > 0) markTypeRead(item.type);
@@ -388,7 +338,7 @@ export default function AdminLayout({
                         <item.icon
                           className={cn(
                             "h-4 w-4 shrink-0",
-                            !isVisuallyExpanded && !isActive && "text-white dark:text-[#111827]",
+                            !isVisuallyExpanded && "text-white dark:text-[#111827]",
                           )}
                         />
                         <span

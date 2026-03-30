@@ -32,6 +32,7 @@ export interface AdminNavItem {
 }
 
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
+  { page: "profile", href: "/admin/profile", icon: User, label: "Account", type: "system" },
   { page: "dashboard", href: "/admin", icon: LayoutGrid, label: "Dashboard", type: "system" },
   { page: "landing-page", href: "/admin/canvas", icon: Sparkles, label: "Canvas", type: "system" },
   { page: "analytics", href: "/admin/analytics", icon: BarChart, label: "Analytics", type: "analytics" },

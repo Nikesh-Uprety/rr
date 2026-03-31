@@ -138,6 +138,7 @@ export default function ProductDetail() {
   const [showSizeGuide, setShowSizeGuide] = useState(false);
   const [isTinyPreviewMode, setIsTinyPreviewMode] = useState(false);
   const [isPreviewRailExpanded, setIsPreviewRailExpanded] = useState(true);
+  const [isMobileOrTablet, setIsMobileOrTablet] = useState(false);
   const galleryCloseTimeoutRef = useRef<number | null>(null);
   const imageTransitionTimeoutRef = useRef<number | null>(null);
   const didSwipeRef = useRef(false);
@@ -202,11 +203,23 @@ export default function ProductDetail() {
   }, []);
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1024px)");
+    const syncMobileOrTablet = () => setIsMobileOrTablet(mediaQuery.matches);
+    syncMobileOrTablet();
+    mediaQuery.addEventListener("change", syncMobileOrTablet);
+    return () => {
+      mediaQuery.removeEventListener("change", syncMobileOrTablet);
+    };
+  }, []);
+
+  useEffect(() => {
     setSelectedImageIndex(0);
     setImageMotionTick(0);
     setPreviousImageIndex(null);
-    setMainImageScrollUnlocked(allImages.length <= 1);
-  }, [product?.id, allImages.length]);
+    // Desktop UX: lock page scroll until user reaches last image via wheel.
+    // Mobile/tablet: never lock page scroll; use swipe + horizontal previews.
+    setMainImageScrollUnlocked(isMobileOrTablet || allImages.length <= 1);
+  }, [product?.id, allImages.length, isMobileOrTablet]);
 
   useEffect(() => {
     if (!isGalleryOpen) return;
@@ -225,7 +238,8 @@ export default function ProductDetail() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [allImages.length, isGalleryOpen, selectedImageIndex]);
 
-  const shouldLockMainPageScroll = !isGalleryOpen && allImages.length > 1 && !mainImageScrollUnlocked;
+  const shouldLockMainPageScroll =
+    !isMobileOrTablet && !isGalleryOpen && allImages.length > 1 && !mainImageScrollUnlocked;
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -274,6 +288,7 @@ export default function ProductDetail() {
   }, []);
 
   useEffect(() => {
+    if (isMobileOrTablet) return;
     if (isGalleryOpen || allImages.length <= 1) return;
 
     const onPageWheel = (event: WheelEvent) => {
@@ -310,7 +325,7 @@ export default function ProductDetail() {
     return () => {
       window.removeEventListener("wheel", onPageWheel);
     };
-  }, [allImages.length, isGalleryOpen, mainImageScrollUnlocked, selectedImageIndex]);
+  }, [allImages.length, isGalleryOpen, isMobileOrTablet, mainImageScrollUnlocked, selectedImageIndex]);
 
   const effectiveColor = selectedColor ?? (colors[0] ?? null);
   const effectiveSize = selectedSize;
@@ -711,63 +726,65 @@ export default function ProductDetail() {
               ) : null}
 
               {allImages.length > 1 ? (
-                <div
-                  className={`scrollbar-hide absolute left-2 top-1/2 z-40 -translate-y-1/2 overflow-y-auto rounded-md border border-white/30 bg-black/20 backdrop-blur-sm transition-all duration-200 sm:left-3 ${
-                    isTinyPreviewMode && !isPreviewRailExpanded
-                      ? "max-h-[36%] w-[26px] p-1"
-                      : "flex max-h-[72%] w-[54px] flex-col gap-1.5 p-1.5 sm:w-[70px] sm:gap-2 sm:p-2"
-                  }`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                  }}
-                >
-                  {isTinyPreviewMode && !isPreviewRailExpanded ? (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setIsPreviewRailExpanded(true);
-                      }}
-                      className="flex h-9 w-full items-center justify-center rounded-sm border border-white/40 bg-black/45 text-[10px] font-black text-white"
-                      aria-label="Expand image preview rail"
-                    >
-                      ••
-                    </button>
-                  ) : (
-                    <>
-                      {isTinyPreviewMode ? (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setIsPreviewRailExpanded(false);
-                          }}
-                          className="mb-1 flex h-6 w-full items-center justify-center rounded-sm border border-white/35 bg-black/45 text-[10px] font-black text-white/90"
-                          aria-label="Collapse image preview rail"
-                        >
-                          −
-                        </button>
-                      ) : null}
-                      {allImages.map((url, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            goToImage(i);
-                          }}
-                          className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border transition-all ${
-                            selectedImageIndex === i
-                              ? "border-white opacity-100"
-                              : "border-white/30 opacity-70 hover:opacity-100"
-                          }`}
-                        >
-                          <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
+                !isMobileOrTablet ? (
+                  <div
+                    className={`scrollbar-hide absolute left-2 top-1/2 z-40 -translate-y-1/2 overflow-y-auto rounded-md border border-white/30 bg-black/20 backdrop-blur-sm transition-all duration-200 sm:left-3 ${
+                      isTinyPreviewMode && !isPreviewRailExpanded
+                        ? "max-h-[36%] w-[26px] p-1"
+                        : "flex max-h-[72%] w-[54px] flex-col gap-1.5 p-1.5 sm:w-[70px] sm:gap-2 sm:p-2"
+                    }`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                  >
+                    {isTinyPreviewMode && !isPreviewRailExpanded ? (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setIsPreviewRailExpanded(true);
+                        }}
+                        className="flex h-9 w-full items-center justify-center rounded-sm border border-white/40 bg-black/45 text-[10px] font-black text-white"
+                        aria-label="Expand image preview rail"
+                      >
+                        ••
+                      </button>
+                    ) : (
+                      <>
+                        {isTinyPreviewMode ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setIsPreviewRailExpanded(false);
+                            }}
+                            className="mb-1 flex h-6 w-full items-center justify-center rounded-sm border border-white/35 bg-black/45 text-[10px] font-black text-white/90"
+                            aria-label="Collapse image preview rail"
+                          >
+                            −
+                          </button>
+                        ) : null}
+                        {allImages.map((url, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              goToImage(i);
+                            }}
+                            className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border transition-all ${
+                              selectedImageIndex === i
+                                ? "border-white opacity-100"
+                                : "border-white/30 opacity-70 hover:opacity-100"
+                            }`}
+                          >
+                            <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                ) : null
               ) : null}
 
               {previousImageIndex !== null && previousImageIndex !== selectedImageIndex ? (
@@ -804,6 +821,29 @@ export default function ProductDetail() {
                 }}
               />
             </div>
+
+            {isMobileOrTablet && allImages.length > 1 ? (
+              <div className="scrollbar-hide -mt-1 overflow-x-auto">
+                <div className="flex min-w-max snap-x snap-mandatory gap-2 pb-1">
+                  {allImages.map((url, i) => (
+                    <button
+                      key={`thumb-${i}`}
+                      type="button"
+                      onClick={() => goToImage(i)}
+                      className={`snap-start h-20 w-16 overflow-hidden rounded-sm border transition-all ${
+                        selectedImageIndex === i ? "border-foreground" : "border-border opacity-80"
+                      }`}
+                      aria-label={`View image ${i + 1}`}
+                    >
+                      <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-center text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                  Swipe image or tap thumbnails
+                </p>
+              </div>
+            ) : null}
           </div>
         </section>
 

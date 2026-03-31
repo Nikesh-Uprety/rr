@@ -249,10 +249,15 @@ export async function registerRoutes(
           threat: threat,
         }).catch((err) => {
           // Log but don't crash if security log insertion fails
-          logger.warn("Failed to insert security log", {
-            timestamp: new Date().toISOString(),
-            error: err.message,
-          });
+          logger.warn(
+            "Failed to insert security log",
+            {
+              timestamp: new Date().toISOString(),
+            },
+            {
+              error: err.message,
+            }
+          );
         });
       } catch (err) {
         // Synchronous errors (shouldn't happen, but just in case)

@@ -14,7 +14,7 @@ if (process.env.SENTRY_DSN) {
 import dns from "node:dns";
 dns.setDefaultResultOrder("ipv4first");
 import { RedisStore } from "connect-redis";
-import { redis } from "./redis";
+import { sessionRedis } from "./redis";
 
 import express, { NextFunction, type Request, Response } from "express";
 import session from "express-session";
@@ -97,9 +97,13 @@ app.use(
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
 // const PgSession = connectPgSimple(session);
+const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 7;
+const SESSION_TTL_SECONDS = Math.ceil(SESSION_MAX_AGE_MS / 1000);
+
 const store = new RedisStore({
-  client: redis,
+  client: sessionRedis,
   prefix: "rarenp:sess:",
+  ttl: SESSION_TTL_SECONDS,
 });
 
 if (!process.env.SESSION_SECRET) {
@@ -114,7 +118,7 @@ const sessionMiddleware = session({
   cookie: {
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 * 7,
+    maxAge: SESSION_MAX_AGE_MS,
   },
 });
 
@@ -133,7 +137,7 @@ app.use((req, res, next) => {
       {
         timestamp: new Date().toISOString(),
       },
-      err.message || "Unknown session error",
+      err,
       {
         method: req.method,
         path: req.path,
@@ -151,6 +155,12 @@ configurePassport();
 app.use(passport.initialize());
 const passportSessionMiddleware = passport.session();
 app.use((req, res, next) => {
+  // Only deserialize users for API requests.
+  // Static assets / Vite HMR requests don't need Passport session work.
+  if (!req.path.startsWith("/api")) {
+    return next();
+  }
+
   if (isAppDocumentRequest(req) && !(req as Request & { session?: unknown }).session) {
     return next();
   }
@@ -163,7 +173,7 @@ app.use((req, res, next) => {
       {
         timestamp: new Date().toISOString(),
       },
-      err.message || "Unknown passport session error",
+      err,
       {
         method: req.method,
         path: req.path,

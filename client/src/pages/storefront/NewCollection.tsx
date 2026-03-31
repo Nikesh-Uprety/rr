@@ -198,9 +198,33 @@ export default function NewCollection() {
       .map((a) => a.imageUrl as string);
 
     // Keep the hero snappy: too many 3D items can hurt mobile performance.
-    const maxItems = 7;
-    return imageAssets.length ? imageAssets.slice(0, maxItems) : ["/images/colllection.webp"];
+    const maxItems = 10;
+    
+    // If we have banner assets, use them (up to maxItems)
+    if (imageAssets.length > 0) {
+      return imageAssets.slice(0, maxItems);
+    }
+    
+    // Otherwise, use default images for a beautiful gallery
+    return [
+      "/images/collection-banner.png",
+      "/images/feature1.webp",
+      "/images/feature2.webp", 
+      "/images/feature3.webp",
+      "/images/landingpage3.webp",
+      "/images/landingpage4.webp",
+      "/images/explore.webp",
+      "/images/explore1.webp",
+      "/images/concept.webp",
+      "/images/feature_premium_1.webp",
+    ].slice(0, maxItems);
   }, [bannerAssets]);
+
+  // Debug: Log gallery images
+  useEffect(() => {
+    console.log('Hero Gallery Images:', heroGalleryImages);
+    console.log('Hero Gallery Length:', heroGalleryImages.length);
+  }, [heroGalleryImages]);
 
   useEffect(() => {
     const scriptId = "instagram-embed-script";
@@ -253,21 +277,23 @@ export default function NewCollection() {
               backgroundColor="transparent"
               itemWidth={10}
               itemHeight={18}
-              activeWidth={32}
-              gap={0.45}
-              perspective={42}
-              hoverScale={13}
-              transitionDuration={1.1}
-              rotationAngle={32}
-              zDepth={9}
+              activeWidth={40}
+              gap={0.8}
+              perspective={50}
+              hoverScale={15}
+              transitionDuration={0.3}
+              rotationAngle={35}
+              zDepth={10}
+              grayscaleStrength={1}
+              brightnessLevel={0.5}
               enableKeyboardNavigation={true}
               autoPlay={false}
             />
           </div>
 
           {/* Dark overlays for legibility (dark mode only) */}
-          <div className="absolute inset-0 hidden dark:block bg-black/35" />
-          <div className="absolute inset-0 hidden dark:block bg-gradient-to-b from-black/55 via-black/25 to-black/60" />
+          <div className="absolute inset-0 hidden dark:block bg-black/35 pointer-events-none" />
+          <div className="absolute inset-0 hidden dark:block bg-gradient-to-b from-black/55 via-black/25 to-black/60 pointer-events-none" />
           <div
             className="absolute inset-0 hidden dark:block pointer-events-none"
             style={{
@@ -276,7 +302,7 @@ export default function NewCollection() {
             }}
           />
 
-          <div className="relative z-10 container mx-auto px-4 md:px-6 h-full flex items-center">
+          <div className="relative z-10 container mx-auto px-4 md:px-6 h-full flex items-center pointer-events-none">
             <div className="w-full flex flex-col items-center text-center py-16 md:py-24">
               <motion.p
                 initial={{ opacity: 0, y: 12 }}

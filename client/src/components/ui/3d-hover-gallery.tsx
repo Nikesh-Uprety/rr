@@ -1,20 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import React, { useRef, useEffect, useState } from "react";
+const cn = (...classes: string[]) => classes.filter(Boolean).join(" ");
 
 export interface ThreeDHoverGalleryProps {
   images?: string[];
-  itemWidth?: number; // vw units (inactive)
-  itemHeight?: number; // vh units (height)
-  gap?: number; // rem units
-  perspective?: number; // vw/vh units
-  hoverScale?: number; // scale intensity
-  transitionDuration?: number; // seconds
+  itemWidth?: number;
+  itemHeight?: number;
+  gap?: number;
+  perspective?: number;
+  hoverScale?: number;
+  transitionDuration?: number;
   backgroundColor?: string;
-  grayscaleStrength?: number; // 0..1
-  brightnessLevel?: number; // 0..1
-  activeWidth?: number; // vw units
-  rotationAngle?: number; // degrees
-  zDepth?: number; // vh units
+  grayscaleStrength?: number;
+  brightnessLevel?: number;
+  activeWidth?: number;
+  rotationAngle?: number;
+  zDepth?: number;
   enableKeyboardNavigation?: boolean;
   autoPlay?: boolean;
   autoPlayDelay?: number;
@@ -25,28 +25,29 @@ export interface ThreeDHoverGalleryProps {
   onImageFocus?: (index: number, image: string) => void;
 }
 
-const DEFAULT_IMAGES = [
-  "/images/feature1.webp",
-  "/images/feature2.webp",
-  "/images/feature3.webp",
-  "/images/landingpage3.webp",
-  "/images/landingpage4.webp",
-].filter(Boolean);
-
-export default function ThreeDHoverGallery({
-  images = DEFAULT_IMAGES,
-  itemWidth = 12,
-  itemHeight = 22,
-  gap = 0.4,
-  perspective = 35,
-  hoverScale = 10,
+const ThreeDHoverGallery: React.FC<ThreeDHoverGalleryProps> = ({
+  images = [
+    "https://images.pexels.com/photos/26797335/pexels-photo-26797335/free-photo-of-scenic-view-of-mountains.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+    "https://images.pexels.com/photos/12194487/pexels-photo-12194487.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+    "https://images.pexels.com/photos/32423809/pexels-photo-32423809/free-photo-of-aerial-view-of-kayaking-at-robberg-south-africa.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+    "https://images.pexels.com/photos/32296519/pexels-photo-32296519/free-photo-of-rocky-coastline-of-cape-point-with-turquoise-waters.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+    "https://images.pexels.com/photos/32396739/pexels-photo-32396739/free-photo-of-serene-motorcycle-ride-through-bamboo-grove.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+    "https://images.pexels.com/photos/32304900/pexels-photo-32304900/free-photo-of-scenic-view-of-cape-town-s-twelve-apostles.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+    "https://images.pexels.com/photos/32437034/pexels-photo-32437034/free-photo-of-fisherman-holding-freshly-caught-red-drum-fish.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+    "https://images.pexels.com/photos/32469847/pexels-photo-32469847/free-photo-of-deer-drinking-from-natural-water-source-in-wilderness.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+  ],
+  itemWidth = 12, // Increased default for more width
+  itemHeight = 20, // Increased default for more height
+  gap = 1.2, // Increased default for more spacing between items
+  perspective = 50, // Increased default for a stronger 3D effect
+  hoverScale = 15, // Increased default for more pronounced hover scale
   transitionDuration = 1.25,
   backgroundColor,
   grayscaleStrength = 1,
   brightnessLevel = 0.5,
-  activeWidth = 28,
+  activeWidth = 45, // Increased default for wider active item
   rotationAngle = 35,
-  zDepth = 8.5,
+  zDepth = 10, // Increased default for deeper Z-axis effect
   enableKeyboardNavigation = true,
   autoPlay = false,
   autoPlayDelay = 3000,
@@ -55,144 +56,174 @@ export default function ThreeDHoverGallery({
   onImageClick,
   onImageHover,
   onImageFocus,
-}: ThreeDHoverGalleryProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const intervalRef = useRef<number | null>(null);
+  const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
 
-  const safeImages = useMemo(() => (Array.isArray(images) ? images.filter(Boolean) : []), [images]);
-
+  // Effect for auto-play functionality
   useEffect(() => {
-    if (!autoPlay) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = null;
-      return;
+    if (autoPlay && images.length > 0) {
+      // Clear any existing interval to prevent multiple intervals running
+      if (autoPlayRef.current) {
+        clearInterval(autoPlayRef.current);
+      }
+      autoPlayRef.current = setInterval(() => {
+        setActiveIndex((prev) => {
+          // Calculate the next index, looping back to the start if at the end
+          const nextIndex = prev === null ? 0 : (prev + 1) % images.length;
+          return nextIndex;
+        });
+      }, autoPlayDelay);
+
+      // Cleanup function to clear the interval when the component unmounts or dependencies change
+      return () => {
+        if (autoPlayRef.current) {
+          clearInterval(autoPlayRef.current);
+        }
+      };
     }
-    if (safeImages.length === 0) return;
-
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = window.setInterval(() => {
-      setActiveIndex((prev) => {
-        const next = prev === null ? 0 : (prev + 1) % safeImages.length;
-        return next;
-      });
-    }, autoPlayDelay);
-
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    };
-  }, [autoPlay, autoPlayDelay, safeImages.length]);
-
-  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
-    if (!enableKeyboardNavigation) return;
-
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      const img = safeImages[index];
-      if (!img) return;
-      setActiveIndex(index);
-      onImageClick?.(index, img);
-      return;
+    // If autoPlay is false or no images, ensure interval is cleared
+    if (!autoPlay && autoPlayRef.current) {
+      clearInterval(autoPlayRef.current);
+      autoPlayRef.current = null;
     }
+  }, [autoPlay, autoPlayDelay, images.length]); // Dependencies for the effect
 
-    if (e.key === "ArrowLeft") {
-      e.preventDefault();
-      const prev = index > 0 ? index - 1 : safeImages.length - 1;
-      (containerRef.current?.children[prev] as HTMLElement | undefined)?.focus?.();
-      return;
-    }
+  // Handler for image click event
+  const handleImageClick = (index: number, image: string) => {
+    // Toggle active state: if clicked item is already active, deactivate it
+    setActiveIndex(activeIndex === index ? null : index);
+    onImageClick?.(index, image); // Call optional onImageClick prop
+  };
 
-    if (e.key === "ArrowRight") {
-      e.preventDefault();
-      const next = index < safeImages.length - 1 ? index + 1 : 0;
-      (containerRef.current?.children[next] as HTMLElement | undefined)?.focus?.();
-      return;
+  // Handler for image hover (mouse enter) event
+  const handleImageHover = (index: number, image: string) => {
+    // Set active index immediately on hover regardless of autoPlay
+    setActiveIndex(index);
+    onImageHover?.(index, image); // Call optional onImageHover prop
+  };
+
+  // Handler for image leave (mouse leave) event
+  const handleImageLeave = () => {
+    // Always clear active index on leave
+    setActiveIndex(null);
+  };
+
+  // Handler for image focus event (e.g., via keyboard navigation)
+  const handleImageFocus = (index: number, image: string) => {
+    setFocusedIndex(index); // Set the focused index
+    onImageFocus?.(index, image); // Call optional onImageFocus prop
+  };
+
+  // Handler for keyboard navigation
+  const handleKeyDown = (event: React.KeyboardEvent, index: number) => {
+    if (!enableKeyboardNavigation) return; // Exit if keyboard navigation is disabled
+
+    switch (event.key) {
+      case "Enter":
+      case " ": // Space key
+        event.preventDefault(); // Prevent default scroll behavior for space key
+        handleImageClick(index, images[index]); // Simulate click
+        break;
+      case "ArrowLeft":
+        event.preventDefault(); // Prevent default scroll behavior
+        // Calculate previous index, looping to the end if at the beginning
+        const prevIndex = index > 0 ? index - 1 : images.length - 1;
+        // Focus the previous element if it exists
+        (containerRef.current?.children[prevIndex] as HTMLElement)?.focus();
+        break;
+      case "ArrowRight":
+        event.preventDefault(); // Prevent default scroll behavior
+        // Calculate next index, looping to the start if at the end
+        const nextIndex = index < images.length - 1 ? index + 1 : 0;
+        // Focus the next element if it exists
+        (containerRef.current?.children[nextIndex] as HTMLElement)?.focus();
+        break;
     }
   };
 
+  // Function to determine the style for each gallery item
   const getItemStyle = (index: number): React.CSSProperties => {
     const isActive = activeIndex === index;
     const isFocused = focusedIndex === index;
 
-    // Clamp prevents vw/vh from exploding on extremely small/large screens.
-    const inactiveW = `clamp(76px, ${itemWidth}vw, 220px)`;
-    const activeW = `clamp(140px, ${activeWidth}vw, 420px)`;
-    const h = `clamp(220px, ${itemHeight}vh, 520px)`;
-
-    const z = `translateZ(${zDepth}vh)`;
-    const scale = `scale(${1 + hoverScale / 250})`;
-    const rotateY = `rotateY(${rotationAngle}deg)`;
+    // A small base width to ensure items are always visible, especially on very small screens
+    const baseWidthPx = 10;
 
     return {
-      width: isActive ? activeW : inactiveW,
-      height: h,
-      borderRadius: "0.5rem",
-      backgroundImage: safeImages[index] ? `url(${safeImages[index]})` : undefined,
-      backgroundSize: "cover",
-      backgroundPosition: "center",
-      backgroundColor: backgroundColor ?? "transparent",
-      cursor: "pointer",
+      // Width calculation: active item gets activeWidth, others get itemWidth + a base pixel width
+      width: isActive
+        ? `${activeWidth}vw` 
+        : `calc(${itemWidth}vw + ${baseWidthPx}px)`,
+      // Height calculation: uses a combination of viewport width and height units for responsiveness
+      height: `calc(${itemHeight}vw + ${itemHeight}vh)`,
+      backgroundImage: `url(${images[index]})`, // Set background image
+      backgroundSize: "cover", // Cover the entire area
+      backgroundPosition: "center", // Center the image
+      backgroundColor, // Fallback background color
+      cursor: "pointer", // Indicate interactivity
+      // Apply grayscale and brightness filters if not active or focused
       filter:
         isActive || isFocused
-          ? "none"
+          ? "inherit"
           : `grayscale(${grayscaleStrength}) brightness(${brightnessLevel})`,
-      transform: isActive ? `${z} ${rotateY} ${scale}` : "translateZ(0px)",
-      transition: `transform ${transitionDuration}s cubic-bezier(.1,.7,0,1), filter ${transitionDuration}s cubic-bezier(.1,.7,0,1), width ${transitionDuration}s cubic-bezier(.1,.7,0,1)`,
-      willChange: "transform, filter, width",
-      outline: isFocused ? "2px solid #3b82f6" : "none",
-      outlineOffset: "2px",
+      // Apply 3D transform for active item, and transitions for smooth animation
+      transform: isActive
+        ? `translateZ(calc(${hoverScale}vw + ${hoverScale}vh))` 
+        : "none",
+      transition: `transform 0.3s cubic-bezier(.1, .7, 0, 1), filter 0.3s cubic-bezier(.1, .7, 0, 1), width 0.3s cubic-bezier(.1, .7, 0, 1)`,
+      willChange: "transform, filter, width", // Optimize for animation performance
+      zIndex: isActive ? 100 : "auto", // Bring active item to front
+      margin: isActive ? "0 0.45vw" : "0", // Add slight margin for active item
+      outline: isFocused ? "2px solid #3b82f6" : "none", // Outline for focused item
+      outlineOffset: "2px", // Offset for the outline
+      borderRadius: "0.5rem", // Apply rounded corners to items
     };
   };
 
   return (
     <div
-      className={cn("relative w-full h-full overflow-hidden", className)}
+      className={cn(
+        "flex items-center justify-center min-h-[550px] w-full overflow-hidden bg-background",
+        className || ''
+      )}
       style={backgroundColor ? { backgroundColor, ...style } : style}
     >
-      {safeImages.length === 0 ? null : (
-        <div
-          ref={containerRef}
-          className="h-full w-full flex items-center justify-center"
-          style={{
-            perspective: `calc(${perspective}vw + ${perspective}vh)`,
-            gap: `${gap}rem`,
-          }}
-        >
-          {safeImages.map((image, index) => {
-            const isActive = activeIndex === index;
-            return (
-              <div
-                key={image + index}
-                tabIndex={enableKeyboardNavigation ? 0 : -1}
-                role="button"
-                aria-label={`Image ${index + 1} of ${safeImages.length}`}
-                aria-pressed={isActive}
-                style={getItemStyle(index)}
-                onClick={() => {
-                  setActiveIndex(index);
-                  onImageClick?.(index, image);
-                }}
-                onMouseEnter={() => {
-                  if (!autoPlay) setActiveIndex(index);
-                  onImageHover?.(index, image);
-                }}
-                onMouseLeave={() => {
-                  if (!autoPlay) setActiveIndex(null);
-                }}
-                onFocus={() => {
-                  setFocusedIndex(index);
-                  onImageFocus?.(index, image);
-                }}
-                onBlur={() => setFocusedIndex(null)}
-                onKeyDown={(e) => handleKeyDown(e, index)}
-              />
-            );
-          })}
-        </div>
-      )}
+      <div
+        ref={containerRef}
+        // Inner flex container for the images, centered and taking full width.
+        // Applies the 3D perspective and gap between items.
+        className="flex justify-center items-center w-full"
+        style={{
+          perspective: `calc(${perspective}vw + ${perspective}vh)`,
+          gap: `${gap}rem`,
+          padding: '1rem 0',
+        }}
+      >
+        {images.map((image, index) => (
+          <div
+            key={index}
+            // Individual image item, applies styling, interactivity, and accessibility attributes.
+            className="relative will-change-transform rounded-lg shadow-lg hover:shadow-xl" // Enhanced hover area
+            style={getItemStyle(index)}
+            tabIndex={enableKeyboardNavigation ? 0 : -1} // Make div focusable if keyboard navigation is enabled
+            onClick={() => handleImageClick(index, image)}
+            onMouseEnter={() => handleImageHover(index, image)}
+            onMouseLeave={handleImageLeave}
+            onFocus={() => handleImageFocus(index, image)}
+            onBlur={() => setFocusedIndex(null)} // Clear focused state on blur
+            onKeyDown={(e) => handleKeyDown(e, index)}
+            role="button" // Indicate that this div acts as a button
+            aria-label={`Image ${index + 1} of ${images.length}`} // Accessible label
+            aria-pressed={activeIndex === index} // Indicate if the button is "pressed" (active)
+          />
+        ))}
+      </div>
     </div>
   );
-}
+};
+
+export default ThreeDHoverGallery;
 

@@ -1779,11 +1779,17 @@ export async function registerRoutes(
     }
   });
 
-  // Serve all uploads (including nested categories)
-  app.use("/uploads", express.static(UPLOADS_DIR));
-  
   // Backwards compatibility for /api/uploads/
-  app.use("/api/uploads", express.static(UPLOADS_DIR));
+  app.use(
+    "/api/uploads",
+    express.static(UPLOADS_DIR, {
+      etag: true,
+      maxAge: 1000 * 60 * 60, // 1 hour
+      setHeaders: (res) => {
+        res.setHeader("Cache-Control", "public, max-age=3600");
+      },
+    }),
+  );
 
   // ── Site Assets (Landing Page Images) ──────────────────────────────
   const validSiteAssetSections = [

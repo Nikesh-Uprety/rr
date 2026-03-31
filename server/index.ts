@@ -34,7 +34,6 @@ import os from "node:os";
 
 
 const app = express();
-app.disable("etag");
 
 // UPLOADS PERSISTENCE NOTE:
 // Uploaded images are written to `UPLOADS_DIR`. On Railway, mount a persistent volume
@@ -351,7 +350,17 @@ async function ensureE2ETestState() {
   // Serve uploaded files - MUST be before registerRoutes and vite
   const path = await import("path");
   const uploadsPath = path.resolve(UPLOADS_DIR);
-  app.use("/uploads", express.static(uploadsPath));
+  app.use(
+    "/uploads",
+    express.static(uploadsPath, {
+      etag: true,
+      maxAge: 1000 * 60 * 60, // 1 hour
+      setHeaders: (res) => {
+        // Uploads can change (same URL might be replaced), so avoid immutable caching.
+        res.setHeader("Cache-Control", "public, max-age=3600");
+      },
+    }),
+  );
 
   await registerRoutes(httpServer, app);
 

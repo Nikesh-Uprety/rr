@@ -470,6 +470,16 @@ function RouterShell({
   const [location] = useLocation();
   const pathname = location.split("?")[0];
 
+  // Ensure product pages always open at the top.
+  // (When navigating from a scrolled position on Home/Collections, browsers keep scrollY.)
+  useEffect(() => {
+    if (!pathname.startsWith("/product/")) return;
+    // Schedule after route render so we don't fight layout.
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+    });
+  }, [pathname]);
+
   useEffect(() => {
     if (routeTransitioning) {
       setRouteTransitioning(false);

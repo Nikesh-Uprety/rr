@@ -264,29 +264,46 @@ export default function Home() {
 
   // Finish pre-loader only when data is ready (Hydration-First)
   useEffect(() => {
-    const canRevealPage = isCanvasPreview
-      ? !pageConfigLoading
-      : isNewArrivalsSuccess && !pageConfigLoading;
+    // Don't block the whole page on product queries/assets.
+    // Reveal once the page config is ready; the rest can stream in progressively.
+    const canRevealPage = !pageConfigLoading;
 
     if (canRevealPage) {
       if (typeof (window as any).finishLoading === 'function') {
         (window as any).finishLoading();
       }
     }
-  }, [isCanvasPreview, isNewArrivalsSuccess, pageConfigLoading]);
+  }, [pageConfigLoading]);
 
   // Preload static campaign images
   useEffect(() => {
-    const assetsToWarm = isCanvasPreview
-      ? [heroImages[0], campaignBannerImage].filter(Boolean)
-      : [...heroImages, ...lifestyleImages];
+    // Avoid preloading large image sets on first paint (can easily add seconds on slow networks).
+    // Warm only the first hero + campaign image, and defer the rest until the browser is idle.
+    const initial = [heroImages[0], campaignBannerImage].filter(Boolean) as string[];
 
-    assetsToWarm.forEach((src: string) => {
+    const warm = (src: string) => {
       if (!src || src.startsWith("http")) return;
       const img = new Image();
+      img.decoding = "async";
       img.src = src;
-    });
-  }, [campaignBannerImage, heroImages, isCanvasPreview, lifestyleImages]);
+    };
+
+    initial.forEach(warm);
+
+    const deferred = () => {
+      const rest = Array.from(new Set([...heroImages.slice(1), ...lifestyleImages])).filter(Boolean) as string[];
+      rest.forEach(warm);
+    };
+
+    if (typeof window === "undefined") return;
+    if ("requestIdleCallback" in window) {
+      const id = (window as any).requestIdleCallback(deferred, { timeout: 1500 });
+      return () => (window as any).cancelIdleCallback?.(id);
+    }
+
+    const t = setTimeout(deferred, 900);
+    return () => clearTimeout(t);
+  }, [campaignBannerImage, heroImages, lifestyleImages]);
 
   const goToSlide = useCallback((index: number) => {
     if (isTransitioning) return;

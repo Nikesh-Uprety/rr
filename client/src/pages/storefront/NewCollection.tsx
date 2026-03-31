@@ -6,6 +6,7 @@ import { ArrowUpRight } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { motion } from "framer-motion";
 import { apiRequest } from "@/lib/queryClient";
+import ThreeDHoverGallery from "@/components/ui/3d-hover-gallery";
 
 type SiteAsset = {
   id: string;
@@ -190,7 +191,16 @@ export default function NewCollection() {
       });
   }, [products]);
 
-  const bannerUrl = "/images/colllection.webp";
+  const heroGalleryImages = useMemo(() => {
+    const imageAssets = (bannerAssets ?? [])
+      .filter((a) => a?.active && a?.imageUrl)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+      .map((a) => a.imageUrl as string);
+
+    // Keep the hero snappy: too many 3D items can hurt mobile performance.
+    const maxItems = 7;
+    return imageAssets.length ? imageAssets.slice(0, maxItems) : ["/images/colllection.webp"];
+  }, [bannerAssets]);
 
   useEffect(() => {
     const scriptId = "instagram-embed-script";
@@ -236,13 +246,24 @@ export default function NewCollection() {
       {/* Hero Banner — Full-bleed background image + Text */}
       <section className="relative w-full overflow-hidden bg-neutral-950">
         <div className="relative w-full min-h-[46vh] md:min-h-[62vh] lg:min-h-[70vh]">
-          <img
-            src={bannerUrl}
-            alt="Collection banner"
-            className="absolute inset-0 w-full h-full object-cover object-top"
-            loading="eager"
-            fetchPriority="high"
-          />
+          <div className="absolute inset-0">
+            <ThreeDHoverGallery
+              images={heroGalleryImages}
+              className="h-full w-full"
+              backgroundColor="transparent"
+              itemWidth={10}
+              itemHeight={18}
+              activeWidth={32}
+              gap={0.45}
+              perspective={42}
+              hoverScale={13}
+              transitionDuration={1.1}
+              rotationAngle={32}
+              zDepth={9}
+              enableKeyboardNavigation={true}
+              autoPlay={false}
+            />
+          </div>
 
           {/* Dark overlays for legibility (dark mode only) */}
           <div className="absolute inset-0 hidden dark:block bg-black/35" />

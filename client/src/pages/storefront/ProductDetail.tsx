@@ -141,6 +141,8 @@ export default function ProductDetail() {
   const [isMobileOrTablet, setIsMobileOrTablet] = useState(false);
   const galleryCloseTimeoutRef = useRef<number | null>(null);
   const imageTransitionTimeoutRef = useRef<number | null>(null);
+  const modalRollTimeoutsRef = useRef<number[]>([]);
+  const modalRollingRef = useRef(false);
   const didSwipeRef = useRef(false);
   const galleryWheelLockRef = useRef(false);
   const pageWheelLockRef = useRef(false);
@@ -216,9 +218,9 @@ export default function ProductDetail() {
     setSelectedImageIndex(0);
     setImageMotionTick(0);
     setPreviousImageIndex(null);
-    // Desktop UX: lock page scroll until user reaches last image via wheel.
-    // Mobile/tablet: never lock page scroll; use swipe + horizontal previews.
-    setMainImageScrollUnlocked(isMobileOrTablet || allImages.length <= 1);
+    // Never hard-lock the page scroll. Desktop gets "scroll on image to change"
+    // (scoped to the image viewport). Mobile/tablet uses swipe + thumbnails.
+    setMainImageScrollUnlocked(true);
   }, [product?.id, allImages.length, isMobileOrTablet]);
 
   useEffect(() => {
@@ -238,8 +240,7 @@ export default function ProductDetail() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [allImages.length, isGalleryOpen, selectedImageIndex]);
 
-  const shouldLockMainPageScroll =
-    !isMobileOrTablet && !isGalleryOpen && allImages.length > 1 && !mainImageScrollUnlocked;
+  const shouldLockMainPageScroll = false;
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -247,7 +248,7 @@ export default function ProductDetail() {
     const previousBodyOverscroll = document.body.style.overscrollBehaviorY;
     const previousHtmlOverscroll = document.documentElement.style.overscrollBehaviorY;
 
-    const shouldLockOverflow = isGalleryOpen || shouldLockMainPageScroll;
+    const shouldLockOverflow = isGalleryOpen;
     document.body.style.overflow = shouldLockOverflow ? "hidden" : "";
     document.documentElement.style.overflow = shouldLockOverflow ? "hidden" : "";
     document.body.style.overscrollBehaviorY = shouldLockOverflow ? "none" : "";
@@ -284,17 +285,21 @@ export default function ProductDetail() {
       if (imageTransitionTimeoutRef.current) {
         window.clearTimeout(imageTransitionTimeoutRef.current);
       }
+      if (modalRollTimeoutsRef.current.length) {
+        modalRollTimeoutsRef.current.forEach((t) => window.clearTimeout(t));
+        modalRollTimeoutsRef.current = [];
+      }
     };
   }, []);
 
   useEffect(() => {
     if (isMobileOrTablet) return;
     if (isGalleryOpen || allImages.length <= 1) return;
+    const el = mainImageViewportRef.current;
+    if (!el) return;
 
-    const onPageWheel = (event: WheelEvent) => {
-      if (mainImageScrollUnlocked) return;
-
-      // While locked, never allow the page itself to scroll.
+    const onWheel = (event: WheelEvent) => {
+      // Only hijack scroll when the user is on the image viewport.
       event.preventDefault();
       event.stopPropagation();
 
@@ -308,24 +313,17 @@ export default function ProductDetail() {
       }, 130);
 
       if (delta > 0) {
-        if (selectedImageIndex < allImages.length - 1) {
-          goToImage(selectedImageIndex + 1, { direction: "down", distance: 1 });
-        } else if (!mainImageScrollUnlocked) {
-          setMainImageScrollUnlocked(true);
-        }
+        goToImage(selectedImageIndex + 1, { direction: "down", distance: 1 });
         return;
       }
-
-      if (selectedImageIndex > 0) {
-        goToImage(selectedImageIndex - 1, { direction: "up", distance: 1 });
-      }
+      goToImage(selectedImageIndex - 1, { direction: "up", distance: 1 });
     };
 
-    window.addEventListener("wheel", onPageWheel, { passive: false });
+    el.addEventListener("wheel", onWheel, { passive: false });
     return () => {
-      window.removeEventListener("wheel", onPageWheel);
+      el.removeEventListener("wheel", onWheel);
     };
-  }, [allImages.length, isGalleryOpen, isMobileOrTablet, mainImageScrollUnlocked, selectedImageIndex]);
+  }, [allImages.length, isGalleryOpen, isMobileOrTablet, selectedImageIndex]);
 
   const effectiveColor = selectedColor ?? (colors[0] ?? null);
   const effectiveSize = selectedSize;
@@ -466,6 +464,51 @@ export default function ProductDetail() {
     }, motionDuration + 30);
   };
 
+  const goToImageInModal = (targetIndex: number) => {
+    if (!allImages.length) return;
+    if (modalRollingRef.current) return;
+
+    const currentIndex = selectedImageIndex;
+    const next = (targetIndex + allImages.length) % allImages.length;
+    if (next === currentIndex) return;
+
+    const direction: "down" | "up" = next > currentIndex ? "down" : "up";
+    const distance = Math.abs(next - currentIndex);
+
+    // Instant switch for adjacent changes (no fade, no roll).
+    if (distance <= 1) {
+      setPreviousImageIndex(null);
+      setImageMotionDurationMs(0);
+      setSelectedImageIndex(next);
+      return;
+    }
+
+    // Roulette roll for big jumps: quickly step through intermediate images.
+    modalRollingRef.current = true;
+    modalRollTimeoutsRef.current.forEach((t) => window.clearTimeout(t));
+    modalRollTimeoutsRef.current = [];
+
+    const step = direction === "down" ? 1 : -1;
+    const totalSteps = distance;
+    const perStepMs = 85;
+
+    for (let k = 1; k <= totalSteps; k++) {
+      const t = window.setTimeout(() => {
+        const intermediate = (currentIndex + step * k + allImages.length) % allImages.length;
+        setPreviousImageIndex(null);
+        setImageMotionDirection(direction);
+        setImageMotionDurationMs(140);
+        setImageMotionTick((prev) => prev + 1);
+        setSelectedImageIndex(intermediate);
+
+        if (k === totalSteps) {
+          modalRollingRef.current = false;
+        }
+      }, perStepMs * k);
+      modalRollTimeoutsRef.current.push(t);
+    }
+  };
+
   const goToNextImage = () => {
     goToImage(selectedImageIndex + 1, { direction: "down", distance: 1 });
   };
@@ -558,6 +601,14 @@ export default function ProductDetail() {
         @keyframes accordion-fade-down {
           0% { opacity: 0; transform: translateY(-6px); }
           100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes modal-image-enter-down {
+          0% { transform: translateY(-40px); }
+          100% { transform: translateY(0); }
+        }
+        @keyframes modal-image-enter-up {
+          0% { transform: translateY(40px); }
+          100% { transform: translateY(0); }
         }
       `}</style>
       <Helmet>
@@ -722,6 +773,16 @@ export default function ProductDetail() {
               {product.stock === 0 ? (
                 <div className="absolute left-3 top-3 z-20 bg-black/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white lg:left-4 lg:top-4 lg:px-4 lg:py-2">
                   Out of Stock
+                </div>
+              ) : null}
+
+              {!isMobileOrTablet && allImages.length > 1 ? (
+                <div className="absolute bottom-3 right-3 z-30 flex items-center gap-2 rounded-sm border border-white/20 bg-black/35 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white/90 backdrop-blur-sm">
+                  <span>
+                    {String(selectedImageIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
+                  </span>
+                  <span className="h-3 w-px bg-white/25" />
+                  <span className="text-white/80">Scroll to view</span>
                 </div>
               ) : null}
 
@@ -1079,15 +1140,21 @@ export default function ProductDetail() {
 
       {isGalleryOpen && (
         <div
-          className={`fixed inset-0 z-[80] flex items-center justify-center bg-black/35 backdrop-blur-[1.5px] transition-opacity duration-200 ${
+          className={`fixed inset-0 z-[80] flex items-center justify-center bg-white transition-[opacity] duration-200 ${
             isGalleryVisible ? "opacity-100" : "opacity-0"
           }`}
-          onClick={closeGallery}
+          onClick={() => {
+            // Cancel any queued roulette roll steps on close.
+            modalRollingRef.current = false;
+            modalRollTimeoutsRef.current.forEach((t) => window.clearTimeout(t));
+            modalRollTimeoutsRef.current = [];
+            closeGallery();
+          }}
           onWheel={handleGalleryWheel}
         >
           <button
             type="button"
-            className="absolute right-5 top-5 z-50 flex h-11 w-11 items-center justify-center rounded-full bg-white/85 text-black transition-colors hover:bg-white"
+            className="absolute right-5 top-5 z-50 flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white text-black shadow-sm transition-colors hover:bg-neutral-50"
             onClick={(e) => {
               e.stopPropagation();
               closeGallery();
@@ -1098,11 +1165,11 @@ export default function ProductDetail() {
           </button>
 
           <div
-            className={`relative flex h-full w-full items-center justify-center px-6 pb-24 pt-8 transition-transform duration-200 lg:px-14 lg:pb-28 ${
-              isGalleryVisible ? "scale-100" : "scale-95"
+            className={`relative flex h-full w-full items-stretch justify-center px-4 py-6 transition-transform duration-200 lg:px-10 ${
+              isGalleryVisible ? "scale-100" : "scale-[0.985]"
             }`}
           >
-            <div className="absolute left-5 top-6 z-40 text-[10px] font-bold uppercase tracking-[0.2em] text-white/85">
+            <div className="absolute left-5 top-5 z-40 text-[10px] font-bold uppercase tracking-[0.2em] text-black/70">
               {String(selectedImageIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
             </div>
 
@@ -1114,7 +1181,7 @@ export default function ProductDetail() {
                     event.stopPropagation();
                     goToPreviousImage();
                   }}
-                  className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white transition-colors hover:bg-black/45 lg:left-8 lg:h-12 lg:w-12"
+                  className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/90 text-black shadow-sm transition-colors hover:bg-white lg:left-6 lg:h-12 lg:w-12"
                   aria-label="Previous image"
                 >
                   <ChevronLeft className="w-5 h-5" />
@@ -1125,7 +1192,7 @@ export default function ProductDetail() {
                     event.stopPropagation();
                     goToNextImage();
                   }}
-                  className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/25 text-white transition-colors hover:bg-black/45 lg:right-8 lg:h-12 lg:w-12"
+                  className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/90 text-black shadow-sm transition-colors hover:bg-white lg:right-6 lg:h-12 lg:w-12"
                   aria-label="Next image"
                 >
                   <ChevronRight className="w-5 h-5" />
@@ -1133,45 +1200,64 @@ export default function ProductDetail() {
               </>
             )}
 
-            <div
-              className="relative h-full w-full max-w-[min(92vw,1600px)]"
-              onClick={(event) => event.stopPropagation()}
-            >
-              {allImages.map((url, idx) => (
-                <img
-                  key={`modal-${url}-${idx}`}
-                  src={url || ""}
-                  alt={`${product.name} fullscreen view ${idx + 1}`}
-                  loading="lazy"
-                  className={`absolute inset-0 h-full w-full object-contain transition-[opacity,transform] duration-300 ease-out ${
-                    selectedImageIndex === idx ? "translate-y-0 opacity-100" : "-translate-y-5 opacity-0"
-                  }`}
-                />
-              ))}
-            </div>
-
-            {allImages.length > 1 ? (
-              <div className="scrollbar-hide absolute bottom-6 left-1/2 z-30 w-[min(88vw,860px)] -translate-x-1/2 overflow-x-auto">
-                <div className="flex min-w-max items-center gap-2 rounded-md border border-white/20 bg-black/25 p-2 backdrop-blur-sm">
-                  {allImages.map((url, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        goToImage(i);
-                      }}
-                      className={`h-16 w-12 overflow-hidden rounded-sm border transition-all lg:h-20 lg:w-16 ${
-                        selectedImageIndex === i ? "border-white opacity-100" : "border-white/30 opacity-70 hover:opacity-100"
-                      }`}
-                      aria-label={`Open image ${i + 1}`}
-                    >
-                      <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
-                    </button>
-                  ))}
+            <div className="flex h-full w-full max-w-[min(96vw,1800px)] items-stretch gap-4 lg:gap-6">
+              {allImages.length > 1 ? (
+                <div
+                  className="scrollbar-hide hidden w-[84px] shrink-0 overflow-y-auto rounded-md border border-black/10 bg-white/70 p-2 lg:block"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="flex flex-col gap-2">
+                    {allImages.map((url, i) => (
+                      <button
+                        key={`modal-rail-${i}`}
+                        type="button"
+                        onClick={() => {
+                          goToImageInModal(i);
+                        }}
+                        className={`aspect-[4/5] w-full overflow-hidden rounded-sm border transition-all ${
+                          selectedImageIndex === i
+                            ? "border-black/50 opacity-100"
+                            : "border-black/10 opacity-70 hover:opacity-100"
+                        }`}
+                        aria-label={`Open image ${i + 1}`}
+                      >
+                        <img
+                          src={url || ""}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
                 </div>
+              ) : null}
+
+              <div
+                className="relative min-w-0 flex-1 overflow-hidden rounded-md border border-black/10 bg-white"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <img
+                  key={`modal-current-${selectedImageIndex}-${imageMotionTick}`}
+                  src={allImages[selectedImageIndex] || ""}
+                  alt={`${product.name} fullscreen view ${selectedImageIndex + 1}`}
+                  loading="eager"
+                  decoding="async"
+                  className="absolute inset-0 h-full w-full object-contain"
+                  style={{
+                    // No fade. Instant preview, with optional roulette "roll" motion.
+                    animation:
+                      imageMotionDurationMs > 0
+                        ? imageMotionDirection === "down"
+                          ? `modal-image-enter-down ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                          : `modal-image-enter-up ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                        : "none",
+                    imageRendering: "auto",
+                  }}
+                />
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
       )}

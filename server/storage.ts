@@ -42,6 +42,7 @@ import {
   type InsertSiteAsset,
 } from "@shared/schema";
 import { and, or, asc, desc, eq, gte, ilike, inArray, isNull, ne, sql } from "drizzle-orm";
+import { meiliClient, PRODUCT_INDEX } from "./lib/meilisearch";
 import { broadcastNotification } from "./websocket";
 
 const ARCHIVED_PRODUCT_CATEGORY = "__archived__";
@@ -440,6 +441,32 @@ export class PgStorage implements IStorage {
     const limit = filters?.limit && filters.limit > 0 ? filters.limit : 24;
     const offset = (page - 1) * limit;
 
+    // Use MeiliSearch if search term is present and client is available
+    if (filters?.search && meiliClient) {
+      try {
+        const index = meiliClient.index(PRODUCT_INDEX);
+        const searchRes = await index.search(filters.search, {
+          limit,
+          offset,
+          filter: filters.category ? `category = "${filters.category}"` : undefined,
+        });
+
+        if (searchRes.hits.length > 0) {
+          const hitIds = searchRes.hits.map((h: any) => h.id);
+          // Fetch full product data from DB for the hits to ensure data consistency
+          // This keeps the return type as Product[] with all fields including internal ones
+          return db
+            .select()
+            .from(products)
+            .where(inArray(products.id, hitIds))
+            .orderBy(asc(products.ranking));
+        }
+        return []; // No hits in MeiliSearch
+      } catch (err) {
+        console.warn("[MeiliSearch] Search failed, falling back to Database:", err);
+      }
+    }
+
     const conditions = [];
 
     if (filters?.category) {
@@ -477,29 +504,7 @@ export class PgStorage implements IStorage {
       conditions.length > 0 ? and(...conditions) : undefined;
 
     const rows = await db
-      .select({
-        id: products.id,
-        name: products.name,
-        shortDetails: products.shortDetails,
-        description: products.description,
-        price: products.price,
-        costPrice: products.costPrice,
-        sku: products.sku,
-        imageUrl: products.imageUrl,
-        galleryUrls: products.galleryUrls,
-        category: products.category,
-        stock: products.stock,
-        colorOptions: products.colorOptions,
-        sizeOptions: products.sizeOptions,
-        ranking: products.ranking,
-        originalPrice: products.originalPrice,
-        salePercentage: products.salePercentage,
-        saleActive: products.saleActive,
-        homeFeatured: products.homeFeatured,
-        homeFeaturedImageIndex: products.homeFeaturedImageIndex,
-        createdAt: products.createdAt,
-        updatedAt: products.updatedAt,
-      })
+      .select()
       .from(products)
       .where(whereClause)
       .orderBy(asc(products.ranking), desc(products.createdAt))
@@ -590,6 +595,23 @@ export class PgStorage implements IStorage {
         updatedAt: products.updatedAt,
       });
 
+    // Sync to MeiliSearch
+    if (meiliClient) {
+      meiliClient.index(PRODUCT_INDEX).addDocuments([{
+        id: row.id,
+        name: row.name,
+        shortDetails: row.shortDetails,
+        description: row.description,
+        price: parseFloat(row.price.toString()),
+        imageUrl: row.imageUrl,
+        category: row.category,
+        stock: row.stock,
+        saleActive: row.saleActive,
+        salePercentage: row.salePercentage,
+        createdAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
+      }]).catch(err => console.warn("[MeiliSearch] Sync failed for new product:", err));
+    }
+
     // Create a notification for the new product
     await this.createAdminNotification({
       title: "New Product Added",
@@ -628,29 +650,23 @@ export class PgStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(products.id, id))
-      .returning({
-        id: products.id,
-        name: products.name,
-        shortDetails: products.shortDetails,
-        description: products.description,
-        price: products.price,
-        costPrice: products.costPrice,
-        sku: products.sku,
-        imageUrl: products.imageUrl,
-        galleryUrls: products.galleryUrls,
-        category: products.category,
-        stock: products.stock,
-        colorOptions: products.colorOptions,
-        sizeOptions: products.sizeOptions,
-        ranking: products.ranking,
-        originalPrice: products.originalPrice,
-        salePercentage: products.salePercentage,
-        saleActive: products.saleActive,
-        homeFeatured: products.homeFeatured,
-        homeFeaturedImageIndex: products.homeFeaturedImageIndex,
-        createdAt: products.createdAt,
-        updatedAt: products.updatedAt,
-      });
+      .returning();
+
+    if (row && meiliClient) {
+      meiliClient.index(PRODUCT_INDEX).updateDocuments([{
+        id: row.id,
+        name: row.name,
+        shortDetails: row.shortDetails,
+        description: row.description,
+        price: parseFloat(row.price.toString()),
+        imageUrl: row.imageUrl,
+        category: row.category,
+        stock: row.stock,
+        saleActive: row.saleActive,
+        salePercentage: row.salePercentage,
+        updatedAt: Date.now(),
+      }]).catch(err => console.warn("[MeiliSearch] Sync failed for updated product:", err));
+    }
 
     if (row && row.stock === 0) {
       await this.createAdminNotification({
@@ -713,6 +729,13 @@ export class PgStorage implements IStorage {
           updatedAt: new Date(),
         })
         .where(eq(products.id, id));
+      
+      // Sync deletion to MeiliSearch
+      if (meiliClient) {
+        meiliClient.index(PRODUCT_INDEX).deleteDocument(id).catch(err => 
+          console.warn("[MeiliSearch] Delete failed for archived product:", err)
+        );
+      }
     }
   }
 

@@ -1,70 +1,62 @@
 import { NextFunction, Request, Response } from "express";
 import { logger } from "../logger";
+import { redis } from "../redis";
 
 interface RateLimitStore {
   [key: string]: { count: number; resetTime: number };
 }
 
-const rateLimitStore: RateLimitStore = {};
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute
+// const rateLimitStore: RateLimitStore = {};
+const RATE_LIMIT_WINDOW = 60; // 1 minute in seconds
+const RATE_LIMIT_MAX_REQUESTS = 15; // Increased to 15 for better UX with Redis latency
 
 /**
  * Simple rate limiting middleware for auth endpoints
  * Tracks requests by IP address
  */
-export function rateLimit(options?: { windowMs?: number; maxRequests?: number }) {
-  const windowMs = options?.windowMs || RATE_LIMIT_WINDOW;
+export function rateLimit(options?: { windowSec?: number; maxRequests?: number }) {
+  const windowSec = options?.windowSec || RATE_LIMIT_WINDOW;
   const maxRequests = options?.maxRequests || RATE_LIMIT_MAX_REQUESTS;
 
-  return (req: Request, res: Response, next: NextFunction) => {
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const now = Date.now();
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const ip = req.ip || req.get("x-forwarded-for") || req.socket.remoteAddress || "unknown";
+    const key = `rarenp:ratelimit:${req.path}:${ip}`;
 
-    if (!rateLimitStore[ip]) {
-      rateLimitStore[ip] = { count: 1, resetTime: now + windowMs };
-      return next();
+    try {
+      const count = await redis.incr(key);
+
+      if (count === 1) {
+        await redis.expire(key, windowSec);
+      }
+
+      if (count > maxRequests) {
+        const ttl = await redis.ttl(key);
+        
+        logger.warn(`Rate limit exceeded for IP ${ip}`, undefined, undefined, {
+          ip,
+          count,
+          maxRequests,
+          endpoint: req.path,
+        });
+
+        return res.status(429).json({
+          success: false,
+          error: "Too many requests",
+          code: "RATE_LIMIT_EXCEEDED",
+          retryAfter: ttl,
+        });
+      }
+
+      next();
+    } catch (err) {
+      console.error("Redis rate limit error:", err);
+      // Fallback: allow request if Redis fails to avoid blocking users
+      next();
     }
-
-    const record = rateLimitStore[ip];
-
-    if (now > record.resetTime) {
-      record.count = 1;
-      record.resetTime = now + windowMs;
-      return next();
-    }
-
-    record.count++;
-
-    if (record.count > maxRequests) {
-      logger.warn(`Rate limit exceeded for IP ${ip}`, undefined, undefined, {
-        ip,
-        count: record.count,
-        maxRequests,
-        endpoint: req.path,
-      });
-
-      return res.status(429).json({
-        success: false,
-        error: "Too many requests",
-        code: "RATE_LIMIT_EXCEEDED",
-        retryAfter: Math.ceil((record.resetTime - now) / 1000),
-      });
-    }
-
-    next();
   };
 }
 
-// Cleanup expired rate limit entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const ip in rateLimitStore) {
-    if (rateLimitStore[ip].resetTime < now) {
-      delete rateLimitStore[ip];
-    }
-  }
-}, 5 * 60 * 1000);
+
 
 /**
  * Add security headers to all responses

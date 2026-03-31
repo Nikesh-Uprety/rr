@@ -1,7 +1,21 @@
+import "dotenv/config";
+import * as Sentry from "@sentry/node";
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || "development",
+    integrations: [
+      // Add any additional integrations here
+    ],
+  });
+}
+
 import dns from "node:dns";
 dns.setDefaultResultOrder("ipv4first");
-import connectPgSimple from "connect-pg-simple";
-import "dotenv/config";
+import { RedisStore } from "connect-redis";
+import { redis } from "./redis";
+
 import express, { NextFunction, type Request, Response } from "express";
 import session from "express-session";
 import { createServer } from "http";
@@ -82,17 +96,18 @@ app.use(
 
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
-const PgSession = connectPgSimple(session);
+// const PgSession = connectPgSimple(session);
+const store = new RedisStore({
+  client: redis,
+  prefix: "rarenp:sess:",
+});
 
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET must be set");
 }
 
 const sessionMiddleware = session({
-  store: new PgSession({
-    pool,
-    createTableIfMissing: true,
-  }),
+  store,
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
@@ -329,6 +344,11 @@ async function ensureE2ETestState() {
   app.use("/uploads", express.static(uploadsPath));
 
   await registerRoutes(httpServer, app);
+
+  // Sentry error handler must be after all controllers but before other error handlers
+  if (process.env.SENTRY_DSN) {
+    Sentry.setupExpressErrorHandler(app);
+  }
 
   // Initialize WebSocket server for real-time admin notifications
   initWebSocketServer(httpServer);

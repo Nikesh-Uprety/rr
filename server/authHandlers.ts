@@ -40,10 +40,7 @@ export function createLoginHandler(deps?: {
   const sendOTPEmail = deps?.sendOTPEmail ?? sendOTPEmailLib;
 
   return (req: Request, res: Response, next: NextFunction) => {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: "Invalid request body" });
-    }
+    const { email, password } = req.body;
 
     passport.authenticate(
       "local",
@@ -144,12 +141,7 @@ export function createVerify2FAHandler(deps?: {
 
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const parsed = verify2FASchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ success: false, error: "Invalid request body" });
-      }
-
-      const { tempToken, code } = parsed.data;
+      const { tempToken, code } = req.body;
       const otp = await storage.consumeOtpToken(tempToken, code);
       if (!otp) {
         return res.status(400).json({ success: false, error: "Invalid or expired code" });
@@ -209,12 +201,7 @@ export function createStoreUserHandler(deps?: {
 
   return async (req: Request, res: Response) => {
     try {
-      const parsed = createStoreUserSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ success: false, error: "Invalid request body" });
-      }
-
-      const { name, email, password, role } = parsed.data;
+      const { name, email, password, role } = req.body;
 
       const existing = await storage.getUserByEmail(email);
       if (existing) {

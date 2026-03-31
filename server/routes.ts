@@ -10,6 +10,7 @@ import { z } from "zod";
 import { canAccessAdminPage, canAccessAdminPanel, requiresTwoFactorChallenge } from "@shared/auth-policy";
 import { MAISON_NOCTURNE_DEFAULT_HERO_SLIDES } from "@shared/canvasDefaults";
 import { storage } from "./storage";
+import { logger } from "./logger";
 import passport from "passport";
 import { processAndStoreImage, deleteLocalImage } from "./lib/imageService";
 import bcrypt from "bcryptjs";
@@ -60,6 +61,11 @@ import { getQueryParam, handleApiError, sendError } from "./errorHandler";
 import { requireAdmin, requireAdminPageAccess } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
 import { rateLimit } from "./middleware/security";
+import { validateRequest } from "./middleware/validation";
+import { 
+  loginSchema, 
+  verify2FASchema 
+} from "./authHandlers";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
 import {
   uploadToCloudinary,
@@ -229,7 +235,9 @@ export async function registerRoutes(
       }
 
       try {
-        await storage.insertSecurityLog({
+        // Don't await security log insertion - it should be non-blocking
+        // If database is slow, we shouldn't block the user's request
+        storage.insertSecurityLog({
           userId: user?.id || null,
           userRole: user?.role || "guest",
           method: req.method,
@@ -239,9 +247,16 @@ export async function registerRoutes(
           ip: req.ip || req.headers["x-forwarded-for"]?.toString() || null,
           userAgent: req.headers["user-agent"] || null,
           threat: threat,
+        }).catch((err) => {
+          // Log but don't crash if security log insertion fails
+          logger.warn("Failed to insert security log", {
+            timestamp: new Date().toISOString(),
+            error: err.message,
+          });
         });
       } catch (err) {
-        console.error("Failed to insert security log:", err);
+        // Synchronous errors (shouldn't happen, but just in case)
+        console.error("Failed to queue security log:", err);
       }
     });
 
@@ -256,58 +271,54 @@ export async function registerRoutes(
   });
 
   // Apply rate limiting to auth endpoints
-  app.post("/api/auth/register", rateLimit(), async (req: Request, res: Response) => {
-    try {
-      const parsed = registerSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return handleApiError(
-          res,
-          parsed.error,
-          "auth/register",
-          400,
-        );
-      }
-
-      const { email, password, name } = parsed.data;
-
-      const existing = await storage.getUserByEmail(email);
-      if (existing) {
-        return sendError(res, "Email already in use", undefined, 400, "EMAIL_IN_USE");
-      }
-
-      const bcrypt = await import("bcryptjs");
-      const hashed = await bcrypt.default.hash(password, 10);
-
-      const user = await storage.createUser({
-        username: email,
-        password: hashed,
-        role: "customer",
-        status: "active",
-        twoFactorEnabled: 0,
-        lastLoginAt: null,
-      });
-
-      const expressUser: Express.User = {
-        id: user.id,
-        email: email,
-        role: user.role,
-        name,
-      };
-
-      req.login(expressUser, (err) => {
-        if (err) {
-          handleApiError(res, err, "auth/register-login", 500);
-          return;
+  app.post(
+    "/api/auth/register", 
+    rateLimit(), 
+    validateRequest(registerSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { email, password, name } = req.body;
+  
+        const existing = await storage.getUserByEmail(email);
+        if (existing) {
+          return sendError(res, "Email already in use", undefined, 400, "EMAIL_IN_USE");
         }
-        return res.status(201).json({
-          success: true,
-          data: { id: user.id, email, name, role: user.role },
+  
+        const bcrypt = await import("bcryptjs");
+        const hashed = await bcrypt.default.hash(password, 10);
+  
+        const user = await storage.createUser({
+          username: email,
+          password: hashed,
+          role: "customer",
+          status: "active",
+          twoFactorEnabled: 0,
+          lastLoginAt: null,
+          requires2FASetup: false,
         });
-      });
-    } catch (err) {
-      handleApiError(res, err, "auth/register", 500);
+  
+        const expressUser: Express.User = {
+          id: user.id,
+          email: email,
+          role: user.role,
+          name,
+        };
+  
+        req.login(expressUser, (err) => {
+          if (err) {
+            handleApiError(res, err, "auth/register-login", 500);
+            return;
+          }
+          return res.status(201).json({
+            success: true,
+            data: { id: user.id, email, name, role: user.role },
+          });
+        });
+      } catch (err) {
+        handleApiError(res, err, "auth/register", 500);
+      }
     }
-  });
+  );
 
   // Feature-level RBAC for admin APIs.
   app.use("/api/admin/categories", requireAdminPageAccess("products"));
@@ -934,6 +945,7 @@ export async function registerRoutes(
   app.post(
     "/api/auth/login",
     rateLimit(),
+    validateRequest(loginSchema),
     createLoginHandler({ storage, passport, sendOTPEmail }),
   );
 
@@ -971,6 +983,7 @@ export async function registerRoutes(
   app.post(
     "/api/auth/verify-2fa",
     rateLimit(),
+    validateRequest(verify2FASchema),
     createVerify2FAHandler({ storage }),
   );
 
@@ -981,15 +994,9 @@ export async function registerRoutes(
   app.post(
     "/api/auth/resend-otp",
     rateLimit(),
+    validateRequest(resendOtpSchema),
     async (req: Request, res: Response) => {
-      const parsed = resendOtpSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid request body" });
-      }
-
-      const { tempToken } = parsed.data;
+      const { tempToken } = req.body;
       const refreshed = await storage.refreshOtpToken(tempToken);
       if (!refreshed) {
         return res
@@ -1009,12 +1016,20 @@ export async function registerRoutes(
 
   // Storefront product routes
   // Public Contact API
-  app.post("/api/contact", rateLimit(), async (req: Request, res: Response) => {
-    try {
-      const { name, email, subject, message } = req.body;
-      if (!name || !email || !subject || !message) {
-        return res.status(400).json({ success: false, error: "Missing required fields" });
-      }
+  const contactSchema = z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+    subject: z.string().min(1),
+    message: z.string().min(1),
+  });
+
+  app.post(
+    "/api/contact", 
+    rateLimit(), 
+    validateRequest(contactSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { name, email, subject, message } = req.body;
 
       const created = await storage.createContactMessage({
         name,
@@ -1042,23 +1057,17 @@ export async function registerRoutes(
   // ── User activity (cart) -> Admin live notifications ─────────────────────────
   app.post(
     "/api/user-activity/cart",
-    rateLimit({ windowMs: 60 * 1000, maxRequests: 20 }),
+    rateLimit({ windowSec: 60, maxRequests: 20 }),
+    validateRequest(z.object({
+      action: z.enum(["add", "update", "remove"]),
+      productName: z.string().min(1),
+      size: z.string().optional(),
+      color: z.string().optional(),
+      quantity: z.number().int().min(1).optional(),
+    })),
     async (req: Request, res: Response) => {
       try {
-        const schema = z.object({
-          action: z.enum(["add", "update", "remove"]),
-          productName: z.string().min(1),
-          size: z.string().optional(),
-          color: z.string().optional(),
-          quantity: z.number().int().min(1).optional(),
-        });
-
-        const parsed = schema.safeParse(req.body);
-        if (!parsed.success) {
-          return res.status(400).json({ success: false, error: "Invalid payload" });
-        }
-
-        const { action, productName, size, color, quantity } = parsed.data;
+        const { action, productName, size, color, quantity } = req.body;
 
         const variantParts = [size ? `Size: ${size}` : null, color ? `Color: ${color}` : null].filter(
           Boolean,
@@ -1082,7 +1091,6 @@ export async function registerRoutes(
       }
     },
   );
-
 
   // Dedicated arrivals endpoint for homepage "New Arrivals" section
   app.get("/api/products/arrivals", async (req: Request, res: Response) => {
@@ -1183,16 +1191,16 @@ export async function registerRoutes(
   });
 
   // Newsletter
-  app.post("/api/newsletter/subscribe", rateLimit(), async (req: Request, res: Response) => {
-    try {
-      const parsed = insertNewsletterSubscriberSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ success: false, error: "Invalid email" });
-      }
-      await storage.subscribeToNewsletter(parsed.data.email);
+  app.post(
+    "/api/newsletter/subscribe", 
+    rateLimit(), 
+    validateRequest(insertNewsletterSubscriberSchema),
+    async (req: Request, res: Response) => {
+      try {
+        await storage.subscribeToNewsletter(req.body.email);
       
       // Async send welcome email
-      sendNewsletterWelcomeEmail(parsed.data.email).catch(e => 
+      sendNewsletterWelcomeEmail(req.body.email).catch(e => 
         console.error("Failed to send welcome email:", e)
       );
 
@@ -1238,26 +1246,24 @@ export async function registerRoutes(
     promoCodeId: z.string().optional(),
   });
 
-  app.post("/api/orders", async (req: Request, res: Response) => {
-    try {
-      const parsed = createOrderSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return handleApiError(res, parsed.error, "orders/create", 400);
-      }
-
-      const {
-        items,
-        shipping,
-        paymentMethod,
-        promoCodeId,
-        source,
-        deliveryRequired,
-        deliveryProvider,
-        deliveryAddress,
-      } = parsed.data;
+  app.post(
+    "/api/orders", 
+    validateRequest(createOrderSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const {
+          items,
+          shipping,
+          paymentMethod,
+          promoCodeId,
+          source,
+          deliveryRequired,
+          deliveryProvider,
+          deliveryAddress,
+        } = req.body;
 
       const orderSubtotal = items.reduce(
-        (acc, item) => acc + item.priceAtTime * item.quantity,
+        (acc: number, item: any) => acc + item.priceAtTime * item.quantity,
         0,
       );
 
@@ -1276,8 +1282,8 @@ export async function registerRoutes(
         const now = new Date();
         const cartProductIds = new Set(
           items
-            .map((it) => Number(it.productId))
-            .filter((n) => Number.isFinite(n)),
+            .map((it: any) => Number(it.productId))
+            .filter((n: number) => Number.isFinite(n)),
         );
 
         const matchesApplicableProducts =
@@ -1323,7 +1329,7 @@ export async function registerRoutes(
       );
 
       const resolvedItems = await Promise.all(
-        items.map(async (item) => {
+        items.map(async (item: any) => {
           const normalizedSize = (item.size || item.selectedSize || "").trim();
           const normalizedColor = item.color?.trim() || null;
           const requestedVariantId = item.variantId === undefined ? NaN : Number(item.variantId);
@@ -1564,17 +1570,12 @@ export async function registerRoutes(
 
   app.post(
     "/api/orders/:id/payment-proof",
+    validateRequest(paymentProofSchema),
     async (req: Request, res: Response) => {
       try {
-        const parsed = paymentProofSchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res
-            .status(400)
-            .json({ success: false, error: "Invalid payload" });
-        }
         const orderId = req.params.id as string;
         await storage.getOrderById(orderId);
-        const base64 = parsed.data.imageBase64;
+        const base64 = req.body.imageBase64;
         const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
         const buffer = Buffer.from(
           match ? match[2] : base64,
@@ -1641,13 +1642,10 @@ export async function registerRoutes(
   app.post(
     "/api/admin/categories",
     requireAdmin,
+    validateRequest(z.object({ name: z.string().min(1), slug: z.string().min(1) })),
     async (req: Request, res: Response) => {
       try {
-        const parsed = z.object({ name: z.string().min(1), slug: z.string().min(1) }).safeParse(req.body);
-        if (!parsed.success) {
-          return res.status(400).json({ success: false, error: "Invalid payload" });
-        }
-        const category = await storage.createCategory(parsed.data);
+        const category = await storage.createCategory(req.body);
         return res.status(201).json({ success: true, data: category });
       } catch (err) {
         console.error("Error in POST /api/admin/categories", err);
@@ -1659,17 +1657,14 @@ export async function registerRoutes(
   app.put(
     "/api/admin/categories/:id",
     requireAdmin,
+    validateRequest(z.object({ name: z.string().min(1), slug: z.string().min(1) })),
     async (req: Request, res: Response) => {
       try {
         const id = getQueryParam(req.params.id);
         if (!id) {
           return res.status(400).json({ success: false, error: "Invalid category ID" });
         }
-        const parsed = z.object({ name: z.string().min(1), slug: z.string().min(1) }).safeParse(req.body);
-        if (!parsed.success) {
-          return res.status(400).json({ success: false, error: "Invalid payload" });
-        }
-        const updated = await storage.updateCategory(id, parsed.data);
+        const updated = await storage.updateCategory(id, req.body);
         return res.json({ success: true, data: updated });
       } catch (err: any) {
         console.error("Error in PUT /api/admin/categories/:id", err);
@@ -1700,13 +1695,10 @@ export async function registerRoutes(
   app.post(
     "/api/admin/upload-product-image",
     requireAdmin,
+    validateRequest(productImageSchema),
     async (req: Request, res: Response) => {
       try {
-        const parsed = productImageSchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res.status(400).json({ success: false, error: "Invalid payload" });
-        }
-        const base64 = parsed.data.imageBase64;
+        const base64 = req.body.imageBase64;
         const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
         const buffer = Buffer.from(match ? match[2] : base64, "base64");
         
@@ -1977,20 +1969,12 @@ export async function registerRoutes(
   app.patch(
     "/api/admin/site-assets/reorder",
     requireAdmin,
+    validateRequest(z.object({
+      section: z.string().min(1),
+      orderedIds: z.array(z.string().min(1)).min(1),
+    })),
     async (req: Request, res: Response) => {
-      const schema = z.object({
-        section: z.string().min(1),
-        orderedIds: z.array(z.string().min(1)).min(1),
-      });
-
-      const parsed = schema.safeParse(req.body);
-      if (!parsed.success) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid payload" });
-      }
-
-      const { section, orderedIds } = parsed.data;
+      const { section, orderedIds } = req.body;
 
       if (!validSiteAssetSections.includes(section as SiteAssetSection)) {
         return res.status(400).json({
@@ -2002,7 +1986,7 @@ export async function registerRoutes(
       try {
         await db.transaction(async (tx) => {
           await Promise.all(
-            orderedIds.map((id, index) =>
+            (orderedIds as string[]).map((id: string, index: number) =>
               tx
                 .update(siteAssets)
                 .set({ sortOrder: index })
@@ -2031,23 +2015,15 @@ export async function registerRoutes(
   app.patch(
     "/api/admin/site-assets/:id",
     requireAdmin,
+    validateRequest(z.object({
+      altText: z.string().optional(),
+      active: z.boolean().optional(),
+      deviceTarget: z.string().optional(),
+      assetType: z.string().optional(),
+      videoUrl: z.string().optional(),
+      imageUrl: z.string().optional(),
+    })),
     async (req: Request, res: Response) => {
-      const schema = z.object({
-        altText: z.string().optional(),
-        active: z.boolean().optional(),
-        deviceTarget: z.string().optional(),
-        assetType: z.string().optional(),
-        videoUrl: z.string().optional(),
-        imageUrl: z.string().optional(),
-      });
-
-      const parsed = schema.safeParse(req.body);
-      if (!parsed.success) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid payload" });
-      }
-
       const { id } = req.params;
       if (typeof id !== "string") {
         return res
@@ -2057,12 +2033,12 @@ export async function registerRoutes(
 
       const update: any = {};
       
-      if (parsed.data.altText !== undefined) update.altText = parsed.data.altText;
-      if (parsed.data.active !== undefined) update.active = parsed.data.active;
-      if (parsed.data.deviceTarget !== undefined) update.deviceTarget = parsed.data.deviceTarget;
-      if (parsed.data.assetType !== undefined) update.assetType = parsed.data.assetType;
-      if (parsed.data.videoUrl !== undefined) update.videoUrl = parsed.data.videoUrl;
-      if (parsed.data.imageUrl !== undefined) update.imageUrl = parsed.data.imageUrl;
+      if (req.body.altText !== undefined) update.altText = req.body.altText;
+      if (req.body.active !== undefined) update.active = req.body.active;
+      if (req.body.deviceTarget !== undefined) update.deviceTarget = req.body.deviceTarget;
+      if (req.body.assetType !== undefined) update.assetType = req.body.assetType;
+      if (req.body.videoUrl !== undefined) update.videoUrl = req.body.videoUrl;
+      if (req.body.imageUrl !== undefined) update.imageUrl = req.body.imageUrl;
 
       try {
         const [updated] = await db
@@ -2207,20 +2183,13 @@ export async function registerRoutes(
   app.patch(
     "/api/admin/products/bulk-categorize",
     requireAdmin,
+    validateRequest(z.object({
+      productIds: z.array(z.string().min(1)).min(1),
+      categorySlug: z.string().min(1),
+    })),
     async (req: Request, res: Response) => {
       try {
-        const schema = z.object({
-          productIds: z.array(z.string().min(1)).min(1),
-          categorySlug: z.string().min(1),
-        });
-        const parsed = schema.safeParse(req.body);
-        if (!parsed.success) {
-          return res
-            .status(400)
-            .json({ success: false, error: "Invalid payload" });
-        }
-
-        const { productIds, categorySlug } = parsed.data;
+        const { productIds, categorySlug } = req.body;
 
         const result = await db
           .update(products)
@@ -2243,34 +2212,28 @@ export async function registerRoutes(
   app.post(
     "/api/admin/products",
     requireAdmin,
+    validateRequest(adminProductSchema),
     async (req: Request, res: Response) => {
       try {
-        const parsed = adminProductSchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res
-            .status(400)
-            .json({ success: false, error: "Invalid product payload" });
-        }
-
         const data = {
-          name: parsed.data.name,
-          shortDetails: parsed.data.shortDetails || null,
-          description: parsed.data.description || null,
-          price: parsed.data.price.toString(),
+          name: req.body.name,
+          shortDetails: req.body.shortDetails || null,
+          description: req.body.description || null,
+          price: req.body.price.toString(),
           costPrice: 0,
           sku: "",
-          imageUrl: parsed.data.imageUrl || null,
-          galleryUrls: parsed.data.galleryUrls || null,
-          category: parsed.data.category || null,
-          stock: parsed.data.stock,
-          colorOptions: parsed.data.colorOptions || null,
-          sizeOptions: parsed.data.sizeOptions || null,
+          imageUrl: req.body.imageUrl || null,
+          galleryUrls: req.body.galleryUrls || null,
+          category: req.body.category || null,
+          stock: req.body.stock,
+          colorOptions: req.body.colorOptions || null,
+          sizeOptions: req.body.sizeOptions || null,
           ranking: 999,
-          salePercentage: parsed.data.salePercentage || 0,
-          saleActive: parsed.data.saleActive || false,
-          originalPrice: parsed.data.originalPrice ? parsed.data.originalPrice.toString() : null,
-          homeFeatured: parsed.data.homeFeatured || false,
-          homeFeaturedImageIndex: parsed.data.homeFeaturedImageIndex ?? 2,
+          salePercentage: req.body.salePercentage || 0,
+          saleActive: req.body.saleActive || false,
+          originalPrice: req.body.originalPrice ? req.body.originalPrice.toString() : null,
+          homeFeatured: req.body.homeFeatured || false,
+          homeFeaturedImageIndex: req.body.homeFeaturedImageIndex ?? 2,
         };
         const product = await storage.createProduct(data);
         return res.status(201).json({ success: true, data: product });
@@ -2286,42 +2249,38 @@ export async function registerRoutes(
   app.put(
     "/api/admin/products/:id",
     requireAdmin,
+    validateRequest(adminProductSchema.partial()),
     async (req: Request, res: Response) => {
       try {
-        const parsed = adminProductSchema.partial().safeParse(req.body);
-        if (!parsed.success) {
-          return res
-            .status(400)
-            .json({ success: false, error: "Invalid product payload" });
+        const productId = req.params.id as string;
+        const exists = await storage.getProductById(productId);
+        if (!exists) {
+          return res.status(404).json({ success: false, error: "Product not found" });
         }
 
-        const data: Partial<Omit<Product, "id">> = {
-          name: parsed.data.name,
-          shortDetails: parsed.data.shortDetails === undefined ? undefined : (parsed.data.shortDetails || null),
-          description: parsed.data.description === undefined ? undefined : (parsed.data.description || null),
-          price: parsed.data.price?.toString(),
-          imageUrl: parsed.data.imageUrl === undefined ? undefined : (parsed.data.imageUrl || null),
-          galleryUrls: parsed.data.galleryUrls === undefined ? undefined : (parsed.data.galleryUrls || null),
-          category: parsed.data.category === undefined ? undefined : (parsed.data.category || null),
-          stock: parsed.data.stock,
-          colorOptions: parsed.data.colorOptions === undefined ? undefined : (parsed.data.colorOptions || null),
-          sizeOptions: parsed.data.sizeOptions === undefined ? undefined : (parsed.data.sizeOptions || null),
-          salePercentage: parsed.data.salePercentage,
-          saleActive: parsed.data.saleActive,
-          originalPrice: parsed.data.originalPrice === undefined ? undefined : (parsed.data.originalPrice ? parsed.data.originalPrice.toString() : null),
-          homeFeatured: parsed.data.homeFeatured,
-          homeFeaturedImageIndex: parsed.data.homeFeaturedImageIndex,
+        const data = {
+          name: req.body.name,
+          shortDetails: req.body.shortDetails === undefined ? undefined : (req.body.shortDetails || null),
+          description: req.body.description === undefined ? undefined : (req.body.description || null),
+          price: req.body.price?.toString(),
+          imageUrl: req.body.imageUrl === undefined ? undefined : (req.body.imageUrl || null),
+          galleryUrls: req.body.galleryUrls === undefined ? undefined : (req.body.galleryUrls || null),
+          category: req.body.category === undefined ? undefined : (req.body.category || null),
+          stock: req.body.stock,
+          colorOptions: req.body.colorOptions === undefined ? undefined : (req.body.colorOptions || null),
+          sizeOptions: req.body.sizeOptions === undefined ? undefined : (req.body.sizeOptions || null),
+          salePercentage: req.body.salePercentage,
+          saleActive: req.body.saleActive,
+          originalPrice: req.body.originalPrice === undefined ? undefined : (req.body.originalPrice ? req.body.originalPrice.toString() : null),
+          homeFeatured: req.body.homeFeatured,
+          homeFeaturedImageIndex: req.body.homeFeaturedImageIndex,
         };
-        const updated = await storage.updateProduct(
-          req.params.id as string,
-          data,
-        );
+
+        const updated = await storage.updateProduct(productId, data);
         return res.json({ success: true, data: updated });
       } catch (err) {
         console.error("Error in PUT /api/admin/products/:id", err);
-        return res
-          .status(500)
-          .json({ success: false, error: "Failed to update product" });
+        return res.status(500).json({ success: false, error: "Failed to update product" });
       }
     },
   );
@@ -2345,24 +2304,19 @@ export async function registerRoutes(
   app.patch(
     "/api/admin/products/:id/home-featured",
     requireAdmin,
+    validateRequest(z.object({
+      homeFeatured: z.boolean(),
+      homeFeaturedImageIndex: z.number().int().min(0).max(3).optional(),
+    })),
     async (req: Request, res: Response) => {
       try {
-        const bodySchema = z.object({
-          homeFeatured: z.boolean(),
-          homeFeaturedImageIndex: z.number().int().min(0).max(3).optional(),
-        });
-        const parsed = bodySchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res.status(400).json({ success: false, error: "Invalid payload" });
-        }
-
         const productId = req.params.id as string;
         const existing = await storage.getProductById(productId);
         if (!existing) {
           return res.status(404).json({ success: false, error: "Product not found" });
         }
 
-        const wantsFeatured = parsed.data.homeFeatured;
+        const wantsFeatured = req.body.homeFeatured;
         if (wantsFeatured && !existing.homeFeatured) {
           const [{ count }] = await db
             .select({ count: sql<number>`count(*)::int` })
@@ -2378,7 +2332,7 @@ export async function registerRoutes(
 
         const updated = await storage.updateProduct(productId, {
           homeFeatured: wantsFeatured,
-          homeFeaturedImageIndex: parsed.data.homeFeaturedImageIndex ?? existing.homeFeaturedImageIndex ?? 2,
+          homeFeaturedImageIndex: req.body.homeFeaturedImageIndex ?? existing.homeFeaturedImageIndex ?? 2,
         });
 
         return res.json({ success: true, data: updated });
@@ -2557,20 +2511,14 @@ export async function registerRoutes(
   app.patch(
     "/api/admin/inventory/:productId/stock",
     requireAdmin,
+    validateRequest(z.object({
+      size: z.string().trim().min(1).optional(),
+      newStock: z.number().int(),
+    })),
     async (req: Request, res: Response) => {
       try {
         const { productId } = req.params;
-        const bodySchema = z.object({
-          size: z.string().trim().min(1).optional(),
-          newStock: z.number().int(),
-        });
-        const parsed = bodySchema.safeParse(req.body);
-
-        if (!parsed.success) {
-          return res.status(400).json({ error: "Invalid inventory update payload" });
-        }
-
-        const { size, newStock } = parsed.data;
+        const { size, newStock } = req.body;
 
         if (newStock < 0) {
           return res.status(400).json({ error: "Stock cannot be negative" });
@@ -2705,13 +2653,10 @@ export async function registerRoutes(
   app.post(
     "/api/admin/attributes",
     requireAdmin,
+    validateRequest(insertProductAttributeSchema),
     async (req: Request, res: Response) => {
       try {
-        const parsed = insertProductAttributeSchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res.status(400).json({ success: false, error: "Invalid attribute data" });
-        }
-        const attribute = await storage.createProductAttribute(parsed.data);
+        const attribute = await storage.createProductAttribute(req.body);
         return res.status(201).json({ success: true, data: attribute });
       } catch (err) {
         console.error("Error in POST /api/admin/attributes", err);
@@ -2769,24 +2714,18 @@ export async function registerRoutes(
   app.put(
     "/api/admin/orders/:id",
     requireAdmin,
+    validateRequest(statusSchema),
     async (req: Request, res: Response) => {
       try {
-        const parsed = statusSchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res
-            .status(400)
-            .json({ success: false, error: "Invalid status" });
-        }
-
         const { id } = req.params;
         if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
         const updated = await storage.updateOrderStatus(
           id,
-          parsed.data.status,
+          req.body.status,
         );
 
         // Auto-generate bill when order is marked completed
-        if (parsed.data.status === "completed") {
+        if (req.body.status === "completed") {
           try {
             const user = req.user as any;
             await generateBillFromOrder(
@@ -2810,7 +2749,7 @@ export async function registerRoutes(
               customerEmail,
               customerName,
               id,
-              parsed.data.status,
+              req.body.status,
             );
           }
         } catch (emailErr) {
@@ -2834,19 +2773,14 @@ export async function registerRoutes(
   app.put(
     "/api/admin/orders/:id/verify-payment",
     requireAdmin,
+    validateRequest(verifyPaymentSchema),
     async (req: Request, res: Response) => {
       try {
-        const parsed = verifyPaymentSchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res
-            .status(400)
-            .json({ success: false, error: "Invalid payload" });
-        }
         const { id } = req.params;
         if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
         const updated = await storage.updateOrderPaymentVerified(
           id,
-          parsed.data.paymentVerified,
+          req.body.paymentVerified,
         );
         return res.json({ success: true, data: updated });
       } catch (err) {
@@ -3073,12 +3007,15 @@ export async function registerRoutes(
   app.post(
     "/api/admin/customers",
     requireAdmin,
+    validateRequest(z.object({
+      firstName: z.string().min(1),
+      lastName: z.string().min(1),
+      email: z.string().email().optional(),
+      phoneNumber: z.string().optional(),
+    })),
     async (req: Request, res: Response) => {
       try {
         const { firstName, lastName, email, phoneNumber } = req.body;
-        if (!firstName || !lastName) {
-          return res.status(400).json({ success: false, error: "First and last name are required" });
-        }
         
         const customer = await storage.createCustomer({
           firstName,
@@ -3192,19 +3129,15 @@ export async function registerRoutes(
   app.patch(
     "/api/admin/store-users/:id",
     requireAdmin,
+    validateRequest(updateStoreUserSchema),
     async (req: Request, res: Response) => {
       const { id } = req.params;
       if (typeof id !== "string") {
         return res.status(400).json({ success: false, error: "Invalid ID" });
       }
 
-      const parsed = updateStoreUserSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ success: false, error: "Invalid request body" });
-      }
-
       try {
-        const { role, email_notifications } = parsed.data;
+        const { role, email_notifications } = req.body;
         const updated = await storage.updateStoreUser(id, {
           role,
           emailNotifications: email_notifications,
@@ -3251,15 +3184,9 @@ export async function registerRoutes(
   app.put(
     "/api/admin/profile/password",
     requireAuth,
+    validateRequest(updatePasswordSchema),
     async (req: Request, res: Response) => {
-      const parsed = updatePasswordSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid request body" });
-      }
-
-      const { current, newPassword, confirm } = parsed.data;
+      const { current, newPassword, confirm } = req.body;
       if (newPassword !== confirm) {
         return res.status(400).json({
           success: false,
@@ -3309,19 +3236,15 @@ export async function registerRoutes(
   app.put(
     "/api/admin/profile/update",
     requireAuth,
+    validateRequest(updateProfileSchema),
     async (req: Request, res: Response) => {
-      const parsed = updateProfileSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ success: false, error: "Invalid request body" });
-      }
-
       const user = req.user as Express.User | undefined;
       if (!user) {
         return res.status(401).json({ success: false, error: "Not authenticated" });
       }
 
       try {
-        await storage.updateUserProfile(user.id, parsed.data);
+        await storage.updateUserProfile(user.id, req.body);
         return res.json({ success: true });
       } catch (err) {
         console.error("Error in PUT /api/admin/profile/update", err);
@@ -3339,13 +3262,10 @@ export async function registerRoutes(
   app.post(
     "/api/admin/profile/upload-avatar",
     requireAuth,
+    validateRequest(uploadAvatarSchema),
     async (req: Request, res: Response) => {
       try {
-        const parsed = uploadAvatarSchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res.status(400).json({ success: false, error: "Missing imageBase64" });
-        }
-        const { imageBase64, provider = "local" } = parsed.data;
+        const { imageBase64, provider = "local" } = req.body;
 
         const user = req.user as Express.User | undefined;
         if (!user) {
@@ -3495,11 +3415,8 @@ export async function registerRoutes(
   app.post(
     "/api/admin/profile/update-email",
     requireAuth,
+    validateRequest(updateEmailSchema),
     async (req: Request, res: Response) => {
-      const parsed = updateEmailSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ success: false, error: "Invalid email" });
-      }
 
       const user = req.user as Express.User | undefined;
       if (!user) {
@@ -3507,7 +3424,7 @@ export async function registerRoutes(
       }
 
       try {
-        const { newEmail } = parsed.data;
+        const { newEmail } = req.body;
 
         // Check if email already taken
         const existing = await storage.getUserByEmail(newEmail);
@@ -3552,11 +3469,8 @@ export async function registerRoutes(
   app.post(
     "/api/admin/profile/verify-email",
     requireAuth,
+    validateRequest(verifyEmailChangeSchema),
     async (req: Request, res: Response) => {
-      const parsed = verifyEmailChangeSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ success: false, error: "Invalid request" });
-      }
 
       const user = req.user as Express.User | undefined;
       if (!user) {
@@ -3564,7 +3478,7 @@ export async function registerRoutes(
       }
 
       try {
-        const { tempToken, code, newEmail } = parsed.data;
+        const { tempToken, code, newEmail } = req.body;
 
         const otpResult = await storage.consumeOtpToken(tempToken, code);
         if (!otpResult) {
@@ -3589,18 +3503,13 @@ export async function registerRoutes(
   app.put(
     "/api/admin/users/:id/2fa",
     requireAdmin,
+    validateRequest(twoFASchema),
     async (req: Request, res: Response) => {
-      const parsed = twoFASchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid request body" });
-      }
 
       const { id } = req.params;
       if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
       try {
-        await storage.updateUserTwoFactor(id, parsed.data.enabled);
+        await storage.updateUserTwoFactor(id, req.body.enabled);
         return res.json({ success: true });
       } catch (err) {
         console.error("Error in PUT /api/admin/users/:id/2fa", err);
@@ -3638,16 +3547,11 @@ export async function registerRoutes(
   app.post(
     "/api/admin/users/invite",
     requireAdmin,
+    validateRequest(inviteUserSchema),
     async (req: Request, res: Response) => {
-      const parsed = inviteUserSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid request body" });
-      }
 
       try {
-        const { name, email, role } = parsed.data;
+        const { name, email, role } = req.body;
         const code = Math.floor(100000 + Math.random() * 900000)
           .toString()
           .slice(0, 6);
@@ -3792,33 +3696,24 @@ export async function registerRoutes(
 
   app.post(
     "/api/admin/platforms",
-    requireAdminPageAccess("analytics"),
-    async (req: Request, res: Response) => {
-    const schema = z.object({
-      key: z
-        .string()
-        .min(1)
-        .regex(/^[a-z0-9_]+$/),
+    validateRequest(z.object({
+      key: z.string().min(1).regex(/^[a-z0-9_]+$/),
       label: z.string().min(1),
       isActive: z.boolean().optional(),
-    });
-
-    const parsed = schema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: "Invalid payload" });
-    }
-
+    })),
+    async (req: Request, res: Response) => {
     try {
+      const { key, label, isActive } = req.body;
       const [row] = await db
         .insert(platforms)
         .values({
-          key: parsed.data.key,
-          label: parsed.data.label,
-          isActive: parsed.data.isActive ?? true,
+          key,
+          label,
+          isActive: isActive ?? true,
         })
         .onConflictDoUpdate({
           target: platforms.key,
-          set: { label: parsed.data.label, isActive: parsed.data.isActive ?? true },
+          set: { label, isActive: isActive ?? true },
         })
         .returning();
       return res.json({ success: true, data: row });
@@ -4210,33 +4105,24 @@ export async function registerRoutes(
 
   app.post(
     "/api/admin/marketing/sms/send",
-    requireAdminPageAccess("marketing"),
+    validateRequest(z.object({
+      message: z.string().trim().min(1, "Message is required"),
+      selectedNumbers: z.array(z.string()).optional(),
+      sendToAll: z.boolean().optional(),
+    })),
     async (req: Request, res: Response) => {
       try {
-        const schema = z.object({
-          message: z.string().trim().min(1, "Message is required"),
-          selectedNumbers: z.array(z.string()).optional(),
-          sendToAll: z.boolean().optional(),
-        });
-
-        const parsed = schema.safeParse(req.body);
-        if (!parsed.success) {
-          return res.status(400).json({
-            success: false,
-            error: "Invalid SMS payload",
-            issues: parsed.error.issues,
-          });
-        }
+        const { message, selectedNumbers, sendToAll } = req.body;
 
         let targetNumbers: string[] = [];
-        if (parsed.data.sendToAll) {
+        if (sendToAll) {
           const rows = await db
             .select({ phoneNumber: customers.phoneNumber })
             .from(customers)
             .where(sql`${customers.phoneNumber} is not null and ${customers.phoneNumber} != ''`);
           targetNumbers = rows.map((row) => row.phoneNumber || "");
         } else {
-          targetNumbers = parsed.data.selectedNumbers ?? [];
+          targetNumbers = selectedNumbers ?? [];
         }
 
         targetNumbers = Array.from(new Set(targetNumbers.map((value) => value.trim()).filter(Boolean)));
@@ -4247,7 +4133,7 @@ export async function registerRoutes(
           });
         }
 
-        const result = await sendMarketingSMS(targetNumbers, parsed.data.message);
+        const result = await sendMarketingSMS(targetNumbers, message);
 
         if (result.failed > 0) {
           return res.status(502).json({
@@ -4464,16 +4350,10 @@ export async function registerRoutes(
   // ── Bulk Delete Emails ──────────────────────────────────
   app.post(
     "/api/admin/newsletter/bulk-delete",
-    requireAdmin,
+    validateRequest(z.object({ emails: z.array(z.string().email()).min(1) })),
     async (req: Request, res: Response) => {
       try {
-        const schema = z.object({ emails: z.array(z.string().email()).min(1) });
-        const parsed = schema.safeParse(req.body);
-        if (!parsed.success) {
-          return sendError(res, "Invalid emails payload", undefined, 400);
-        }
-
-        const emails = Array.from(new Set(parsed.data.emails.map((e) => e.toLowerCase())));
+        const emails = Array.from(new Set((req.body.emails as string[]).map((e: string) => e.toLowerCase())));
         await db
           .delete(newsletterSubscribers)
           .where(inArray(newsletterSubscribers.email, emails));
@@ -4633,46 +4513,43 @@ export async function registerRoutes(
   });
 
   // POST /api/admin/bills/pos — create bill directly from POS (no order record)
-  app.post("/api/admin/bills/pos", requireAdmin, async (req: Request, res: Response) => {
-    try {
-      const schema = z.object({
-        customerName: z.string().optional(),
-        customerEmail: z.string().email().optional().nullable(),
-        customerPhone: z.string().optional().nullable(),
-        items: z.array(z.any()).min(1),
-        source: z.string().optional(),
-        paymentMethod: z.string().min(1),
-        isPaid: z.boolean().optional(),
-        deliveryRequired: z.boolean().optional(),
-        deliveryProvider: z.string().optional().nullable(),
-        deliveryLocation: z.string().optional().nullable(),
-        deliveryAddress: z.string().optional().nullable(),
-        cashReceived: z.number().optional().nullable(),
-        discountAmount: z.number().optional(),
-        notes: z.string().optional(),
-      });
-
-      const parsed = schema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ success: false, error: "Invalid payload" });
-      }
-
-      const {
-        customerName,
-        customerEmail,
-        customerPhone,
-        items,
-        source,
-        paymentMethod,
-        isPaid,
-        deliveryRequired,
-        deliveryProvider,
-        deliveryLocation,
-        deliveryAddress,
-        cashReceived,
-        discountAmount,
-        notes,
-      } = parsed.data;
+  app.post(
+    "/api/admin/bills/pos",
+    requireAdmin,
+    validateRequest(z.object({
+      customerName: z.string().optional(),
+      customerEmail: z.string().email().optional().nullable(),
+      customerPhone: z.string().optional().nullable(),
+      items: z.array(z.any()).min(1),
+      source: z.string().optional(),
+      paymentMethod: z.string().min(1),
+      isPaid: z.boolean().optional(),
+      deliveryRequired: z.boolean().optional(),
+      deliveryProvider: z.string().optional().nullable(),
+      deliveryLocation: z.string().optional().nullable(),
+      deliveryAddress: z.string().optional().nullable(),
+      cashReceived: z.number().optional().nullable(),
+      discountAmount: z.number().optional(),
+      notes: z.string().optional(),
+    })),
+    async (req: Request, res: Response) => {
+      try {
+        const {
+          customerName,
+          customerEmail,
+          customerPhone,
+          items,
+          source,
+          paymentMethod,
+          isPaid,
+          deliveryRequired,
+          deliveryProvider,
+          deliveryLocation,
+          deliveryAddress,
+          cashReceived,
+          discountAmount,
+          notes,
+        } = req.body;
 
       const normalizedSource = (source || "pos").toLowerCase();
       const isSocialSource = !["pos", "website", "store"].includes(normalizedSource);
@@ -5003,23 +4880,22 @@ export async function registerRoutes(
     return { expiresAt: null as Date | null, durationPreset: null as string | null };
   }
 
-  app.post("/api/admin/promo-codes", requireAdmin, async (req: Request, res: Response) => {
-    try {
-      const parsed = adminPromoCodeUpsertSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ success: false, error: "Invalid promo code payload" });
-      }
-
-      const {
-        code,
-        discountPct,
-        discount,
-        maxUses,
-        active,
-        applicableProductIds,
-        expiresAt,
-        durationPreset,
-      } = parsed.data;
+  app.post(
+    "/api/admin/promo-codes",
+    requireAdmin,
+    validateRequest(adminPromoCodeUpsertSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const {
+          code,
+          discountPct,
+          discount,
+          maxUses,
+          active,
+          applicableProductIds,
+          expiresAt,
+          durationPreset,
+        } = req.body;
 
       const resolvedDiscountPct = discountPct ?? discount;
       if (!resolvedDiscountPct || resolvedDiscountPct < 1) {
@@ -5050,12 +4926,7 @@ export async function registerRoutes(
     }
   });
 
-  async function updatePromoCodeById(id: string, payload: unknown, res: Response) {
-    const parsed = adminPromoCodeUpsertSchema.safeParse(payload);
-    if (!parsed.success) {
-      return res.status(400).json({ success: false, error: "Invalid promo code payload" });
-    }
-
+  async function updatePromoCodeById(id: string, payload: any, res: Response) {
     const {
       code,
       discountPct,
@@ -5065,7 +4936,7 @@ export async function registerRoutes(
       applicableProductIds,
       expiresAt,
       durationPreset,
-    } = parsed.data;
+    } = payload;
 
     const resolvedDiscountPct = discountPct ?? discount;
     if (!resolvedDiscountPct || resolvedDiscountPct < 1) {
@@ -5146,26 +5017,22 @@ export async function registerRoutes(
   });
 
   // Checkout validation (used for product-restricted promo codes)
-  app.post("/api/promo/validate", async (req: Request, res: Response) => {
-    try {
-      const schema = z.object({
-        code: z.string().min(3).max(50),
-        items: z
-          .array(
-            z.object({
-              productId: z.union([z.coerce.number().int(), z.string().min(1)]),
-            }),
-          )
-          .min(1),
-      });
-
-      const parsed = schema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ valid: false, reason: "Invalid payload" });
-      }
-
-      const now = new Date();
-      const promo = await storage.getPromoCodeByCode(parsed.data.code);
+  app.post(
+    "/api/promo/validate",
+    validateRequest(z.object({
+      code: z.string().min(3).max(50),
+      items: z
+        .array(
+          z.object({
+            productId: z.union([z.coerce.number().int(), z.string().min(1)]),
+          }),
+        )
+        .min(1),
+    })),
+    async (req: Request, res: Response) => {
+      try {
+        const now = new Date();
+        const promo = await storage.getPromoCodeByCode(req.body.code);
 
       if (!promo || !promo.active) {
         return res.status(200).json({ valid: false, reason: "Invalid promo code" });
@@ -5181,9 +5048,9 @@ export async function registerRoutes(
 
       if (promo.applicableProductIds) {
         const cartProductIds = new Set(
-          parsed.data.items
-            .map((it) => Number(it.productId))
-            .filter((n) => Number.isFinite(n)),
+          req.body.items
+            .map((it: any) => Number(it.productId))
+            .filter((n: number) => Number.isFinite(n)),
         );
 
         const matches = promo.applicableProductIds.some((pid: number) =>

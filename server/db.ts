@@ -13,7 +13,11 @@ if (!process.env.DATABASE_URL) {
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === "production" ? true : { rejectUnauthorized: false },
-  connectionTimeoutMillis: 5000,
+  // Neon pooler can take longer to establish connections, especially with SSL
+  // Increased to 15s to handle network latency and SSL handshake
+  connectionTimeoutMillis: 15000,
+  // Query timeout to prevent hanging queries
+  query_timeout: 10000,
 });
 
 export const db = drizzle(pool, { schema });

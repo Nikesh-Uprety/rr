@@ -1,40 +1,6 @@
 import "dotenv/config";
-import nodemailer from "nodemailer";
+import { emailQueue } from "./queues/emailQueue";
 
-// SMTP Configuration
-const SMTP_HOST = process.env.SMTP_HOST || "";
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587");
-const SMTP_USER = process.env.SMTP_USER || "";
-const SMTP_PASS = process.env.SMTP_PASS || "";
-
-// Check if SMTP is properly configured
-const isSMTPConfigured = SMTP_HOST && SMTP_USER && SMTP_PASS;
-
-// Create transporter (only if SMTP is configured)
-let transporter: nodemailer.Transporter | null = null;
-
-if (isSMTPConfigured) {
-  transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT === 465, // true for 465, false for other ports
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS,
-    },
-    // Required for some cloud providers and Mailjet fallback ports
-    tls: {
-      rejectUnauthorized: false
-    },
-    debug: true,
-    logger: true,
-  });
-  console.log(`[EMAIL] SMTP transporter configured: ${SMTP_HOST}:${SMTP_PORT} (secure: ${SMTP_PORT === 465})`);
-}
-
-// Sender configuration - can be set via environment or use default
-const SENDER_EMAIL = process.env.SENDER_EMAIL || "upretynikesh021@gmail.com";
-const SENDER_NAME = process.env.SENDER_NAME || "RARE Nepal";
 const isE2ETestMode = process.env.E2E_TEST_MODE === "1";
 const shouldLogOtpCodes =
   process.env.NODE_ENV !== "production" || process.env.LOG_OTP_CODES === "1";
@@ -54,19 +20,8 @@ export async function sendOTPEmail(to: string, code: string, name: string) {
     console.log(`[DEV OTP] ${to} -> ${code}`);
   }
 
-  if (!isSMTPConfigured || !transporter) {
-    console.warn(
-      "[DEV] SMTP not configured (SMTP_HOST, SMTP_USER, SMTP_PASS missing). OTP for",
-      to,
-      "->",
-      code
-    );
-    return;
-  }
-  
   try {
-    await transporter.sendMail({
-      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+    await emailQueue.add("otp", {
       to,
       subject: "Your RARE.np verification code",
       html: `
@@ -82,15 +37,9 @@ export async function sendOTPEmail(to: string, code: string, name: string) {
         </div>
       `,
     });
-    console.log(`[SMTP] OTP email sent to: ${to}`);
+    console.log(`[Queue] OTP email job added for: ${to}`);
   } catch (err: any) {
-    console.warn("[SMTP] OTP delivery failed for", to, "Error:", {
-      message: err.message,
-      code: err.code,
-      command: err.command,
-      response: err.response,
-      stack: err.stack
-    });
+    console.warn("[Queue] OTP job failed for", to, "Error:", err.message);
   }
 }
 
@@ -104,18 +53,8 @@ export async function sendInviteEmail(
     return;
   }
 
-  if (!isSMTPConfigured || !transporter) {
-    console.warn(
-      "[DEV] SMTP not configured. Invite code for",
-      to,
-      "->",
-      code
-    );
-    return;
-  }
   try {
-    await transporter.sendMail({
-      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+    await emailQueue.add("invite", {
       to,
       subject: "You've been invited to RARE.np Admin",
       html: `
@@ -131,15 +70,9 @@ export async function sendInviteEmail(
         </div>
       `,
     });
-    console.log(`[SMTP] Invite email sent to: ${to}`);
+    console.log(`[Queue] Invite email job added for: ${to}`);
   } catch (err: any) {
-    console.warn("[SMTP] Invite delivery failed for", to, "Error:", {
-      message: err.message,
-      code: err.code,
-      command: err.command,
-      response: err.response,
-      stack: err.stack
-    });
+    console.warn("[Queue] Invite job failed for", to, "Error:", err.message);
   }
 }
 
@@ -152,14 +85,8 @@ export async function sendStoreUserWelcomeEmail(
     return;
   }
 
-  if (!isSMTPConfigured || !transporter) {
-    console.warn("[DEV] SMTP not configured. Store user welcome for", to);
-    return;
-  }
-
   try {
-    await transporter.sendMail({
-      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+    await emailQueue.add("store-user-welcome", {
       to,
       subject: "Welcome to RARE.np Admin",
       html: `
@@ -187,16 +114,9 @@ export async function sendStoreUserWelcomeEmail(
         </div>
       `,
     });
-
-    console.log(`[SMTP] Store user welcome email sent to: ${to}`);
+    console.log(`[Queue] Store user welcome job added for: ${to}`);
   } catch (err: any) {
-    console.warn("[SMTP] Store user welcome email failed for", to, "Error:", {
-      message: err.message,
-      code: err.code,
-      command: err.command,
-      response: err.response,
-      stack: err.stack,
-    });
+    console.warn("[Queue] Store user welcome job failed for", to, "Error:", err.message);
   }
 }
 
@@ -205,26 +125,15 @@ export async function sendContactReplyEmail(to: string, subject: string, html: s
     return;
   }
 
-  if (!isSMTPConfigured || !transporter) {
-    console.warn("[DEV] SMTP not configured. Contact reply for", to, "->", subject);
-    throw new Error("SMTP not configured");
-  }
   try {
-    await transporter.sendMail({
-      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+    await emailQueue.add("contact-reply", {
       to,
       subject,
       html,
     });
-    console.log(`[SMTP] Contact reply email sent to: ${to}`);
+    console.log(`[Queue] Contact reply email job added for: ${to}`);
   } catch (err: any) {
-    console.warn("[SMTP] Contact reply delivery failed for", to, "Error:", {
-      message: err.message,
-      code: err.code,
-      command: err.command,
-      response: err.response,
-      stack: err.stack
-    });
+    console.warn("[Queue] Contact reply job failed for", to, "Error:", err.message);
     throw err;
   }
 }
@@ -234,40 +143,18 @@ export async function sendMarketingBroadcastEmail(bccList: string[], subject: st
     return { sent: bccList.length, failed: 0, errors: [] };
   }
 
-  if (!isSMTPConfigured || !transporter || bccList.length === 0) {
-    console.warn("[DEV] SMTP not configured or empty BCC. Broadcast ->", subject);
-    return { sent: 0, failed: bccList.length, errors: ["SMTP not configured"] };
+  try {
+    const job = await emailQueue.add("marketing-broadcast", {
+      bcc: bccList,
+      subject,
+      html,
+    });
+    console.log(`[Queue] Added marketing broadcast job: ${job.id} for ${bccList.length} recipients`);
+    return { sent: bccList.length, failed: 0, errors: [] };
+  } catch (err: any) {
+    console.warn("[Queue] Marketing broadcast job failed:", err.message);
+    return { sent: 0, failed: bccList.length, errors: [err.message] };
   }
-  const batchSize = Math.max(1, Number(process.env.SMTP_BCC_BATCH_SIZE ?? "50"));
-  let sent = 0;
-  let failed = 0;
-  const errors: string[] = [];
-
-  for (let i = 0; i < bccList.length; i += batchSize) {
-    const batch = bccList.slice(i, i + batchSize);
-    try {
-      await transporter.sendMail({
-        from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
-        bcc: batch,
-        subject,
-        html,
-      });
-      sent += batch.length;
-      console.log(`[SMTP] Broadcast batch sent: ${batch.length} recipients (${sent}/${bccList.length})`);
-    } catch (err: any) {
-      failed += batch.length;
-      const msg = err?.message ? String(err.message) : "Unknown SMTP error";
-      errors.push(msg);
-      console.warn("[SMTP] Broadcast batch failed. Error:", {
-        message: err.message,
-        code: err.code,
-        command: err.command,
-        response: err.response,
-      });
-    }
-  }
-
-  return { sent, failed, errors };
 }
 
 export async function sendNewsletterWelcomeEmail(to: string) {
@@ -275,13 +162,8 @@ export async function sendNewsletterWelcomeEmail(to: string) {
     return;
   }
 
-  if (!isSMTPConfigured || !transporter) {
-    console.warn("[DEV] SMTP not configured. Newsletter welcome for", to);
-    return;
-  }
   try {
-    await transporter.sendMail({
-      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+    await emailQueue.add("newsletter-welcome", {
       to,
       subject: "Welcome to the RARE Community",
       html: `
@@ -302,15 +184,9 @@ export async function sendNewsletterWelcomeEmail(to: string) {
         </div>
       `,
     });
-    console.log(`[SMTP] Newsletter welcome email sent to: ${to}`);
+    console.log(`[Queue] Newsletter welcome job added for: ${to}`);
   } catch (err: any) {
-    console.warn("[SMTP] Newsletter welcome failed for", to, "Error:", {
-      message: err.message,
-      code: err.code,
-      command: err.command,
-      response: err.response,
-      stack: err.stack
-    });
+    console.warn("[Queue] Newsletter welcome job failed for", to, "Error:", err.message);
   }
 }
 
@@ -353,16 +229,6 @@ export async function sendOrderConfirmationEmail(data: OrderConfirmationData) {
     return;
   }
 
-  if (!isSMTPConfigured || !transporter) {
-    console.warn(
-      "[DEV] SMTP not configured. Order confirmation for",
-      data.email,
-      "-> Order",
-      data.orderId.substring(0, 8),
-    );
-    return;
-  }
-
   const shortId = data.orderId.substring(0, 8).toUpperCase();
 
   const itemRows = data.items
@@ -385,14 +251,13 @@ export async function sendOrderConfirmationEmail(data: OrderConfirmationData) {
       : "";
 
   try {
-    await transporter.sendMail({
-      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+    await emailQueue.add("order-confirmation", {
       to: data.email,
       subject: `Order Confirmed — #${shortId}`,
       html: `
         <div style="font-family: 'serif'; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; border-radius: 24px;">
           <h1 style="font-size: 28px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px; color: #f2efe8; text-align: center;">RARE ATELIER</h1>
-          <div style="width: 40px; height: 1px; background: rgba(242,239,232,0.3); margin: 0 auto 32px;"></div>
+          <div style="width: 40px; height: 1px; background: rgba(242, 239, 232, 0.3); margin: 0 auto 32px;"></div>
 
           <h2 style="font-size: 22px; font-style: italic; margin-bottom: 8px; text-align: center;">Order Confirmed</h2>
           <p style="font-size: 15px; color: rgba(242,239,232,0.7); text-align: center; margin-bottom: 32px;">
@@ -438,15 +303,9 @@ export async function sendOrderConfirmationEmail(data: OrderConfirmationData) {
         </div>
       `,
     });
-    console.log(`[SMTP] Order confirmation email sent to: ${data.email}`);
+    console.log(`[Queue] Order confirmation job added for: ${data.email}`);
   } catch (err: any) {
-    console.warn("[SMTP] Order confirmation failed for", data.email, "Error:", {
-      message: err.message,
-      code: err.code,
-      command: err.command,
-      response: err.response,
-      stack: err.stack,
-    });
+    console.warn("[Queue] Order confirmation job failed for", data.email, "Error:", err.message);
   }
 }
 
@@ -482,29 +341,18 @@ export async function sendOrderStatusUpdateEmail(
     return;
   }
 
-  if (!isSMTPConfigured || !transporter) {
-    console.warn(
-      "[DEV] SMTP not configured. Status update for",
-      email,
-      "->",
-      newStatus,
-    );
-    return;
-  }
-
   const shortId = orderId.substring(0, 8).toUpperCase();
   const label = statusLabel(newStatus);
   const color = statusColor(newStatus);
 
   try {
-    await transporter.sendMail({
-      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+    await emailQueue.add("order-status", {
       to: email,
       subject: `Order #${shortId} — ${label}`,
       html: `
         <div style="font-family: 'serif'; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; border-radius: 24px;">
           <h1 style="font-size: 28px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px; color: #f2efe8; text-align: center;">RARE ATELIER</h1>
-          <div style="width: 40px; height: 1px; background: rgba(242,239,232,0.3); margin: 0 auto 32px;"></div>
+          <div style="width: 40px; height: 1px; background: rgba(242, 239, 232, 0.3); margin: 0 auto 32px;"></div>
 
           <h2 style="font-size: 22px; font-style: italic; margin-bottom: 16px; text-align: center;">Order Update</h2>
           <p style="font-size: 15px; color: rgba(242,239,232,0.7); text-align: center; margin-bottom: 32px;">
@@ -522,14 +370,8 @@ export async function sendOrderStatusUpdateEmail(
         </div>
       `,
     });
-    console.log(`[SMTP] Order status update email sent to: ${email}`);
+    console.log(`[Queue] Order status job added for: ${email}`);
   } catch (err: any) {
-    console.warn("[SMTP] Order status update failed for", email, "Error:", {
-      message: err.message,
-      code: err.code,
-      command: err.command,
-      response: err.response,
-      stack: err.stack,
-    });
+    console.warn("[Queue] Order status job failed for", email, "Error:", err.message);
   }
 }

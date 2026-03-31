@@ -67,6 +67,8 @@ function RevealImage({
   const { ref, isVisible } = useScrollReveal();
   const aspect = getAspect(index);
   const [isHovered, setIsHovered] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [autoPlayIndex, setAutoPlayIndex] = useState(0);
 
   const gallery = useMemo(() => {
     try {
@@ -148,13 +150,15 @@ function RevealImage({
 
 function GallerySkeleton() {
   return (
-    <div className="columns-2 md:columns-3 xl:columns-4 gap-4 space-y-4">
-      {Array.from({ length: 12 }).map((_, i) => (
-        <div
-          key={i}
-          className={`${getAspect(i)} bg-neutral-200 dark:bg-neutral-800 rounded-sm animate-pulse break-inside-avoid`}
-        />
-      ))}
+    <div className="py-20 md:py-24 container mx-auto px-4 md:px-6 max-w-7xl">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className={`${getAspect(i)} bg-neutral-100 dark:bg-neutral-800 rounded-sm animate-pulse break-inside-avoid`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -163,6 +167,7 @@ export default function NewCollection() {
   const { data: products, isLoading } = useQuery<ProductApi[]>({
     queryKey: ["products", "all-collection"],
     queryFn: () => fetchProducts(),
+    staleTime: 1000 * 60 * 5, // 5 minutes stale time for better performance
   });
 
   const { data: bannerAssets = [] } = useQuery<SiteAsset[]>({
@@ -266,10 +271,10 @@ export default function NewCollection() {
   }, []);
 
   return (
-    <div className="flex flex-col min-h-screen pt-20">
+    <div className="flex flex-col min-h-screen">
       {/* Hero Banner — Full-bleed background image + Text */}
       <section className="relative w-full overflow-hidden bg-neutral-950">
-        <div className="relative w-full min-h-[46vh] md:min-h-[62vh] lg:min-h-[70vh]">
+        <div className="relative w-full h-screen md:h-screen lg:h-screen">
           <div className="absolute inset-0">
             <ThreeDHoverGallery
               images={heroGalleryImages}
@@ -291,17 +296,7 @@ export default function NewCollection() {
             />
           </div>
 
-          {/* Dark overlays for legibility (dark mode only) */}
-          <div className="absolute inset-0 hidden dark:block bg-black/35 pointer-events-none" />
-          <div className="absolute inset-0 hidden dark:block bg-gradient-to-b from-black/55 via-black/25 to-black/60 pointer-events-none" />
-          <div
-            className="absolute inset-0 hidden dark:block pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%)",
-            }}
-          />
-
+          {/* Hero text overlay - no dark overlays */}
           <div className="relative z-10 container mx-auto px-4 md:px-6 h-full flex items-center pointer-events-none">
             <div className="w-full flex flex-col items-center text-center py-16 md:py-24">
               <motion.p

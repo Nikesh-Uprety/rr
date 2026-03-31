@@ -74,14 +74,9 @@ export default function NotFound() {
 
   return (
     <div className="fixed inset-0 bg-[#07060a] overflow-hidden z-[9999]" id="loader-container">
-      {/* Premium Styles */}
+      {/* Optimized Styles - Removed expensive grain animation */}
       <style>{`
         *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-
-        .grain { position:fixed; inset:-100%; width:300%; height:300%;
-          background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E");
-          background-size:180px; animation:grain .55s steps(2) infinite; pointer-events:none; z-index:3; opacity:.34; }
-        @keyframes grain { 0%{transform:translate(0,0)} 25%{transform:translate(-2%,1%)} 50%{transform:translate(2%,-2%)} 75%{transform:translate(-1%,2%)} 100%{transform:translate(2%,-1%)} }
 
         .vignette { position:fixed; inset:0; z-index:4; pointer-events:none;
           background:radial-gradient(ellipse 80% 70% at 50% 50%, transparent 25%, rgba(7,6,10,0.9) 100%); }
@@ -93,7 +88,8 @@ export default function NotFound() {
         .mono-ring { width:100%; height:100%; animation:spinSlow 14s linear infinite; }
         @keyframes spinSlow { to{transform:rotate(360deg)} }
         .mono-inner { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
-        .mono-letter { font-family:'Cinzel',serif; font-size:clamp(1.8rem,5vw,2.8rem); font-weight:600; color:#c8a96d; text-shadow:0 0 28px rgba(200,169,109,.55); letter-spacing:.04em; }
+        .mono-letter { font-family:'Cinzel',serif; font-size:clamp(1.8rem,5vw,2.8rem); font-weight:600; color:#c8a96d; text-shadow:0 0 28px rgba(200,169,109,.55); letter-spacing:.04em; animation:fadeIn 0.8s ease-out; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(8px) scale(.992); } to { opacity:1; transform:translateY(0) scale(1); } }
 
         .brand-rare { font-family:'Cormorant Garamond',serif; font-style:italic; font-weight:300; font-size:clamp(4rem,13vw,8.5rem); color:#f2efe8; line-height:.9; letter-spacing:.04em; text-align:center; }
         .brand-atelier { font-family:'DM Mono',monospace; font-size:clamp(.48rem,1.6vw,.72rem); font-weight:400; letter-spacing:.72em; text-transform:uppercase; color:#c8a96d; padding-left:.72em; margin-top:7px; }
@@ -106,7 +102,6 @@ export default function NotFound() {
       `}</style>
 
       <StarsBackground className="z-[2] opacity-85" />
-      <div className="grain"></div>
       <div className="vignette"></div>
 
       <div className="stage">
@@ -140,7 +135,7 @@ export default function NotFound() {
           </div>
         </div>
 
-        <div className="brand-rare">Lost in Atelier</div>
+        <div className="brand-rare">RARE ATELIER</div>
         <div className="brand-atelier">Page Not Found</div>
 
         <div className="tagline">&nbsp;</div>

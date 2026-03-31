@@ -96,6 +96,7 @@ export default function Products() {
   } = useQuery<ProductApi[]>({
     queryKey: ["products", filters],
     queryFn: () => fetchProducts(filters),
+    staleTime: 1000 * 60 * 5, // 5 minutes cache for better performance
   });
 
   const filteredProducts = useMemo(() => {

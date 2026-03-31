@@ -103,7 +103,7 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
     if (slides.length <= 1) return;
     const timer = window.setTimeout(() => {
       setActiveIndex((prev) => (prev + 1) % slides.length);
-    }, durations[activeIndex] ?? 6000);
+    }, durations[activeIndex] ?? 3000); // Reduced from 6000ms for faster loading
     return () => window.clearTimeout(timer);
   }, [activeIndex, durations, slides.length]);
 
@@ -137,7 +137,7 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
                 style={{
                   background: progressFillColor,
                   width: isDone ? "100%" : "0%",
-                  animationDuration: `${durations[index]}ms`,
+                  animationDuration: `${durations[index]}ms`, // Reduced from 2400ms
                 }}
               />
             </button>
@@ -302,7 +302,7 @@ function NikeshDesignHero({ heroImages, config }: { heroImages: string[]; config
     if (slides.length <= 1) return;
     const timer = window.setTimeout(() => {
       setActiveIndex((prev) => (prev + 1) % slides.length);
-    }, durations[activeIndex] ?? 6000);
+    }, durations[activeIndex] ?? 3000); // Reduced from 6000ms for faster loading
     return () => window.clearTimeout(timer);
   }, [activeIndex, durations, slides.length]);
 
@@ -329,7 +329,7 @@ function NikeshDesignHero({ heroImages, config }: { heroImages: string[]; config
                 className={`absolute inset-y-0 left-0 bg-[var(--gold)] ${isActive ? "rare-story-bar-fill" : ""}`}
                 style={{
                   width: isDone ? "100%" : "0%",
-                  animationDuration: `${durations[index]}ms`,
+                  animationDuration: `${durations[index]}ms`, // Reduced from 2400ms
                 }}
               />
             </button>
@@ -357,11 +357,11 @@ function NikeshDesignHero({ heroImages, config }: { heroImages: string[]; config
           return (
             <div
               key={`${slide.headline}-${index}`}
-              className={`absolute inset-0 transition-opacity duration-700 ${isActive ? "opacity-100" : "pointer-events-none opacity-0"}`}
+              className={`absolute inset-0 transition-opacity duration-[700ms] ease-out ${isActive ? "opacity-100" : "pointer-events-none opacity-0"}`}
             >
               <div className="absolute inset-0 overflow-hidden">
                 <div
-                  className={`absolute inset-0 transition-transform duration-[7000ms] ease-out ${isActive ? "scale-100" : "scale-[1.08]"}`}
+                  className={`absolute inset-0 transition-transform duration-[700ms] ease-out ${isActive ? "scale-100" : "scale-[1.08]"}`} // Reduced from 7000ms
                   style={{ filter: "brightness(0.52) saturate(0.94)" }}
                 >
                   <OptimizedImage

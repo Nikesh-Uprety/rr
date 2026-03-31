@@ -59,6 +59,8 @@ export default function Navbar() {
   const isMaisonNocturne = isStorefront && pageConfig?.template?.slug === "maison-nocturne";
   const isNikeshDesign = isStorefront && pageConfig?.template?.slug === "nikeshdesign";
   const isLuxuryEditorialHome = isMaisonNocturne || isNikeshDesign;
+  const isAtelierPage = isStorefront && location === "/atelier";
+  const isSpecialPage = isLuxuryEditorialHome || isAtelierPage;
   const dashboardPath = user
     ? canAccessAdminPanel(user.role)
       ? getDefaultAdminPath(user.role)
@@ -86,7 +88,7 @@ export default function Navbar() {
   }, [isMobileMenuOpen]);
 
   useEffect(() => {
-    if (!isLuxuryEditorialHome) {
+    if (!isSpecialPage) {
       setIsScrolled(false);
       setHideAnnouncement(false);
       setIsNavHidden(false);
@@ -96,7 +98,7 @@ export default function Navbar() {
 
     const onScroll = () => {
       const y = window.scrollY;
-      if (isMaisonNocturne) {
+      if (isSpecialPage) {
         setIsScrolled(y > 24);
       } else {
         setIsScrolled(y > 60);
@@ -130,7 +132,7 @@ export default function Navbar() {
   }, [isLuxuryEditorialHome, isMaisonNocturne]);
 
   useEffect(() => {
-    if (!isStorefront || isLuxuryEditorialHome) return;
+    if (!isStorefront || isSpecialPage) return;
 
     const onScroll = () => {
       setIsScrolled(window.scrollY > 8);
@@ -142,7 +144,7 @@ export default function Navbar() {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [isLuxuryEditorialHome, isStorefront, location]);
+  }, [isSpecialPage, isStorefront, location]);
 
   if (!isStorefront) return null;
 
@@ -193,7 +195,9 @@ export default function Navbar() {
     const showTopAnnouncement = !isMaisonNocturne;
     const isMaisonLight = isMaisonNocturne && theme !== "dark";
     const isHomeRoute = location === "/";
-    const isTransparentState = isMaisonNocturne && isHomeRoute && !isScrolled;
+    const isNewCollectionRoute = location === "/new-collection";
+    const isAtelierRoute = location === "/atelier";
+    const isTransparentState = (isMaisonNocturne && isHomeRoute) || (isNewCollectionRoute && !isScrolled) || (isAtelierRoute && !isScrolled);
     const useHeroContrastState = isTransparentState;
     const shouldUseChrome = !isTransparentState;
     const navLinkColor = useHeroContrastState

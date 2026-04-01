@@ -113,34 +113,48 @@ export default function Contact() {
 
       <section
         ref={conceptSectionRef}
-        className="py-20 md:py-24 bg-[var(--bg-secondary)] border-b border-[var(--border)]"
+        className="relative overflow-hidden border-b border-[var(--border)]"
       >
+        {/* Full-width background image */}
         <div
-          className={`container mx-auto px-4 max-w-6xl transition-all duration-700 ${
-            isConceptVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
+          className="absolute inset-0"
+          style={{
+            backgroundImage: "url('/images/concept.webp')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundAttachment: "fixed",
+          }}
+        />
+        
+        {/* Dark overlay for text readability */}
+        <div className="absolute inset-0 bg-black/60" />
+        
+        {/* Content overlay */}
+        <div
+          className={`relative z-10 container mx-auto px-4 max-w-6xl py-32 md:py-48 transition-all duration-1000 ${
+            isConceptVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
         >
-          <div className="grid lg:grid-cols-2 gap-10 lg:gap-14 items-center">
-            <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)]">
-              <img
-                src="/images/concept.webp"
-                alt="Rare.NP concept visual"
-                className="w-full h-[300px] md:h-[420px] object-cover"
-              />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground font-semibold mb-5">
-                The Concept
-              </p>
-              <h2 className="text-3xl md:text-5xl font-black tracking-tight uppercase mb-5">
-                Rare Atelier
-              </h2>
-              <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
-                Rare Atelier is a luxury streetwear label from Nepal, creating limited pieces where
-                local memory meets a modern global silhouette. Each garment is cut with intent,
-                built in small runs, and released as an object of meaning as much as design.
-              </p>
-            </div>
+          <div className="max-w-4xl mx-auto text-center">
+            {/* Concept label */}
+            <p className="text-[10px] uppercase tracking-[0.35em] text-white/90 font-semibold mb-6">
+              The Concept
+            </p>
+            
+            {/* Main heading */}
+            <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight uppercase mb-8 text-white leading-tight">
+              Rare Atelier
+            </h2>
+            
+            {/* Description text */}
+            <p className="text-lg md:text-xl lg:text-2xl text-white/95 leading-relaxed max-w-3xl mx-auto font-light">
+              Rare Atelier is a luxury streetwear label from Nepal, creating limited pieces where
+              local memory meets a modern global silhouette. Each garment is cut with intent,
+              built in small runs, and released as an object of meaning as much as design.
+            </p>
+            
+            {/* Optional decorative element */}
+            <div className="mt-12 w-24 h-1 bg-white/50 mx-auto rounded-full" />
           </div>
         </div>
       </section>

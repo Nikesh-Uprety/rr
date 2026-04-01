@@ -13,8 +13,8 @@ import { storage } from "./storage";
 import { logger } from "./logger";
 import passport from "passport";
 import { processAndStoreImage, deleteLocalImage } from "./lib/imageService";
-import bcrypt from "bcryptjs";
 import { resolveUploadsDir } from "./uploads";
+import { storageService } from "./storage-service";
 import {
   createLoginHandler,
   createStoreUserHandler,
@@ -1707,14 +1707,15 @@ export async function registerRoutes(
         const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
         const buffer = Buffer.from(match ? match[2] : base64, "base64");
         
-        // Use unified local WebP service for products
-        const asset = await processAndStoreImage(
+        // Use S3 storage for product images
+        const fileName = `product_${Date.now()}.png`;
+        const asset = await storageService.uploadFile(
           buffer,
-          "product",
-          `product_${Date.now()}.png` // fallback name
+          fileName,
+          'image/png'
         );
 
-        return res.json({ success: true, url: asset.url });
+        return res.json({ success: true, url: asset });
       } catch (err) {
         console.error("Error in product image upload", err);
         return res.status(500).json({ success: false, error: "Upload failed" });
@@ -1746,19 +1747,23 @@ export async function registerRoutes(
         return res.status(400).json({ success: false, error: "No file uploaded" });
       }
 
-      ensureMediaUploadsDir();
+      // Use S3 storage for media files
       const filename = `${path.parse(req.file.originalname).name}-${Date.now()}.webp`;
-      const filePath = path.join(MEDIA_UPLOADS_DIR, filename);
-
-      await sharp(req.file.buffer)
+      const webpBuffer = await sharp(req.file.buffer)
         .webp({ quality: 85 })
-        .toFile(filePath);
+        .toBuffer();
+
+      const asset = await storageService.uploadFile(
+        webpBuffer,
+        filename,
+        'image/webp'
+      );
 
       res.status(201).json({ 
         success: true, 
         data: {
           name: filename,
-          url: `/api/uploads/media/${filename}`
+          url: asset
         } 
       });
     } catch (err) {
@@ -1769,10 +1774,10 @@ export async function registerRoutes(
   app.delete("/api/admin/media/:filename", requireAdmin, async (req, res) => {
     try {
       const filename = req.params.filename as string;
-      const filePath = path.join(MEDIA_UPLOADS_DIR, filename);
-      if (fs.existsSync(filePath)) {
-        await fs.promises.unlink(filePath);
-      }
+      
+      // Use S3 storage for deletion
+      await storageService.deleteFile(filename);
+      
       res.json({ success: true });
     } catch (err) {
       handleApiError(res, err, "DELETE /api/admin/media/:filename");

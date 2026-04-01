@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { emailQueue } from "./queues/emailQueue";
+import { resendEmailService } from "./resend-service";
 
 const isE2ETestMode = process.env.E2E_TEST_MODE === "1";
 const shouldLogOtpCodes =
@@ -18,6 +19,18 @@ export async function sendOTPEmail(to: string, code: string, name: string) {
 
   if (shouldLogOtpCodes) {
     console.log(`[DEV OTP] ${to} -> ${code}`);
+  }
+
+  // Try Resend first, fallback to queue
+  try {
+    const result = await resendEmailService.sendOTPEmail(to, code, name, 10);
+    if (result.success) {
+      console.log(`[Resend] OTP email sent successfully to: ${to}`);
+      return;
+    }
+    console.log(`[Resend] Fallback to queue for: ${to}`);
+  } catch (error) {
+    console.log(`[Resend] Error, fallback to queue for: ${to}`);
   }
 
   try {

@@ -18,6 +18,7 @@
     "analyze": "source-map-explorer 'dist/public/assets/*.js'"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1020.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -79,6 +80,7 @@
     "memorystore": "^1.6.7",
     "motion": "^12.38.0",
     "multer": "^2.1.1",
+    "multer-s3": "^3.0.1",
     "next-themes": "^0.4.6",
     "nodemailer": "^8.0.1",
     "passport": "^0.7.0",
@@ -100,6 +102,7 @@
     "react-zoom-pan-pinch": "^3.7.0",
     "recharts": "^2.15.4",
     "redis": "^5.11.0",
+    "resend": "^6.10.0",
     "sharp": "^0.34.5",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",

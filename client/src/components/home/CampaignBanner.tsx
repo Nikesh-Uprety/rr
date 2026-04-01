@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { ArrowUp } from "lucide-react";
 
 interface CampaignBannerProps {
   exploreCollectionImage: string;
@@ -260,6 +261,16 @@ export default function CampaignBanner({
           }
         />
       </motion.div>
+      <div className="absolute bottom-8 left-0 right-0 flex justify-center z-10">
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="group flex items-center gap-3 px-7 py-3.5 rounded-full bg-black/85 hover:bg-black text-white transition-all duration-300 shadow-xl hover:shadow-2xl backdrop-blur-sm border border-white/10"
+          aria-label="Go to top"
+        >
+          <ArrowUp className="w-4 h-4 transition-transform group-hover:-translate-y-1" />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.25em]">Back to Top</span>
+        </button>
+      </div>
     </section>
   );
 }

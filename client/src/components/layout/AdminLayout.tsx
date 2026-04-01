@@ -391,10 +391,20 @@ export default function AdminLayout({
         <header className="sticky top-0 z-20 h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5">
           <div className="flex items-center gap-2.5">
             <SidebarTrigger className="text-foreground hover:bg-background/50 hidden lg:flex" />
-            <div className="hidden lg:flex items-center gap-1.5 rounded-full border border-border/70 bg-card/55 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-muted-foreground animate-pulse">
-              <ChevronsLeftRight className="h-3 w-3" />
-              Collapse sidebar
-            </div>
+            {isVisuallyExpanded ? (
+              <div className="hidden lg:flex items-center gap-1.5 rounded-full border border-border/70 bg-card/55 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-muted-foreground animate-pulse">
+                <ChevronsLeftRight className="h-3 w-3" />
+                Collapse sidebar
+              </div>
+            ) : (
+              <Link href="/" className="hidden lg:flex items-center" title="Open Home Page">
+                <img
+                  src="/images/logo.webp"
+                  alt="RARE.NP"
+                  className="h-7 w-auto object-contain brightness-0 dark:brightness-0 dark:invert"
+                />
+              </Link>
+            )}
             <Button
               variant="ghost"
               size="icon"

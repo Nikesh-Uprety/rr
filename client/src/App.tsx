@@ -26,7 +26,7 @@ import SentryTest from "@/components/SentryTest";
 const loadProductsPage = () => import("@/pages/storefront/Products");
 const loadProductDetailPage = () => import("@/pages/storefront/ProductDetail");
 const loadNewCollectionPage = () => import("@/pages/storefront/NewCollection");
-const loadContactPage = () => import("@/pages/storefront/Contact");
+const loadAtelierPage = () => import("@/pages/storefront/Contact");
 const loadCartPage = () => import("@/pages/storefront/Cart");
 const loadCheckoutPage = () => import("@/pages/storefront/Checkout");
 const loadPaymentProcessPage = () => import("@/pages/storefront/PaymentProcess");
@@ -56,7 +56,7 @@ const loadLegalPlaceholderPage = () => import("@/pages/storefront/LegalPlacehold
 const Products = lazy(loadProductsPage);
 const ProductDetail = lazy(loadProductDetailPage);
 const NewCollection = lazy(loadNewCollectionPage);
-const Contact = lazy(loadContactPage);
+const Contact = lazy(loadAtelierPage);
 const Cart = lazy(loadCartPage);
 const Checkout = lazy(loadCheckoutPage);
 const PaymentProcess = lazy(loadPaymentProcessPage);
@@ -115,7 +115,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/products" || cleanPath === "/shop") return loadProductsPage();
   if (cleanPath.startsWith("/product/")) return loadProductDetailPage();
   if (cleanPath === "/new-collection") return loadNewCollectionPage();
-  if (cleanPath === "/atelier" || cleanPath === "/contact") return loadContactPage();
+  if (cleanPath === "/atelier") return loadAtelierPage();
   if (cleanPath === "/cart") return loadCartPage();
   if (cleanPath === "/checkout") return loadCheckoutPage();
   if (cleanPath === "/checkout/payment") return loadPaymentProcessPage();
@@ -401,9 +401,6 @@ function AppRoutes() {
         <StorefrontLayout>
           <Contact />
         </StorefrontLayout>
-      </Route>
-      <Route path="/contact">
-        <Redirect to="/atelier" />
       </Route>
       <Route path="/cart">
         <StorefrontLayout>
@@ -807,7 +804,7 @@ function App() {
       void loadProductsPage();
       void loadProductDetailPage();
       void loadNewCollectionPage();
-      void loadContactPage();
+      void loadAtelierPage();
       void loadCartPage();
       void loadCheckoutPage();
     };

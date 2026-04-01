@@ -4,8 +4,9 @@ import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Receipt, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe } from "lucide-react";
+import { Search, Receipt, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import {
   Sheet,
@@ -335,58 +336,56 @@ export default function AdminOrders() {
         <ExportButton onExport={() => exportOrdersCSV()} />
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search orders, customers..."
-            data-testid="admin-orders-search"
-            className="pl-9 bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-11"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {STATUS_TABS.map(tab => (
-            <button
-              key={tab}
-              onClick={() => setStatusFilter(tab === 'All' ? 'all' : tab.toLowerCase())}
-              className={cn(
-                "px-3 py-1 rounded-full text-xs font-medium border transition-all",
-                (tab === 'All' ? statusFilter === 'all' : statusFilter === tab.toLowerCase())
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
-              )}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex gap-2 flex-wrap">
+            {STATUS_TABS.map(tab => (
+              <button
+                key={tab}
+                onClick={() => setStatusFilter(tab === 'All' ? 'all' : tab.toLowerCase())}
+                className={cn(
+                  "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                  (tab === 'All' ? statusFilter === 'all' : statusFilter === tab.toLowerCase())
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+                )}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
+            <Clock className="h-3 w-3 text-muted-foreground" />
+            <Select
+              value={timeRange}
+              onValueChange={(v) => setTimeRange(v as "all" | "1d" | "3d" | "7d")}
             >
-              {tab}
-            </button>
-          ))}
+              <SelectTrigger className="h-7 border-0 bg-transparent px-0 shadow-none focus:ring-0 text-xs font-medium">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="1d">Last 1 day</SelectItem>
+                <SelectItem value="3d">Last 3 days</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        <div className="ml-auto sm:ml-0 flex items-center gap-3">
-           <p className="text-xs font-medium text-muted-foreground hidden sm:block">
-             {orders?.length ?? 0} orders found
-           </p>
-           <div className="flex items-center gap-2 border-l border-border pl-3 ml-1">
-             <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
-               <Clock className="h-3 w-3 text-muted-foreground" />
-               <Select
-                 value={timeRange}
-                 onValueChange={(v) => setTimeRange(v as "all" | "1d" | "3d" | "7d")}
-               >
-                 <SelectTrigger className="h-7 border-0 bg-transparent px-0 shadow-none focus:ring-0 text-xs font-medium">
-                   <SelectValue />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectItem value="all">All time</SelectItem>
-                   <SelectItem value="1d">Last 1 day</SelectItem>
-                   <SelectItem value="3d">Last 3 days</SelectItem>
-                   <SelectItem value="7d">Last 7 days</SelectItem>
-                 </SelectContent>
-               </Select>
-             </div>
-             <ViewToggle view={viewMode} onViewChange={setViewMode} />
-           </div>
+        <div className="flex items-center gap-3">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search orders, customers..."
+              data-testid="admin-orders-search"
+              className="pl-9 bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-11"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <ViewToggle view={viewMode} onViewChange={setViewMode} />
+          <ExportButton onExport={() => exportOrdersCSV()} />
         </div>
       </div>
 
@@ -409,7 +408,10 @@ export default function AdminOrders() {
                 <th className="px-4 py-3 font-medium">Items</th>
                 <th className="px-4 py-3 font-medium">Date</th>
                 <th className="px-4 py-3 font-medium">Payment</th>
+                <th className="px-4 py-3 font-medium">Delivered</th>
+                <th className="px-4 py-3 font-medium">Paid</th>
                 <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Bill</th>
                 <th className="px-4 py-3 font-medium text-right">Amount</th>
               </tr>
             </thead>
@@ -499,6 +501,27 @@ export default function AdminOrders() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
+                          <Switch
+                            checked={order.status === "completed"}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                statusMutation.mutate({ id: order.id, status: "completed" });
+                              } else {
+                                statusMutation.mutate({ id: order.id, status: "processing" });
+                              }
+                            }}
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          {order.paymentVerified === "verified" ? (
+                            <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">Paid</Badge>
+                          ) : order.paymentVerified === "rejected" ? (
+                            <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px]">Rejected</Badge>
+                          ) : (
+                            <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Unpaid</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
                           <Badge
                             className={cn(
                               "text-[10px] font-bold uppercase tracking-wider",
@@ -510,6 +533,9 @@ export default function AdminOrders() {
                             )}>
                             {status}
                           </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <BillButton orderId={order.id} />
                         </td>
                         <td className="px-4 py-3 text-right font-medium">
                           {formatPrice((order.total ?? 0) - (order.discountAmount ?? 0))}
@@ -651,7 +677,7 @@ export default function AdminOrders() {
                   </div>
                 </SheetHeader>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3 flex-wrap">
                   <Select
                     value={selectedOrder.status}
                     onValueChange={(val) => {
@@ -680,6 +706,34 @@ export default function AdminOrders() {
                       <SelectItem value="pos">🟣 POS</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Quick toggles for delivered/paid */}
+                <div className="flex items-center gap-6 p-3 rounded-lg bg-muted/30 border border-border">
+                  <div className="flex items-center gap-3">
+                    <Truck className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs font-medium">Delivered</span>
+                    <Switch
+                      checked={selectedOrder.status === "completed"}
+                      onCheckedChange={(checked) => {
+                        const newStatus = checked ? "completed" : "processing";
+                        statusMutation.mutate({ id: selectedOrder.id, status: newStatus });
+                        setSelectedOrder(prev => prev ? { ...prev, status: newStatus } : null);
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Receipt className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-xs font-medium">Paid</span>
+                    <Switch
+                      checked={selectedOrder.paymentVerified === "verified"}
+                      onCheckedChange={(checked) => {
+                        const val = checked ? "verified" : "rejected";
+                        verifyMutation.mutate({ id: selectedOrder.id, paymentVerified: val as "verified" | "rejected" });
+                        setSelectedOrder(prev => prev ? { ...prev, paymentVerified: val } : null);
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 

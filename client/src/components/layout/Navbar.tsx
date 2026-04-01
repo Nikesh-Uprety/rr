@@ -106,7 +106,7 @@ export default function Navbar() {
       const announceHeight = announceRef.current?.offsetHeight ?? 0;
       setHideAnnouncement(y > announceHeight);
 
-      if (isMaisonNocturne) {
+      if (isMaisonNocturne || isNikeshDesign) {
         const previousY = lastScrollYRef.current;
         const delta = y - previousY;
         const nearTop = y <= 40;
@@ -129,7 +129,7 @@ export default function Navbar() {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [isLuxuryEditorialHome, isMaisonNocturne]);
+  }, [isSpecialPage, isMaisonNocturne, isNikeshDesign]);
 
   useEffect(() => {
     if (!isStorefront || isSpecialPage) return;
@@ -252,7 +252,7 @@ export default function Navbar() {
             top: showTopAnnouncement ? (hideAnnouncement ? 0 : announceHeight) : 0,
             transition:
               "top 0.45s cubic-bezier(.4,0,.2,1), transform 0.42s cubic-bezier(.4,0,.2,1), background 0.55s var(--ease), backdrop-filter 0.55s var(--ease), border-color 0.55s var(--ease), box-shadow 0.55s var(--ease)",
-            transform: isMaisonNocturne && isNavHidden ? "translateY(-115%)" : "translateY(0)",
+            transform: (isMaisonNocturne || isNikeshDesign) && isNavHidden ? "translateY(-115%)" : "translateY(0)",
             background: navChrome.background,
             backdropFilter: navChrome.backdropFilter,
             borderBottom: `1px solid ${navChrome.borderColor}`,
@@ -522,19 +522,35 @@ export default function Navbar() {
     );
   }
 
-  const defaultNavChrome = location === "/" && !isScrolled
-    ? getGlassChrome(theme === "dark" ? "dark" : "light", { active: false })
-    : getGlassChrome(theme === "dark" ? "dark" : "light");
+  const isDark = theme === "dark";
+
+  const navChrome = {
+    background: isDark
+      ? "rgba(10,10,10,0.75)"
+      : "rgba(255,255,255,0.72)",
+    backdropFilter: "blur(12px)",
+    borderColor: "rgba(201,168,76,0.15)",
+    boxShadow: isDark
+      ? "0 4px 24px rgba(201,168,76,0.06)"
+      : "0 4px 24px rgba(0,0,0,0.06)",
+  };
+
+  const navLinkColor = isDark ? "rgba(255,255,255,0.88)" : "rgba(24,24,27,0.88)";
+  const navLinkActive = isDark ? "#c9a84c" : "#c9a84c";
+  const navUnderlineColor = "#c9a84c";
+  const logoTextColor = isDark ? "#c9a84c" : "#c9a84c";
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 border-none"
+      className="fixed top-0 left-0 right-0 z-50"
       style={{
-        background: defaultNavChrome.background,
-        backdropFilter: defaultNavChrome.backdropFilter,
-        borderBottom: `1px solid ${defaultNavChrome.borderColor}`,
-        boxShadow: defaultNavChrome.boxShadow,
-        transition: "background 0.25s ease, backdrop-filter 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease",
+        transform: isNavHidden ? "translateY(-100%)" : "translateY(0)",
+        background: navChrome.background,
+        backdropFilter: navChrome.backdropFilter,
+        WebkitBackdropFilter: navChrome.backdropFilter,
+        borderBottom: `1px solid ${navChrome.borderColor}`,
+        boxShadow: navChrome.boxShadow,
+        transition: "all 300ms ease",
       }}
     >
       <div className="max-w-screen-2xl mx-auto px-6 sm:px-12">
@@ -565,8 +581,8 @@ export default function Navbar() {
               className="group inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 dark:focus-visible:ring-white dark:focus-visible:ring-offset-zinc-950"
             >
               <span
-                className="text-sm font-extrabold uppercase tracking-[0.32em] text-zinc-950 transition-all duration-300 group-hover:scale-[1.02] group-hover:opacity-80 dark:text-white sm:text-base md:text-lg lg:text-xl"
-                style={{ fontFamily: "var(--font-body)" }}
+                className="text-sm font-extrabold uppercase tracking-[0.32em] transition-all duration-300 group-hover:scale-[1.02] group-hover:opacity-80 sm:text-base md:text-lg lg:text-xl"
+                style={{ fontFamily: "'Syne', sans-serif", color: logoTextColor }}
               >
                 RARE ATELIER
               </span>
@@ -580,7 +596,7 @@ export default function Navbar() {
                 href={item.href}
                 className="relative text-sm font-medium uppercase tracking-[0.18em] transition-all duration-300 hover:opacity-100 after:absolute after:bottom-[-6px] after:left-0 after:h-px after:w-full after:origin-left after:transition-transform after:duration-300"
                 style={{
-                  color: theme === "dark" ? "rgba(255,255,255,0.88)" : "rgba(24,24,27,0.88)",
+                  color: location === item.href ? navLinkActive : navLinkColor,
                   opacity: location === item.href ? 1 : 0.8,
                   fontFamily: "var(--font-body)",
                 }}
@@ -595,7 +611,7 @@ export default function Navbar() {
                 <span
                   className="absolute bottom-[-6px] left-0 h-px w-full origin-left transition-transform duration-300"
                   style={{
-                    background: theme === "dark" ? "#ffffff" : "#111111",
+                    background: navUnderlineColor,
                     transform: location === item.href ? "scaleX(1)" : "scaleX(0)",
                   }}
                 />

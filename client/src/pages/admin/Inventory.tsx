@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Download, Loader2, Package, Search } from "lucide-react";
+import { AlertTriangle, Download, Loader2, Package, Search, Plus, X, ChevronDown, ChevronUp, Palette, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -42,6 +43,8 @@ interface InventoryProduct {
   totalStock: number;
   inventoryValue: number;
   status: "healthy" | "low" | "critical";
+  colorOptions?: string | null;
+  sizeOptions?: string | null;
 }
 
 const SIZE_KEYS = ["S", "M", "L", "XL"] as const;
@@ -96,6 +99,41 @@ function getInventoryEditorSizes(product: InventoryProduct | null): string[] {
   return [...SIZE_KEYS, ...extras];
 }
 
+function parseColorOptions(product: InventoryProduct | null): string[] {
+  if (!product?.colorOptions) return [];
+  try {
+    const parsed = JSON.parse(product.colorOptions);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseSizeOptions(product: InventoryProduct | null): string[] {
+  if (!product?.sizeOptions) return [];
+  try {
+    const parsed = JSON.parse(product.sizeOptions);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getColorName(hex: string): string {
+  const names: Record<string, string> = {
+    "#000000": "Black", "#ffffff": "White", "#ff0000": "Red", "#00ff00": "Green",
+    "#0000ff": "Blue", "#ffff00": "Yellow", "#800080": "Purple", "#ffa500": "Orange",
+    "#ffc0cb": "Pink", "#a52a2a": "Brown", "#808080": "Gray", "#c0c0c0": "Silver",
+    "#1f1f1f": "Charcoal", "#292524": "Stone", "#171717": "Jet", "#0f0f10": "Onyx",
+    "#2d2d2d": "Dark Gray", "#333333": "Graphite", "#4a4a4a": "Slate",
+    "#8b7355": "Tan", "#c7b9a6": "Sand", "#8a7861": "Khaki", "#d9d4cb": "Cream",
+    "#e7dfd1": "Beige", "#f5f5dc": "Ivory", "#2c3e50": "Navy", "#34495e": "Midnight",
+    "#1a1a2e": "Deep Navy", "#2d3436": "Gunmetal", "#636e72": "Steel",
+    "#b99356": "Gold", "#c9a96e": "Light Gold", "#d4af37": "Metallic Gold",
+  };
+  return names[hex.toLowerCase()] || hex;
+}
+
 const InventoryRow = React.memo(function InventoryRow({
   product,
   onEdit,
@@ -104,7 +142,7 @@ const InventoryRow = React.memo(function InventoryRow({
   onEdit: (product: InventoryProduct) => void;
 }) {
   return (
-    <tr className="border-t border-border">
+    <tr className="border-t border-border hover:bg-muted/30 transition-colors">
       <td className="px-4 py-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 overflow-hidden rounded-md border border-border bg-muted/40 shrink-0">
@@ -169,6 +207,9 @@ export default function Inventory() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
   const [editStocks, setEditStocks] = useState<StockDraft>({ S: 0, M: 0, L: 0, XL: 0 });
+  const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
+  const [newColorHex, setNewColorHex] = useState("");
+  const [newSize, setNewSize] = useState("");
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSearch(searchInput), 300);
@@ -193,6 +234,17 @@ export default function Inventory() {
     staleTime: 30 * 1000,
   });
 
+  // Sort: low/critical stock first, then by name
+  const sortedProducts = useMemo(() => {
+    return [...products].sort((a, b) => {
+      const statusOrder = { critical: 0, low: 1, healthy: 2 };
+      const aOrder = statusOrder[a.status] ?? 2;
+      const bOrder = statusOrder[b.status] ?? 2;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.name.localeCompare(b.name);
+    });
+  }, [products]);
+
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedProductId) ?? null,
     [products, selectedProductId],
@@ -201,9 +253,20 @@ export default function Inventory() {
     () => getInventoryEditorSizes(selectedProduct),
     [selectedProduct],
   );
+  const productColors = useMemo(
+    () => parseColorOptions(selectedProduct),
+    [selectedProduct],
+  );
+  const productSizes = useMemo(
+    () => parseSizeOptions(selectedProduct),
+    [selectedProduct],
+  );
 
   useEffect(() => {
     setEditStocks(buildDraft(selectedProduct));
+    setExpandedColors(new Set());
+    setNewColorHex("");
+    setNewSize("");
   }, [selectedProduct]);
 
   const updateStock = useMutation({
@@ -326,6 +389,29 @@ export default function Inventory() {
     }));
   };
 
+  const toggleColor = (color: string) => {
+    setExpandedColors((prev) => {
+      const next = new Set(prev);
+      if (next.has(color)) next.delete(color);
+      else next.add(color);
+      return next;
+    });
+  };
+
+  const addNewColor = () => {
+    if (!newColorHex || !/^#[0-9a-fA-F]{6}$/.test(newColorHex)) return;
+    const updatedColors = [...productColors, newColorHex];
+    setNewColorHex("");
+  };
+
+  const addNewSize = () => {
+    if (!newSize.trim()) return;
+    const trimmed = newSize.trim().toUpperCase();
+    if (editorSizes.includes(trimmed)) return;
+    setEditStocks((prev) => ({ ...prev, [trimmed]: 0 }));
+    setNewSize("");
+  };
+
   const saveStocks = async () => {
     if (!selectedProduct) return;
 
@@ -341,6 +427,7 @@ export default function Inventory() {
       }
     }
     setEditModalOpen(false);
+    setSelectedProductId(null);
     setEditStocks({ S: 0, M: 0, L: 0, XL: 0 });
   };
 
@@ -544,7 +631,7 @@ export default function Inventory() {
                       </td>
                     </tr>
                   ))
-                : products.length === 0
+                : sortedProducts.length === 0
                   ? (
                     <tr>
                       <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
@@ -552,7 +639,7 @@ export default function Inventory() {
                       </td>
                     </tr>
                     )
-                  : products.map((product) => (
+                  : sortedProducts.map((product) => (
                       <InventoryRow key={product.id} product={product} onEdit={openEditor} />
                     ))}
             </tbody>
@@ -560,121 +647,310 @@ export default function Inventory() {
         </div>
       </div>
 
+      {/* Redesigned Restock Dialog */}
       <Dialog
         open={editModalOpen}
         onOpenChange={(open) => {
           setEditModalOpen(open);
-          if (!open) setSelectedProductId(null);
+          if (!open) {
+            setSelectedProductId(null);
+            setEditStocks({ S: 0, M: 0, L: 0, XL: 0 });
+            setExpandedColors(new Set());
+          }
         }}
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>
-              {selectedProduct ? `Restock — ${selectedProduct.name}` : "Restock — Select Product"}
+              {selectedProduct ? `Edit Stock — ${selectedProduct.name}` : "Adjust Stock — Select Product"}
             </DialogTitle>
+            <DialogDescription>
+              {selectedProduct
+                ? "Manage stock levels for each color and size variant."
+                : "Search and select a product to adjust its stock."}
+            </DialogDescription>
           </DialogHeader>
 
-          {!selectedProduct ? (
-            <div className="space-y-4">
-              <Input
-                value={pickerSearch}
-                onChange={(event) => setPickerSearch(event.target.value)}
-                placeholder="Search product to adjust"
-              />
-              <div className="max-h-72 space-y-2 overflow-y-auto">
-                {pickerProducts.map((product) => (
-                  <button
-                    key={product.id}
-                    type="button"
-                    onClick={() => setSelectedProductId(product.id)}
-                    className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-3 text-left hover:bg-muted"
-                  >
-                    <div>
-                      <p className="font-medium">{product.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {product.category} · {product.totalStock} in stock
-                      </p>
-                    </div>
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                      Select
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {editorSizes.map((size) => (
-                <div
-                  key={size}
-                  className="flex items-center justify-between py-3 border-b border-border"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 flex items-center justify-center border border-border rounded text-sm font-medium">
-                      {size}
-                    </span>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded font-medium ${
-                        (selectedProduct.stockBySize[size] ?? 0) === 0
-                          ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
-                          : (selectedProduct.stockBySize[size] ?? 0) <= 5
-                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                            : "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300"
-                      }`}
-                    >
-                      {(selectedProduct.stockBySize[size] ?? 0) === 0
-                        ? "Out of stock"
-                        : (selectedProduct.stockBySize[size] ?? 0) <= 5
-                          ? `Low — ${selectedProduct.stockBySize[size] ?? 0} left`
-                          : `${selectedProduct.stockBySize[size] ?? 0} in stock`}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => adjustSize(size, -5)}
-                      className="w-7 h-7 border border-border rounded text-sm hover:bg-muted transition-colors"
-                    >
-                      -5
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => adjustSize(size, -1)}
-                      className="w-7 h-7 border border-border rounded text-sm hover:bg-muted transition-colors"
-                    >
-                      -1
-                    </button>
-                    <input
-                      type="number"
-                      min={0}
-                      value={editStocks[size] ?? selectedProduct.stockBySize[size] ?? 0}
-                      onChange={(e) =>
-                        setEditStocks((prev) => ({
-                          ...prev,
-                          [size]: Math.max(0, parseInt(e.target.value) || 0),
-                        }))
-                      }
-                      className="w-16 text-center border border-border rounded px-2 py-1 text-sm bg-background"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => adjustSize(size, 1)}
-                      className="w-7 h-7 border border-border rounded text-sm hover:bg-muted transition-colors"
-                    >
-                      +1
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => adjustSize(size, 10)}
-                      className="w-7 h-7 border border-border rounded text-sm hover:bg-muted transition-colors"
-                    >
-                      +10
-                    </button>
-                  </div>
+          <div className="flex-1 overflow-y-auto pr-1">
+            {!selectedProduct ? (
+              <div className="space-y-4">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={pickerSearch}
+                    onChange={(event) => setPickerSearch(event.target.value)}
+                    placeholder="Search product name or SKU..."
+                    className="pl-9"
+                  />
                 </div>
-              ))}
-            </div>
-          )}
+                <div className="max-h-72 space-y-2 overflow-y-auto">
+                  {pickerProducts.map((product) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={() => setSelectedProductId(product.id)}
+                      className="flex w-full items-center gap-3 rounded-lg border border-border px-4 py-3 text-left hover:bg-muted transition-colors"
+                    >
+                      <div className="h-10 w-10 overflow-hidden rounded-md border bg-muted/40 shrink-0">
+                        {product.imageUrl ? (
+                          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <Package className="h-full w-full p-2 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{product.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {product.category} · {product.totalStock} in stock
+                        </p>
+                      </div>
+                      <Badge className={badgeClasses(product.status)}>{product.status}</Badge>
+                    </button>
+                  ))}
+                  {pickerProducts.length === 0 && (
+                    <p className="text-center text-sm text-muted-foreground py-8">No products found</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {/* Product info bar */}
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+                  <div className="h-12 w-12 overflow-hidden rounded-md border bg-muted/40 shrink-0">
+                    {selectedProduct.imageUrl ? (
+                      <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <Package className="h-full w-full p-2 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{selectedProduct.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedProduct.category} · Total: {selectedProduct.totalStock} units
+                    </p>
+                  </div>
+                  <Badge className={badgeClasses(selectedProduct.status)}>{selectedProduct.status}</Badge>
+                </div>
+
+                {/* Color/Size variant stock management */}
+                {productColors.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Palette className="h-4 w-4" />
+                      <span>Stock by Color & Size</span>
+                    </div>
+
+                    {productColors.map((color) => {
+                      const isExpanded = expandedColors.has(color);
+                      const colorStock = editorSizes.reduce((sum, size) => {
+                        const key = `${color}/${size}`;
+                        return sum + (editStocks[key] ?? selectedProduct.stockBySize[key] ?? 0);
+                      }, 0);
+
+                      return (
+                        <div key={color} className="rounded-lg border border-border overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => toggleColor(color)}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
+                          >
+                            <div
+                              className="h-6 w-6 rounded-full border border-border shrink-0"
+                              style={{ backgroundColor: color }}
+                            />
+                            <span className="text-sm font-medium flex-1 text-left">
+                              {getColorName(color)}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {colorStock} total
+                            </span>
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </button>
+
+                          {isExpanded && (
+                            <div className="px-4 pb-4 space-y-2 border-t border-border pt-3">
+                              {editorSizes.map((size) => {
+                                const key = `${color}/${size}`;
+                                const currentStock = editStocks[key] ?? selectedProduct.stockBySize[key] ?? 0;
+                                const isLow = currentStock <= 3;
+
+                                return (
+                                  <div key={key} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-14 text-xs font-mono font-medium">{size}</span>
+                                      {isLow && (
+                                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Low</Badge>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditStocks((prev) => ({ ...prev, [key]: Math.max(0, currentStock - 5) }))}
+                                        className="w-7 h-7 flex items-center justify-center rounded border border-border text-xs hover:bg-muted transition-colors"
+                                      >
+                                        -5
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditStocks((prev) => ({ ...prev, [key]: Math.max(0, currentStock - 1) }))}
+                                        className="w-7 h-7 flex items-center justify-center rounded border border-border text-xs hover:bg-muted transition-colors"
+                                      >
+                                        -1
+                                      </button>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        value={currentStock}
+                                        onChange={(e) =>
+                                          setEditStocks((prev) => ({
+                                            ...prev,
+                                            [key]: Math.max(0, parseInt(e.target.value) || 0),
+                                          }))
+                                        }
+                                        className="w-16 text-center border border-border rounded px-2 py-1 text-sm bg-background"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditStocks((prev) => ({ ...prev, [key]: currentStock + 1 }))}
+                                        className="w-7 h-7 flex items-center justify-center rounded border border-border text-xs hover:bg-muted transition-colors"
+                                      >
+                                        +1
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditStocks((prev) => ({ ...prev, [key]: currentStock + 10 }))}
+                                        className="w-7 h-7 flex items-center justify-center rounded border border-border text-xs hover:bg-muted transition-colors"
+                                      >
+                                        +10
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Add new color */}
+                    <div className="flex items-center gap-2 pt-2">
+                      <input
+                        type="color"
+                        value={newColorHex || "#000000"}
+                        onChange={(e) => setNewColorHex(e.target.value)}
+                        className="w-8 h-8 rounded cursor-pointer border border-border"
+                      />
+                      <Input
+                        value={newColorHex}
+                        onChange={(e) => setNewColorHex(e.target.value)}
+                        placeholder="#hex color"
+                        className="w-32 text-xs"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={addNewColor}
+                        disabled={!/^#[0-9a-fA-F]{6}$/.test(newColorHex)}
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Add Color
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Simple size-only stock */
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Ruler className="h-4 w-4" />
+                      <span>Stock by Size</span>
+                    </div>
+
+                    {editorSizes.map((size) => {
+                      const currentStock = editStocks[size] ?? selectedProduct.stockBySize[size] ?? 0;
+                      const isLow = currentStock <= 3;
+
+                      return (
+                        <div key={size} className="flex items-center justify-between py-2 px-3 rounded-lg border border-border">
+                          <div className="flex items-center gap-2">
+                            <span className="w-10 h-10 flex items-center justify-center rounded-md bg-muted text-sm font-bold">
+                              {size}
+                            </span>
+                            {isLow && (
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Low stock</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => adjustSize(size, -5)}
+                              className="w-7 h-7 flex items-center justify-center rounded border border-border text-xs hover:bg-muted transition-colors"
+                            >
+                              -5
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => adjustSize(size, -1)}
+                              className="w-7 h-7 flex items-center justify-center rounded border border-border text-xs hover:bg-muted transition-colors"
+                            >
+                              -1
+                            </button>
+                            <input
+                              type="number"
+                              min={0}
+                              value={currentStock}
+                              onChange={(e) =>
+                                setEditStocks((prev) => ({
+                                  ...prev,
+                                  [size]: Math.max(0, parseInt(e.target.value) || 0),
+                                }))
+                              }
+                              className="w-16 text-center border border-border rounded px-2 py-1 text-sm bg-background"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => adjustSize(size, 1)}
+                              className="w-7 h-7 flex items-center justify-center rounded border border-border text-xs hover:bg-muted transition-colors"
+                            >
+                              +1
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => adjustSize(size, 10)}
+                              className="w-7 h-7 flex items-center justify-center rounded border border-border text-xs hover:bg-muted transition-colors"
+                            >
+                              +10
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Add new size */}
+                    <div className="flex items-center gap-2 pt-2">
+                      <Input
+                        value={newSize}
+                        onChange={(e) => setNewSize(e.target.value)}
+                        placeholder="New size (e.g., XXL)"
+                        className="w-32 text-xs"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={addNewSize}
+                        disabled={!newSize.trim() || editorSizes.includes(newSize.trim().toUpperCase())}
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Add Size
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <DialogFooter>
             <Button

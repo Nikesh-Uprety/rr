@@ -112,7 +112,7 @@ export default function Footer() {
               <li><Link href="/new-collection" className="hover:text-[var(--fg)]">Lookbook</Link></li>
               <li><Link href="/shipping" className="hover:text-[var(--fg)]">Stockists</Link></li>
               <li><Link href="/refund" className="hover:text-[var(--fg)]">Care Guide</Link></li>
-              <li><Link href="/contact" className="hover:text-[var(--fg)]">Contact</Link></li>
+              <li><Link href="/atelier" className="hover:text-[var(--fg)]">Contact</Link></li>
             </ul>
           </div>
         </div>

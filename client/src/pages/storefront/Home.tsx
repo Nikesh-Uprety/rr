@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchHomeFeaturedProducts, fetchProducts, type ProductApi } from "@/lib/api";
-import { useScroll, useTransform } from "framer-motion";
+import { useScroll, useTransform, motion, AnimatePresence } from "framer-motion";
 import { Helmet } from "react-helmet-async";
+import { ArrowUp } from "lucide-react";
 import OurServices from "@/components/home/OurServices";
 import HeroSection from "@/components/home/HeroSection";
 import QuoteSection from "@/components/home/QuoteSection";
@@ -11,6 +12,7 @@ import CampaignBanner from "@/components/home/CampaignBanner";
 import NewArrivalsSection from "@/components/home/NewArrivalsSection";
 import GoldTickerSection from "@/components/home/GoldTickerSection";
 import FreshReleaseSection from "@/components/home/FreshReleaseSection";
+import ContactSection from "@/components/home/ContactSection";
 import { ScrollProgress } from "@/components/ScrollProgress";
 
 type SiteAsset = {
@@ -418,6 +420,19 @@ export default function Home() {
 
   const parallaxY = yParallax;
   const campaignBannerAltText = campaignAssets[0]?.altText || "Campaign story";
+  const [showGoToTop, setShowGoToTop] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setShowGoToTop(window.scrollY > 600);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const defaultSections = [
     { id: -1, sectionType: "hero", isVisible: true, config: {}, orderIndex: 1 },
     { id: -2, sectionType: "quote", isVisible: true, config: {}, orderIndex: 2 },
@@ -425,6 +440,7 @@ export default function Home() {
     { id: -4, sectionType: "campaign", isVisible: true, config: {}, orderIndex: 4 },
     { id: -5, sectionType: "arrivals", isVisible: true, config: {}, orderIndex: 5 },
     { id: -6, sectionType: "services", isVisible: true, config: {}, orderIndex: 6 },
+    { id: -7, sectionType: "contact", isVisible: true, config: {}, orderIndex: 7 },
   ];
 
   const activeSections = (
@@ -604,6 +620,12 @@ export default function Home() {
             config={section.config}
           />
         );
+      case "contact":
+        return (
+          <ContactSection
+            key={section.id}
+          />
+        );
       case "fresh-release":
         return (
           <FreshReleaseSection
@@ -634,6 +656,10 @@ export default function Home() {
       </Helmet>
       <main className={isLuxuryEditorialTemplate ? "bg-[var(--bg)] text-[var(--fg)]" : undefined}>
         {activeSections.map(renderSection)}
+        {/* Always render ContactSection at the bottom when not already present */}
+        {!activeSections.some((s: any) => s.sectionType === "contact") && (
+          <ContactSection />
+        )}
       </main>
     </div>
   );

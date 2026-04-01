@@ -58,7 +58,7 @@ export class S3StorageService implements StorageService {
 
   constructor() {
     this.config = this.getStorageConfig();
-    this.s3Uploader = createS3Uploader(this.config);
+    this.s3Uploader = createS3Uploader();
   }
 
   private getStorageConfig(): StorageConfig {

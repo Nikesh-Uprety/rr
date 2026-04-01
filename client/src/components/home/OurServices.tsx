@@ -43,7 +43,7 @@ function SectionMountainSilhouette() {
 
 function Card1TruckArt() {
   return (
-    <div className="relative flex h-[200px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
+    <div className="relative flex h-[240px] lg:h-[280px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
       <div className="our-services-truck-wrap relative flex items-center">
         {/* Speed lines */}
         <div className="absolute right-full mr-1 flex flex-col gap-1.5">
@@ -85,7 +85,7 @@ function Card2MountainBg() {
 
 function Card2Art() {
   return (
-    <div className="relative flex h-[200px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
+    <div className="relative flex h-[240px] lg:h-[280px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
       <Card2MountainBg />
       <div className="our-services-flag-wrap relative z-[2] flex justify-center">
         <img
@@ -103,7 +103,7 @@ function Card2Art() {
 
 function Card3ExchangeArt() {
   return (
-    <div className="relative flex h-[200px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
+    <div className="relative flex h-[240px] lg:h-[280px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
       <div className="our-services-box-exchange relative flex items-center justify-center">
         <img
           src={`${import.meta.env.BASE_URL}easyexchange.svg`}
@@ -221,7 +221,7 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
   return (
     <section
       ref={sectionRef}
-      className="relative min-h-[520px] overflow-hidden px-10 py-[60px] pb-[72px]"
+      className="relative min-h-[680px] overflow-hidden px-6 sm:px-10 lg:px-16 py-[80px] pb-[96px]"
       style={{
         background: "linear-gradient(to bottom, #050505, #0b0b0b 45%, #111111)",
       }}
@@ -250,23 +250,23 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
         }}
       />
 
-      <div className="relative z-10 mx-auto max-w-[960px]">
+      <div className="relative z-10 mx-auto max-w-[1400px]">
         <h2
-          className="our-services-heading mb-2 text-center font-extrabold text-white"
+          className="our-services-heading mb-3 text-center font-extrabold text-white"
           style={{
-            fontSize: "clamp(32px, 4.5vw, 52px)",
+            fontSize: "clamp(36px, 5vw, 64px)",
           }}
         >
           {sectionTitle}
         </h2>
         <p
-          className="mb-11 text-center text-white/72"
-          style={{ fontSize: "clamp(14px, 1.6vw, 18px)" }}
+          className="mb-14 text-center text-white/72"
+          style={{ fontSize: "clamp(16px, 1.8vw, 22px)" }}
         >
           {sectionText}
         </p>
 
-        <div className="grid max-w-[960px] grid-cols-1 gap-5 md:grid-cols-3 md:gap-5">
+        <div className="grid max-w-[1400px] grid-cols-1 gap-6 md:grid-cols-3 md:gap-6 lg:gap-8">
           {serviceCards.slice(0, 3).map((card, index) => {
             const art = index === 0 ? <Card1TruckArt /> : index === 1 ? <Card2Art /> : <Card3ExchangeArt />;
             return (
@@ -277,15 +277,15 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
                 }`}
               >
                 {art}
-                <div className="flex flex-1 flex-col items-center bg-[#0b0b0b] px-6 pb-7 pt-6 text-center">
-                  <h3 className="our-services-card-title mb-2.5 text-[20px] font-bold text-white">{card.title}</h3>
-                  <p className="mb-5 flex-1 text-[13.5px] leading-[1.7] text-white/72">
+                <div className="flex flex-1 flex-col items-center bg-[#0b0b0b] px-6 pb-8 pt-7 text-center">
+                  <h3 className="our-services-card-title mb-3 text-[22px] lg:text-[26px] font-bold text-white">{card.title}</h3>
+                  <p className="mb-6 flex-1 text-[14px] lg:text-[15px] leading-[1.75] text-white/72">
                     {card.text}
                   </p>
                   <button
                     type="button"
                     onClick={() => handleTarget(card.target)}
-                    className="our-services-btn cursor-pointer rounded-md border border-white/14 bg-[#161616] px-8 py-[11px] text-[13px] font-medium tracking-[0.06em] text-white transition-[background,transform,border-color] duration-200 hover:scale-[1.02] hover:bg-[#202020] hover:border-white/22"
+                    className="our-services-btn cursor-pointer rounded-md border border-white/14 bg-[#161616] px-10 py-[13px] text-[14px] font-medium tracking-[0.06em] text-white transition-[background,transform,border-color] duration-200 hover:scale-[1.02] hover:bg-[#202020] hover:border-white/22"
                   >
                     {card.buttonLabel || "Learn More"}
                   </button>

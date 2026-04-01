@@ -201,7 +201,12 @@ export function createStoreUserHandler(deps?: {
 
   return async (req: Request, res: Response) => {
     try {
-      const { name, email, password, role } = req.body;
+      const validation = createStoreUserSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ success: false, error: "Invalid request body" });
+      }
+
+      const { name, email, password, role } = validation.data;
 
       const existing = await storage.getUserByEmail(email);
       if (existing) {

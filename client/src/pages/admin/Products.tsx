@@ -13,7 +13,7 @@ import {
   Share2, FileText, Download, Check, X, Pencil, Search, Table as TableIcon,
   ChevronRight, FileSpreadsheet, Eye, EyeOff, LayoutTemplate, Shirt, Footprints, Tag,
   MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar, Percent,
-  FolderInput, Box, CheckCircle2, ChevronDown
+  FolderInput, Box, CheckCircle2, ChevronDown, Plus
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -98,6 +98,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AttributesManager } from "./AttributesManager";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import AddProductWizard from "./AddProductWizard";
 import {
   DEFAULT_PRODUCT_SIZES,
   DEFAULT_PRODUCT_VARIANTS,
@@ -247,6 +248,13 @@ export default function AdminProducts() {
   } | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Edit page managers
+  const [showColorManager, setShowColorManager] = useState(false);
+  const [showSizeManager, setShowSizeManager] = useState(false);
+  const [editNewColorHex, setEditNewColorHex] = useState("#000000");
+  const [editNewColorName, setEditNewColorName] = useState("");
+  const [editNewSize, setEditNewSize] = useState("");
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
@@ -594,6 +602,37 @@ export default function AdminProducts() {
     onError: () => toast({ title: "Failed to update category", variant: "destructive" }),
   });
 
+  // Edit page color/size management handlers
+  const handleAddEditColor = () => {
+    if (!editNewColorName.trim()) return;
+    const label = `${editNewColorName.trim()} (${editNewColorHex})`;
+    const existing = editForm.getValues("colorOptions") || [];
+    if (!existing.includes(label)) {
+      editForm.setValue("colorOptions", [...existing, label], { shouldValidate: true, shouldDirty: true });
+    }
+    setEditNewColorName("");
+  };
+
+  const handleRemoveEditColor = (color: string) => {
+    const current = editForm.getValues("colorOptions") || [];
+    editForm.setValue("colorOptions", current.filter((x: string) => x !== color), { shouldValidate: true, shouldDirty: true });
+  };
+
+  const handleAddEditSize = () => {
+    const trimmed = editNewSize.trim().toUpperCase();
+    if (!trimmed) return;
+    const existing = editForm.getValues("sizeOptions") || [];
+    if (!existing.includes(trimmed)) {
+      editForm.setValue("sizeOptions", [...existing, trimmed], { shouldValidate: true, shouldDirty: true });
+    }
+    setEditNewSize("");
+  };
+
+  const handleRemoveEditSize = (size: string) => {
+    const current = editForm.getValues("sizeOptions") || [];
+    editForm.setValue("sizeOptions", current.filter((x: string) => x !== size), { shouldValidate: true, shouldDirty: true });
+  };
+
   const deleteCategoryMutation = useMutation({
     mutationFn: (id: string) => deleteCategory(id),
     onSuccess: () => {
@@ -740,642 +779,28 @@ export default function AdminProducts() {
       </div>
 
 
-      {/* Full-page Add Product overlay */}
+
+      {/* Full-page Add Product Wizard */}
       {addOpen && (
-        <div className="fixed inset-0 z-40 bg-background overflow-auto">
-          <div className="max-w-[1400px] mx-auto p-4 sm:p-6 pb-20">
-            <Button
-              type="button"
-              variant="ghost"
-              className="mb-6 -ml-2 rounded-2xl hover:bg-[#EEF4EE]"
-              onClick={closeAddOverlay}
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" /> Back to products
-            </Button>
-            
-            <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
-              {/* LEFT COLUMN: Data Form */}
-              <div className="flex-1 lg:max-w-[500px]">
-                <h2 className="text-2xl font-serif font-medium mb-8">Add New Product</h2>
-                <Form {...addForm}>
-                  <form
-                    id="add-product-form"
-                    onSubmit={addForm.handleSubmit((values) => addMutation.mutate(values))}
-                    className="space-y-8"
-                  >
-                    <div className="space-y-4">
-                      <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Product Details</h3>
-                      <FormField
-                        control={addForm.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Product Name *</FormLabel>
-                            <FormControl>
-                              <Input data-testid="admin-product-name" placeholder="Two-Way Zip Hoodie" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={addForm.control}
-                        name="shortDetails"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Short details</FormLabel>
-                            <FormControl>
-                              <Input data-testid="admin-product-short-details" placeholder="Brief tagline or key features" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={addForm.control}
-                        name="description"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Full description</FormLabel>
-                            <FormControl>
-                              <Textarea rows={4} placeholder="Full product description..." {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={addForm.control}
-                        name="category"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Category *</FormLabel>
-                            <div className="flex gap-2 flex-wrap">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger data-testid="admin-product-category" className="min-w-[180px]">
-                                    <SelectValue placeholder="Select category" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {categories.map((c) => (
-                                    <SelectItem key={c.id} value={c.slug}>{c.name}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => { setPendingCategoryForm("add"); setNewCategoryOpen(true); }}
-                              >
-                                Add new
-                              </Button>
-                            </div>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div className="space-y-4">
-                      <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Pricing &amp; Stock</h3>
-                      <FormField
-                        control={addForm.control}
-                        name="price"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Price (NPR) *</FormLabel>
-                            <FormControl>
-                              <Input data-testid="admin-product-price" type="number" min={0} step="1" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      {/* Sale Section */}
-                      <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label className="text-sm font-bold flex items-center gap-2">
-                              <Percent className="w-4 h-4 text-primary" /> Active Sale
-                            </Label>
-                            <p className="text-[10px] text-muted-foreground">Apply a discount to this product</p>
-                          </div>
-                          <FormField
-                            control={addForm.control}
-                            name="saleActive"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <Switch
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                  />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        <AnimatePresence>
-                          {addForm.watch("saleActive") && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="pt-2 border-t border-primary/10"
-                            >
-                              <FormField
-                                control={addForm.control}
-                                name="salePercentage"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <div className="flex items-center justify-between mb-2">
-                                      <FormLabel className="text-[11px] font-bold uppercase tracking-wider">Discount Percentage</FormLabel>
-                                      <span className="text-lg font-serif font-black text-primary">{field.value}% OFF</span>
-                                    </div>
-                                    <FormControl>
-                                      <div className="space-y-2">
-                                        <Input 
-                                          type="range" 
-                                          min="0" 
-                                          max="90" 
-                                          step="5" 
-                                          className="h-2 bg-primary/20 accent-primary"
-                                          {...field} 
-                                        />
-                                        <div className="flex justify-between text-[9px] font-bold text-muted-foreground px-1">
-                                          <span>0%</span>
-                                          <span>25%</span>
-                                          <span>50%</span>
-                                          <span>75%</span>
-                                          <span>90%</span>
-                                        </div>
-                                      </div>
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-
-                      <FormField
-                        control={addForm.control}
-                        name="stockStatus"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Stock status</FormLabel>
-                            <FormControl>
-                              <RadioGroup
-                                value={field.value}
-                                onValueChange={field.onChange}
-                                className="flex gap-4"
-                              >
-                                <div className="flex items-center space-x-2">
-                                  <RadioGroupItem value="in_stock" id="add-in-stock" />
-                                  <Label htmlFor="add-in-stock">In Stock</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <RadioGroupItem value="out_of_stock" id="add-out-of-stock" />
-                                  <Label htmlFor="add-out-of-stock">Out of Stock</Label>
-                                </div>
-                              </RadioGroup>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {addForm.watch("stockStatus") === "in_stock" && (
-                        <FormField
-                          control={addForm.control}
-                          name="stock"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Quantity</FormLabel>
-                              <FormControl>
-                                <Input data-testid="admin-product-stock" type="number" min={0} step="1" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                    </div>
-                    
-                    {/* Hidden inputs to keep form state intact but UI on the right */}
-                    <input type="hidden" {...addForm.register("imageUrl")} />
-                    <input type="hidden" {...addForm.register("galleryUrlsText")} />
-                    
-                    <div className="flex justify-end gap-3 pt-8 border-t">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="rounded-2xl border-[#CDD7C8] bg-gradient-to-br from-white to-[#F3F7F1] hover:-translate-y-0.5 hover:shadow-[0_10px_20px_rgba(34,63,41,0.15)] transition-all duration-300"
-                        onClick={closeAddOverlay}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        data-testid="admin-product-save"
-                        type="submit"
-                        form="add-product-form"
-                        loading={addMutation.isPending}
-                        loadingText="Saving..."
-                        className="rounded-2xl bg-gradient-to-r from-[#2C5234] to-[#3A6A45] text-white hover:brightness-110 shadow-[0_12px_24px_rgba(34,63,41,0.2)] transition-all duration-300"
-                      >
-                        Save Product
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              </div>
-
-              {/* RIGHT COLUMN: Live Preview */}
-              <div className="flex-1 bg-white/50 dark:bg-card/50 p-6 rounded-2xl border border-dashed border-[#E5E5E0] dark:border-border relative">
-                <div className="absolute top-4 right-4 bg-yellow-100 text-yellow-800 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-sm z-10">
-                  Live Preview
-                </div>
-                
-                <div className="flex flex-col xl:flex-row gap-8">
-                  {/* Media Preview Uploads */}
-                  <div className="xl:max-w-[320px] space-y-4">
-                    <div 
-                      className="aspect-[4/5] bg-muted/30 hover:bg-muted/50 transition-colors overflow-hidden rounded-sm relative group cursor-pointer border border-[#E5E5E0] dark:border-border flex items-center justify-center p-4 text-center"
-                      onClick={() => imageInputRef.current?.click()}
-                    >
-                      {addForm.watch("imageUrl") ? (
-                        <img
-                          src={addForm.watch("imageUrl")}
-                          alt="Preview"
-                          className="w-full h-full object-cover absolute inset-0 group-hover:opacity-75 transition-opacity"
-                        />
-                      ) : (
-                        <div className="text-muted-foreground flex flex-col items-center">
-                          <ImageIcon className="w-8 h-8 mb-2 opacity-20" />
-                          <span className="text-sm font-medium">Click to set Main Image</span>
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-white text-sm font-medium px-4 py-2 bg-black/60 rounded-full">Change Image</span>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="flex-1 text-xs h-8"
-                        onClick={() => {
-                          setMediaLibraryTarget('add-main');
-                          setMediaLibraryOpen(true);
-                        }}
-                      >
-                        <FolderInput className="w-3.5 h-3.5 mr-2" /> Select display picture
-                      </Button>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="flex-1 text-xs h-8"
-                        onClick={() => imageInputRef.current?.click()}
-                      >
-                        <Upload className="w-3.5 h-3.5 mr-2" /> Upload display picture
-                      </Button>
-                    </div>
-
-                    <input
-                      ref={imageInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        setUploadingImage(true);
-                        toast({ title: "Uploading main image..." });
-                        try {
-                          const dataUrl = await compressImage(file);
-                          const url = await uploadProductImage(dataUrl);
-                          addForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
-                          toast({ title: "Image uploaded successfully" });
-                        } catch {
-                          toast({ title: "Upload failed", variant: "destructive" });
-                        } finally {
-                          setUploadingImage(false);
-                          e.target.value = "";
-                        }
-                      }}
-                    />
-
-                    {/* Gallery Preview & Upload */}
-                    <div className="space-y-2 pt-2">
-                      <div className="flex gap-2">
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          className="flex-1 border-dashed text-xs h-9"
-                          onClick={() => {
-                            setMediaLibraryTarget('add-gallery');
-                            setMediaLibraryOpen(true);
-                          }}
-                        >
-                          <FolderInput className="w-3.5 h-3.5 mr-2" /> Select from Library
-                        </Button>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          className="flex-1 border-dashed text-xs h-9"
-                          onClick={() => {
-                            setGalleryTarget("add");
-                            galleryInputRef.current?.click();
-                          }}
-                          disabled={uploadingImage}
-                        >
-                          Add More Pictures
-                        </Button>
-                      </div>
-
-                      {addForm.watch("galleryUrlsText") && (
-                        <div className="grid grid-cols-4 gap-2 pt-2">
-                          {addForm.watch("galleryUrlsText")!.split(/\n/).map(u => u.trim()).filter(Boolean).map((url, i) => (
-                            <div key={i} className="aspect-square bg-muted rounded-sm border border-[#E5E5E0] overflow-hidden relative group">
-                               <img src={url} alt="" className="w-full h-full object-cover" />
-                               <button 
-                                 type="button"
-                                 className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                 onClick={() => {
-                                    const urls = addForm.getValues("galleryUrlsText")!.split(/\n/).map(u => u.trim()).filter(Boolean);
-                                    urls.splice(i, 1);
-                                    addForm.setValue("galleryUrlsText", urls.join("\n"), { shouldValidate: true });
-                                 }}
-                               >
-                                 <X className="w-3 h-3" />
-                               </button>
-                            </div>
-                          ))}
-                          {addPendingGalleryImages.map((img) => (
-                            <div key={img.id} className="aspect-square bg-muted rounded-sm border border-[#E5E5E0] overflow-hidden relative group">
-                              <img src={img.previewUrl} alt="" className="w-full h-full object-cover" />
-                              <button
-                                type="button"
-                                className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => {
-                                  setAddPendingGalleryImages((prev) => prev.filter((p) => p.id !== img.id));
-                                  URL.revokeObjectURL(img.previewUrl);
-                                }}
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {galleryUploadStatus && galleryUploadStatus.mode === "add" && (
-                        <p className="text-[11px] text-muted-foreground pt-1">
-                          Uploading {galleryUploadStatus.completed}/{galleryUploadStatus.total}...
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Text Details Preview */}
-                  <div className="flex-1 min-w-0">
-                    <h1 
-                      style={{
-                        fontFamily: 'Roboto, ui-sans-serif, system-ui, sans-serif',
-                        fontWeight: 600,
-                        fontSize: '24px',
-                        lineHeight: '36px',
-                        color: 'var(--brand-product-detail)'
-                      }}
-                      className="uppercase tracking-tight mb-2 break-words"
-                    >
-                      {addForm.watch("name") || "Product Name"}
-                    </h1>
-                    
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {addForm.watch("shortDetails") || "Brief tagline will appear here"}
-                    </p>
-                    
-                    <p 
-                      style={{
-                        fontFamily: 'Roboto, ui-sans-serif, system-ui, sans-serif',
-                        fontWeight: 600,
-                        fontSize: '24px',
-                        lineHeight: '36px',
-                        color: 'var(--brand-product-detail)'
-                      }}
-                      className="mb-8"
-                    >
-                      {formatPrice(addForm.watch("price") || 0)}
-                    </p>
-
-                    <div className="space-y-6">
-                      {/* Interactive Colors */}
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">Product Variants</p>
-                          <button
-                            type="button"
-                            className="text-[10px] text-primary hover:underline font-medium"
-                            onClick={() => {
-                              const current = addForm.getValues("colorOptions") || [];
-                              if (!current.length && dynamicColors.length) {
-                                addForm.setValue("colorOptions", [dynamicColors[0]], {
-                                  shouldValidate: true,
-                                  shouldDirty: true,
-                                });
-                              }
-                            }}
-                          >
-                            Manage
-                          </button>
-                        </div>
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {dynamicColors.map((c) => {
-                            const selectedColors = addForm.watch("colorOptions") || [];
-                            const isSelected = selectedColors.includes(c);
-                            const colorName = extractAttributeLabel(c);
-                            const colorHex =
-                              colorSwatches[normalizeAttributeLabel(c)] || "#cccccc";
-                            return (
-                              <button
-                                key={c}
-                                type="button"
-                                onClick={() => {
-                                  const next = isSelected
-                                    ? selectedColors.filter((x) => x !== c)
-                                    : [...selectedColors, c];
-                                  addForm.setValue("colorOptions", next, {
-                                    shouldValidate: true,
-                                    shouldDirty: true,
-                                  });
-                                }}
-                                className={`flex items-center gap-2 px-3 py-1.5 border text-[11px] font-bold transition-all rounded-full ${
-                                  isSelected
-                                    ? "border-primary bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20"
-                                    : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground bg-white/50 dark:bg-card"
-                                }`}
-                              >
-                                <div
-                                  className="w-3 h-3 rounded-full border border-black/10 shadow-sm"
-                                  style={{ backgroundColor: colorHex }}
-                                />
-                                {colorName}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
-                            Product Variants
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {(addForm.watch("colorOptions") || []).map((c) => {
-                              const colorName = extractAttributeLabel(c);
-                              const colorHex =
-                                colorSwatches[normalizeAttributeLabel(c)] || "#cccccc";
-                              return (
-                                <div
-                                  key={c}
-                                  className="flex items-center gap-2 px-2 py-1 rounded-full border bg-background text-xs"
-                                >
-                                  <span
-                                    className="w-3 h-3 rounded-full border border-black/10"
-                                    style={{ backgroundColor: colorHex }}
-                                  />
-                                  <span>{colorName}</span>
-                                  <button
-                                    type="button"
-                                    className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"
-                                    onClick={() => {
-                                      const current = addForm.getValues("colorOptions") || [];
-                                      addForm.setValue(
-                                        "colorOptions",
-                                        current.filter((x) => x !== c),
-                                        { shouldValidate: true, shouldDirty: true },
-                                      );
-                                    }}
-                                  >
-                                    ×
-                                  </button>
-                                </div>
-                              );
-                            })}
-                            {(!addForm.watch("colorOptions") ||
-                              addForm.watch("colorOptions")!.length === 0) && (
-                              <p className="text-[11px] text-muted-foreground">
-                                No colors added for this product yet.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Interactive Sizes */}
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">
-                            Product Sizes
-                          </p>
-                          <button
-                            type="button"
-                            className="text-[10px] text-primary hover:underline font-medium"
-                            onClick={() => {
-                              const current = addForm.getValues("sizeOptions") || [];
-                              if (!current.length && dynamicSizes.length) {
-                                addForm.setValue("sizeOptions", [dynamicSizes[0]], {
-                                  shouldValidate: true,
-                                  shouldDirty: true,
-                                });
-                              }
-                            }}
-                          >
-                            Manage
-                          </button>
-                        </div>
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {dynamicSizes.map((s) => {
-                            const selectedSizes = addForm.watch("sizeOptions") || [];
-                            const isSelected = selectedSizes.includes(s);
-                            return (
-                              <button
-                                key={s}
-                                type="button"
-                                onClick={() => {
-                                  const next = isSelected
-                                    ? selectedSizes.filter((x) => x !== s)
-                                    : [...selectedSizes, s];
-                                  addForm.setValue("sizeOptions", next, {
-                                    shouldValidate: true,
-                                    shouldDirty: true,
-                                  });
-                                }}
-                                className={`h-11 w-11 flex items-center justify-center border text-[11px] font-black tracking-tighter transition-all rounded-xl ${
-                                  isSelected
-                                    ? "border-primary bg-primary text-primary-foreground shadow-lg scale-105"
-                                    : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground bg-white/50 dark:bg-card"
-                                }`}
-                              >
-                                {extractAttributeLabel(s)}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
-                            Product Sizes
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {(addForm.watch("sizeOptions") || []).map((s) => (
-                              <div
-                                key={s}
-                                className="flex items-center gap-2 px-2 py-1 rounded-full border bg-background text-xs"
-                              >
-                                <span>{extractAttributeLabel(s)}</span>
-                                <button
-                                  type="button"
-                                  className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"
-                                  onClick={() => {
-                                    const current = addForm.getValues("sizeOptions") || [];
-                                    addForm.setValue(
-                                      "sizeOptions",
-                                      current.filter((x) => x !== s),
-                                      { shouldValidate: true, shouldDirty: true },
-                                    );
-                                  }}
-                                >
-                                  ×
-                                </button>
-                              </div>
-                            ))}
-                            {(!addForm.watch("sizeOptions") ||
-                              addForm.watch("sizeOptions")!.length === 0) && (
-                              <p className="text-[11px] text-muted-foreground">
-                                No sizes added for this product yet.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="pt-8 space-y-4 border-t border-border">
-                        <h4 className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground">
-                          Product Details
-                        </h4>
-                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                          {addForm.watch("description") || "Full description preview..."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AddProductWizard
+          categories={categories}
+          onCategoryCreated={() => {
+            queryClient.invalidateQueries({ queryKey: ["categories"] });
+          }}
+          addForm={addForm}
+          addMutation={addMutation}
+          onClose={closeAddOverlay}
+          imageInputRef={imageInputRef}
+          galleryInputRef={galleryInputRef}
+          pendingGalleryImages={addPendingGalleryImages}
+          setPendingGalleryImages={setAddPendingGalleryImages}
+          setUploadingImage={setUploadingImage}
+          toast={toast}
+          onMediaLibraryOpen={(target) => {
+            setMediaLibraryTarget(target as any);
+            setMediaLibraryOpen(true);
+          }}
+        />
       )}
 
       <MediaLibrary 
@@ -2733,19 +2158,55 @@ export default function AdminProducts() {
                           <button
                             type="button"
                             className="text-[10px] text-primary hover:underline font-medium"
-                            onClick={() => {
-                              const current = editForm.getValues("colorOptions") || [];
-                              if (!current.length && dynamicColors.length) {
-                                editForm.setValue("colorOptions", [dynamicColors[0]], {
-                                  shouldValidate: true,
-                                  shouldDirty: true,
-                                });
-                              }
-                            }}
+                            onClick={() => setShowColorManager((v) => !v)}
                           >
-                            Manage
+                            {showColorManager ? "Close" : "Manage"}
                           </button>
                         </div>
+
+                        {/* Inline color manager */}
+                        {showColorManager && (
+                          <div className="mb-3 p-3 rounded-lg border border-border bg-muted/30 space-y-3">
+                            <div className="flex gap-2">
+                              <input
+                                type="color"
+                                value={editNewColorHex}
+                                onChange={(e) => setEditNewColorHex(e.target.value)}
+                                className="w-8 h-8 rounded cursor-pointer border border-border"
+                              />
+                              <Input
+                                value={editNewColorName}
+                                onChange={(e) => setEditNewColorName(e.target.value)}
+                                placeholder="Color name (e.g. Burgundy)"
+                                className="text-xs h-8"
+                                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddEditColor())}
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-8 text-xs shrink-0"
+                                onClick={handleAddEditColor}
+                                disabled={!editNewColorName.trim()}
+                              >
+                                <Plus className="w-3 h-3 mr-1" /> Add
+                              </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {dynamicColors.map((c) => {
+                                const colorName = extractAttributeLabel(c);
+                                const colorHex = colorSwatches[normalizeAttributeLabel(c)] || "#cccccc";
+                                return (
+                                  <div key={c} className="flex items-center gap-1.5 px-2 py-1 rounded-full border bg-background text-xs">
+                                    <span className="w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: colorHex }} />
+                                    <span>{colorName}</span>
+                                    <button type="button" className="ml-1 text-[10px] text-muted-foreground hover:text-red-500" onClick={() => handleRemoveEditColor(c)}>×</button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex flex-wrap gap-2 mb-3">
                           {dynamicColors.map((c) => {
                             const selectedColors = editForm.watch("colorOptions") || [];
@@ -2783,7 +2244,7 @@ export default function AdminProducts() {
                         </div>
                         <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
                           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
-                            Product Variants
+                            Selected Variants
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {(editForm.watch("colorOptions") || []).map((c) => {
@@ -2820,7 +2281,7 @@ export default function AdminProducts() {
                             {(!editForm.watch("colorOptions") ||
                               editForm.watch("colorOptions")!.length === 0) && (
                               <p className="text-[11px] text-muted-foreground">
-                                No colors added for this product yet.
+                                No colors selected for this product.
                               </p>
                             )}
                           </div>
@@ -2836,19 +2297,44 @@ export default function AdminProducts() {
                           <button
                             type="button"
                             className="text-[10px] text-primary hover:underline font-medium"
-                            onClick={() => {
-                              const current = editForm.getValues("sizeOptions") || [];
-                              if (!current.length && dynamicSizes.length) {
-                                editForm.setValue("sizeOptions", [dynamicSizes[0]], {
-                                  shouldValidate: true,
-                                  shouldDirty: true,
-                                });
-                              }
-                            }}
+                            onClick={() => setShowSizeManager((v) => !v)}
                           >
-                            Manage
+                            {showSizeManager ? "Close" : "Manage"}
                           </button>
                         </div>
+
+                        {/* Inline size manager */}
+                        {showSizeManager && (
+                          <div className="mb-3 p-3 rounded-lg border border-border bg-muted/30 space-y-3">
+                            <div className="flex gap-2">
+                              <Input
+                                value={editNewSize}
+                                onChange={(e) => setEditNewSize(e.target.value.toUpperCase())}
+                                placeholder="Size (e.g. XXL)"
+                                className="text-xs h-8 w-32"
+                                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddEditSize())}
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-8 text-xs shrink-0"
+                                onClick={handleAddEditSize}
+                                disabled={!editNewSize.trim()}
+                              >
+                                <Plus className="w-3 h-3 mr-1" /> Add
+                              </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {dynamicSizes.map((s) => (
+                                <div key={s} className="flex items-center gap-1.5 px-2 py-1 rounded-full border bg-background text-xs">
+                                  <span>{extractAttributeLabel(s)}</span>
+                                  <button type="button" className="ml-1 text-[10px] text-muted-foreground hover:text-red-500" onClick={() => handleRemoveEditSize(s)}>×</button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex flex-wrap gap-2 mb-3">
                           {dynamicSizes.map((s) => {
                             const selectedSizes = editForm.watch("sizeOptions") || [];
@@ -2879,7 +2365,7 @@ export default function AdminProducts() {
                         </div>
                         <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
                           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
-                            Product Sizes
+                            Selected Sizes
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {(editForm.watch("sizeOptions") || []).map((s) => (
@@ -2907,10 +2393,41 @@ export default function AdminProducts() {
                             {(!editForm.watch("sizeOptions") ||
                               editForm.watch("sizeOptions")!.length === 0) && (
                               <p className="text-[11px] text-muted-foreground">
-                                No sizes added for this product yet.
+                                No sizes selected for this product.
                               </p>
                             )}
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Category selector */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">Category</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Select
+                            value={editForm.watch("category") || ""}
+                            onValueChange={(val) => editForm.setValue("category", val, { shouldValidate: true, shouldDirty: true })}
+                          >
+                            <SelectTrigger className="flex-1">
+                              <SelectValue placeholder="Select category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categories.map((c) => (
+                                <SelectItem key={c.id} value={c.slug}>{c.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => { setPendingCategoryForm("add"); setNewCategoryOpen(true); }}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
                       </div>
 

@@ -23,7 +23,7 @@ export async function sendOTPEmail(to: string, code: string, name: string) {
 
   // Try Resend first, fallback to queue
   try {
-    const result = await resendEmailService.sendOTPEmail(to, code, name, 10);
+    const result = await resendEmailService.sendOTPEmail(to, code, 10);
     if (result.success) {
       console.log(`[Resend] OTP email sent successfully to: ${to}`);
       return;

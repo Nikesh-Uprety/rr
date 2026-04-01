@@ -30,6 +30,7 @@ describe("auth policy", () => {
     expect(getAdminAllowedPages("csr")).toEqual([
       "dashboard",
       "profile",
+      "messages",
       "notifications",
       "orders",
       "customers",

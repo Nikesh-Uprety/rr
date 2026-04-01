@@ -1,6 +1,7 @@
-import type { MouseEvent, TouchEvent } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { useState, type MouseEvent, type TouchEvent } from "react";
+import { ChevronLeft, ChevronRight, Plus, X, ZoomIn } from "lucide-react";
 import { Link } from "wouter";
+import { AnimatePresence, motion } from "framer-motion";
 
 import { FeaturedProductCard } from "@/components/home/FeaturedProductCard";
 import { formatPrice } from "@/lib/format";
@@ -41,6 +42,93 @@ function resolveFeaturedProducts(
     .filter(Boolean);
 
   return configured.length ? configured : featuredProducts;
+}
+
+function ImageGalleryModal({
+  images,
+  initialIndex,
+  onClose,
+}: {
+  images: string[];
+  initialIndex: number;
+  onClose: () => void;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+
+  const goNext = () => setCurrentIndex((i) => (i + 1) % images.length);
+  const goPrev = () => setCurrentIndex((i) => (i - 1 + images.length) % images.length);
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+        className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center"
+        onClick={onClose}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-6 right-6 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 hover:scale-110"
+          aria-label="Close gallery"
+        >
+          <X className="h-6 w-6" />
+        </button>
+
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4">
+          <button
+            onClick={(e) => { e.stopPropagation(); goPrev(); }}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 hover:scale-110"
+            aria-label="Previous image"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+
+          <div className="flex gap-2">
+            {images.map((_, i) => (
+              <button
+                key={i}
+                onClick={(e) => { e.stopPropagation(); setCurrentIndex(i); }}
+                className={`rounded-full transition-all duration-300 ${
+                  i === currentIndex
+                    ? "w-8 h-2 bg-white"
+                    : "w-2 h-2 bg-white/40 hover:bg-white/70"
+                }`}
+                aria-label={`Go to image ${i + 1}`}
+              />
+            ))}
+          </div>
+
+          <button
+            onClick={(e) => { e.stopPropagation(); goNext(); }}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 hover:scale-110"
+            aria-label="Next image"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 text-xs text-white/60 font-mono tracking-widest uppercase">
+          {currentIndex + 1} / {images.length}
+        </p>
+
+        <AnimatePresence mode="wait">
+          <motion.img
+            key={images[currentIndex]}
+            src={images[currentIndex]}
+            alt={`Gallery image ${currentIndex + 1}`}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+            className="max-h-[85vh] max-w-[90vw] object-contain rounded-sm"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </AnimatePresence>
+      </motion.div>
+    </AnimatePresence>
+  );
 }
 
 function MaisonNocturneFeatured({
@@ -335,6 +423,8 @@ export default function FeaturedCollection({
   void isFeaturedSuccess;
   void isTransitioning;
   const products = resolveFeaturedProducts(featuredProducts, config);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryStartIndex, setGalleryStartIndex] = useState(0);
 
   if (config?.variant === "nikeshdesign-featured") {
     return <NikeshDesignFeatured featuredProducts={products} config={config} />;
@@ -362,6 +452,7 @@ export default function FeaturedCollection({
         </Link>
         </div>
 
+        {/* Lookbook Carousel - Clickable images with gallery */}
         <div
           className="group/carousel relative mb-16 aspect-[16/10] overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-900 md:aspect-[2/1] xl:aspect-[21/9] cursor-grab active:cursor-grabbing select-none"
         onTouchStart={onTouchStart}
@@ -377,21 +468,33 @@ export default function FeaturedCollection({
             style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
           >
             {featureCollectionImages.map((src, i) => (
-              <img
+              <button
                 key={src}
-                src={src}
-                alt={`Featured collection image ${i + 1}`}
-                className="h-full w-full shrink-0 object-cover object-center"
-                draggable={false}
-              />
+                type="button"
+                onClick={() => { setGalleryStartIndex(i); setGalleryOpen(true); }}
+                className="h-full w-full shrink-0 relative group/slide"
+              >
+                <img
+                  src={src}
+                  alt={`Featured collection image ${i + 1}`}
+                  className="h-full w-full object-cover object-center transition-transform duration-700 group-hover/slide:scale-105"
+                  draggable={false}
+                />
+                {/* Hover overlay with zoom icon */}
+                <div className="absolute inset-0 bg-black/0 group-hover/slide:bg-black/30 transition-all duration-500 flex items-center justify-center">
+                  <div className="opacity-0 group-hover/slide:opacity-100 transition-all duration-500 transform translate-y-4 group-hover/slide:translate-y-0">
+                    <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-white">
+                      <ZoomIn className="h-5 w-5" />
+                      <span className="text-xs font-mono uppercase tracking-[0.2em]">Explore</span>
+                    </div>
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
 
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onCarouselPrev();
-          }}
+          onClick={(e) => { e.stopPropagation(); onCarouselPrev(); }}
           className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover/carousel:opacity-100 transition-all duration-300 hover:bg-black/60 hover:scale-110"
           aria-label="Previous slide"
         >
@@ -399,10 +502,7 @@ export default function FeaturedCollection({
         </button>
 
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onCarouselNext();
-          }}
+          onClick={(e) => { e.stopPropagation(); onCarouselNext(); }}
           className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm opacity-0 group-hover/carousel:opacity-100 transition-all duration-300 hover:bg-black/60 hover:scale-110"
           aria-label="Next slide"
         >
@@ -413,10 +513,7 @@ export default function FeaturedCollection({
           {featureCollectionImages.map((_, i) => (
             <button
               key={i}
-              onClick={(e) => {
-                e.stopPropagation();
-                onCarouselGoTo?.(i);
-              }}
+              onClick={(e) => { e.stopPropagation(); onCarouselGoTo?.(i); }}
               className={`rounded-full transition-all duration-500 ease-out ${
                 i === carouselIndex
                   ? "w-7 h-2.5 bg-white shadow-lg shadow-white/30"
@@ -434,6 +531,15 @@ export default function FeaturedCollection({
           ))}
         </div>
       </div>
+
+      {/* Full-screen image gallery modal */}
+      {galleryOpen && (
+        <ImageGalleryModal
+          images={featureCollectionImages}
+          initialIndex={galleryStartIndex}
+          onClose={() => setGalleryOpen(false)}
+        />
+      )}
     </section>
   );
 }

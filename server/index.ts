@@ -370,6 +370,37 @@ async function ensureE2ETestState() {
     }),
   );
 
+  // Health check endpoint for deployment probes (Railway, Render, etc.)
+  app.get("/health", async (_req, res) => {
+    const health: Record<string, string> = {
+      status: "ok",
+      uptime: `${Math.round(process.uptime())}s`,
+      timestamp: new Date().toISOString(),
+    };
+    let dbOk = false;
+    let redisOk = false;
+    try {
+      await db.query.users.findFirst();
+      dbOk = true;
+      health.database = "connected";
+    } catch {
+      health.database = "unavailable";
+    }
+    try {
+      if (sessionRedis) {
+        await sessionRedis.ping();
+        redisOk = true;
+        health.redis = "connected";
+      } else {
+        health.redis = "not configured";
+      }
+    } catch {
+      health.redis = "unavailable";
+    }
+    const allHealthy = dbOk && redisOk;
+    res.status(allHealthy ? 200 : 503).json(health);
+  });
+
   await registerRoutes(httpServer, app);
   registerSentryTestRoutes(app);
 

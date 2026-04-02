@@ -1,11 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Check, Upload, X, Plus, Palette, Ruler,
-  FolderInput, ImageIcon, FileText, Tag, Percent,
+  FolderInput, ImageIcon, FileText, Tag, Percent, Cloud, HardDrive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +33,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/format";
 import { compressImage } from "@/lib/imageUtils";
-import { uploadProductImage } from "@/lib/adminApi";
+import { uploadProductImage, uploadAdminImage, fetchAdminAttributes, type ProductAttribute } from "@/lib/adminApi";
+import { QuantityInput } from "@/components/ui/quantity-input";
+import { PriceInput } from "@/components/ui/price-input";
 import type { CategoryApi } from "@/lib/api";
 
 const productSchema = z.object({
@@ -43,6 +46,7 @@ const productSchema = z.object({
   price: z.coerce.number().min(1, "Price required"),
   stockStatus: z.enum(["in_stock", "out_of_stock"]),
   stock: z.coerce.number().min(0).default(0),
+  stockBySize: z.record(z.string(), z.coerce.number().min(0)).default({}),
   imageUrl: z.string().optional(),
   galleryUrlsText: z.string().optional(),
   colorOptions: z.array(z.string()),
@@ -54,6 +58,14 @@ const productSchema = z.object({
 type ProductFormValues = z.infer<typeof productSchema>;
 
 const DEFAULT_SIZES = ["S", "M", "L", "XL"];
+const DEFAULT_COLORS = ["Black", "White", "Red", "Navy", "Olive", "Sand", "Charcoal"];
+const IMAGE_CATEGORIES = [
+  { value: "product", label: "Product Images" },
+  { value: "website", label: "Website Assets" },
+  { value: "model", label: "Model Shots" },
+  { value: "landing_page", label: "Landing Pages" },
+  { value: "collection_page", label: "Collection Pages" },
+];
 
 interface AddProductWizardProps {
   categories: CategoryApi[];
@@ -94,10 +106,31 @@ export default function AddProductWizard({
   const [newCategoryName, setNewCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
 
+  // Image upload state
+  const [uploadMode, setUploadMode] = useState<"cloud" | "local">("cloud");
+  const [imageCategory, setImageCategory] = useState("product");
+  const [uploadingCloud, setUploadingCloud] = useState(false);
+  const [galleryUploadMode, setGalleryUploadMode] = useState<"cloud" | "local">("cloud");
+  const [galleryImageCategory, setGalleryImageCategory] = useState("product");
+
+  // Attributes from DB
+  const { data: attributes } = useQuery<ProductAttribute[]>({
+    queryKey: ["admin", "attributes"],
+    queryFn: () => fetchAdminAttributes(),
+  });
+
+  const attributeColors = useMemo(() => {
+    const colors: string[] = [];
+    (attributes ?? []).filter(a => a.type === "color").forEach(a => {
+      const [label, hex] = a.value.split("|");
+      if (label?.trim()) colors.push(`${label.trim()} (${hex?.trim() || "#000000"})`);
+    });
+    return colors;
+  }, [attributes]);
+
   const availableColors = useMemo(() => {
-    const base = ["Black", "White", "Red", "Navy", "Olive", "Sand", "Charcoal"];
-    return [...base, ...customColors];
-  }, [customColors]);
+    return [...DEFAULT_COLORS, ...attributeColors, ...customColors];
+  }, [attributeColors, customColors]);
 
   const availableSizes = useMemo(() => {
     return [...DEFAULT_SIZES, ...customSizes];
@@ -105,6 +138,30 @@ export default function AddProductWizard({
 
   const selectedColors = addForm.watch("colorOptions") || [];
   const selectedSizes = addForm.watch("sizeOptions") || [];
+
+  // Initialize default sizes on mount
+  useEffect(() => {
+    const current = addForm.getValues("sizeOptions") || [];
+    if (current.length === 0) {
+      addForm.setValue("sizeOptions", [...DEFAULT_SIZES], { shouldValidate: false, shouldDirty: false });
+    }
+  }, []);
+
+  const toggleColor = useCallback((color: string) => {
+    const currentColors = addForm.getValues("colorOptions") || [];
+    const next = currentColors.includes(color)
+      ? currentColors.filter((c: string) => c !== color)
+      : [...currentColors, color];
+    addForm.setValue("colorOptions", next, { shouldValidate: false, shouldDirty: false });
+  }, [addForm]);
+
+  const toggleSize = useCallback((size: string) => {
+    const currentSizes = addForm.getValues("sizeOptions") || [];
+    const next = currentSizes.includes(size)
+      ? currentSizes.filter((s: string) => s !== size)
+      : [...currentSizes, size];
+    addForm.setValue("sizeOptions", next, { shouldValidate: false, shouldDirty: false });
+  }, [addForm]);
 
   const addCustomColor = () => {
     if (!newColorName.trim()) return;
@@ -119,21 +176,12 @@ export default function AddProductWizard({
     const trimmed = newSizeInput.trim().toUpperCase();
     if (!trimmed || availableSizes.includes(trimmed)) return;
     setCustomSizes((prev) => [...prev, trimmed]);
+    // Also add to form
+    const currentSizes = addForm.getValues("sizeOptions") || [];
+    if (!currentSizes.includes(trimmed)) {
+      addForm.setValue("sizeOptions", [...currentSizes, trimmed], { shouldValidate: false, shouldDirty: false });
+    }
     setNewSizeInput("");
-  };
-
-  const toggleColor = (color: string) => {
-    const next = selectedColors.includes(color)
-      ? selectedColors.filter((c: string) => c !== color)
-      : [...selectedColors, color];
-    addForm.setValue("colorOptions", next, { shouldValidate: true, shouldDirty: true });
-  };
-
-  const toggleSize = (size: string) => {
-    const next = selectedSizes.includes(size)
-      ? selectedSizes.filter((s: string) => s !== size)
-      : [...selectedSizes, size];
-    addForm.setValue("sizeOptions", next, { shouldValidate: true, shouldDirty: true });
   };
 
   const handleCreateCategory = async () => {
@@ -163,17 +211,62 @@ export default function AddProductWizard({
   };
 
   const canProceedStep1 = addForm.watch("name")?.length >= 2 && addForm.watch("price") >= 1;
-  const canProceedStep2 = selectedSizes.length > 0;
+  const canProceedStep2 = true;
 
   const steps = [
     { num: 1, label: "Details", icon: FileText },
-    { num: 2, label: "Variants", icon: Palette },
+    { num: 2, label: "Colors", icon: Palette },
     { num: 3, label: "Photos", icon: ImageIcon },
   ];
 
+  // Cloud upload handler
+  const handleCloudUpload = async (file: File, target: "main" | "gallery") => {
+    setUploadingCloud(true);
+    try {
+      const result = await uploadAdminImage({
+        file,
+        category: target === "main" ? imageCategory : galleryImageCategory,
+        provider: "cloudinary",
+      });
+      if (target === "main") {
+        addForm.setValue("imageUrl", result.url, { shouldValidate: true, shouldDirty: true });
+      } else {
+        const currentText = addForm.getValues("galleryUrlsText") || "";
+        const current = currentText.split(/\n/).map((u: string) => u.trim()).filter(Boolean);
+        addForm.setValue("galleryUrlsText", [...current, result.url].join("\n"), { shouldValidate: true, shouldDirty: true });
+      }
+      toast({ title: "Image uploaded to cloud" });
+    } catch {
+      toast({ title: "Cloud upload failed", variant: "destructive" });
+    } finally {
+      setUploadingCloud(false);
+    }
+  };
+
+  // Local upload handler
+  const handleLocalUpload = async (file: File, target: "main" | "gallery") => {
+    setUploadingImage(true);
+    try {
+      const dataUrl = await compressImage(file);
+      const url = await uploadProductImage(dataUrl);
+      if (target === "main") {
+        addForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
+      } else {
+        const currentText = addForm.getValues("galleryUrlsText") || "";
+        const current = currentText.split(/\n/).map((u: string) => u.trim()).filter(Boolean);
+        addForm.setValue("galleryUrlsText", [...current, url].join("\n"), { shouldValidate: true, shouldDirty: true });
+      }
+      toast({ title: "Image uploaded locally" });
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-40 bg-background overflow-auto">
-      <div className="max-w-3xl mx-auto p-4 sm:p-6 pb-20">
+      <div className="min-h-screen max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 pb-24">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <Button
@@ -227,7 +320,7 @@ export default function AddProductWizard({
             onSubmit={addForm.handleSubmit((values: ProductFormValues) => addMutation.mutate(values))}
           >
             <AnimatePresence mode="wait">
-              {/* STEP 1: Product Details */}
+              {/* STEP 1: Product Details + Stock */}
               {step === 1 && (
                 <motion.div
                   key="step1"
@@ -359,7 +452,12 @@ export default function AddProductWizard({
                         <FormItem>
                           <FormLabel>Price (NPR) *</FormLabel>
                           <FormControl>
-                            <Input type="number" min={1} step="1" {...field} />
+                            <PriceInput
+                              min={1}
+                              value={field.value}
+                              onChange={(val) => field.onChange(val)}
+                              placeholder="0"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -415,6 +513,7 @@ export default function AddProductWizard({
                     </div>
                   </div>
 
+                  {/* Stock Section with per-size inputs */}
                   <div className="space-y-4">
                     <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Stock</h3>
                     <FormField
@@ -437,20 +536,88 @@ export default function AddProductWizard({
                         </FormItem>
                       )}
                     />
+
                     {addForm.watch("stockStatus") === "in_stock" && (
-                      <FormField
-                        control={addForm.control}
-                        name="stock"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Quantity</FormLabel>
-                            <FormControl>
-                              <Input type="number" min={0} step="1" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
+                      <div className="space-y-3">
+                        {/* Size selection for stock */}
+                        <div>
+                          <Label className="text-xs font-bold uppercase tracking-wider">Select Sizes</Label>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {availableSizes.map((size) => {
+                              const isSelected = selectedSizes.includes(size);
+                              return (
+                                <button
+                                  key={size}
+                                  type="button"
+                                  onClick={() => toggleSize(size)}
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-full text-xs font-bold uppercase border transition-all",
+                                    isSelected
+                                      ? "bg-primary text-primary-foreground border-primary"
+                                      : "bg-background text-muted-foreground border-border hover:border-foreground"
+                                  )}
+                                >
+                                  {size}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Input
+                              value={newSizeInput}
+                              onChange={(e) => setNewSizeInput(e.target.value)}
+                              placeholder="New size (e.g. XXL)"
+                              className="w-32 text-xs h-8"
+                              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomSize())}
+                            />
+                            <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addCustomSize} disabled={!newSizeInput.trim()}>
+                              <Plus className="w-3 h-3 mr-1" /> Add Size
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Stock per size inputs */}
+                        {selectedSizes.length > 0 && (
+                          <div className="p-5 rounded-2xl bg-gradient-to-br from-muted/40 to-muted/20 border border-border/60">
+                            <Label className="text-xs font-bold uppercase tracking-wider mb-4 block">Stock by Size</Label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                              {selectedSizes.map((size: string) => {
+                                const stockBySize = addForm.watch("stockBySize") || {};
+                                const currentStock = stockBySize[size] ?? undefined;
+                                return (
+                                  <div key={size} className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <Label className="text-sm font-bold">{size}</Label>
+                                      {currentStock !== undefined && currentStock > 0 && (
+                                        <span className="text-[10px] font-bold text-primary">{currentStock}</span>
+                                      )}
+                                    </div>
+                                    <QuantityInput
+                                      min={0}
+                                      step={1}
+                                      value={currentStock}
+                                      onChange={(newValue) => {
+                                        const current = addForm.getValues("stockBySize") || {};
+                                        addForm.setValue("stockBySize", { ...current, [size]: newValue }, { shouldValidate: false, shouldDirty: false });
+                                      }}
+                                      placeholder="—"
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div className="mt-4 pt-3 border-t border-border/60 flex justify-between items-center">
+                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Stock</span>
+                              <span className="text-xl font-black tabular-nums">
+                                {selectedSizes.reduce((total: number, size: string) => {
+                                  const stockBySize = addForm.watch("stockBySize") || {};
+                                  return total + (stockBySize[size] ?? 0);
+                                }, 0)}
+                              </span>
+                            </div>
+                          </div>
                         )}
-                      />
+                      </div>
                     )}
                   </div>
 
@@ -473,7 +640,7 @@ export default function AddProductWizard({
                 </motion.div>
               )}
 
-              {/* STEP 2: Attributes (Colors & Sizes) */}
+              {/* STEP 2: Colors */}
               {step === 2 && (
                 <motion.div
                   key="step2"
@@ -482,80 +649,106 @@ export default function AddProductWizard({
                   exit={{ opacity: 0, x: -20 }}
                   className="space-y-6"
                 >
-                  {/* Sizes */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Ruler className="w-4 h-4" />
-                      <h3 className="text-sm font-bold">Sizes</h3>
-                      <span className="text-xs text-muted-foreground">({selectedSizes.length} selected)</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {availableSizes.map((size) => {
-                        const isSelected = selectedSizes.includes(size);
-                        return (
-                          <button
-                            key={size}
-                            type="button"
-                            onClick={() => toggleSize(size)}
-                            className={cn(
-                              "px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider border transition-all",
-                              isSelected
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-background text-muted-foreground border-border hover:border-foreground"
-                            )}
-                          >
-                            {size}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={newSizeInput}
-                        onChange={(e) => setNewSizeInput(e.target.value)}
-                        placeholder="New size (e.g. XXL)"
-                        className="w-32 text-xs h-8"
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomSize())}
-                      />
-                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addCustomSize} disabled={!newSizeInput.trim()}>
-                        <Plus className="w-3 h-3 mr-1" /> Add Size
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Colors */}
+                  {/* Colors - including attribute colors */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">
                       <Palette className="w-4 h-4" />
                       <h3 className="text-sm font-bold">Colors</h3>
                       <span className="text-xs text-muted-foreground">({selectedColors.length} selected)</span>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {availableColors.map((color) => {
-                        const isSelected = selectedColors.includes(color);
-                        const hexMatch = color.match(/\((#[0-9a-fA-F]{6})\)/);
-                        const hex = hexMatch ? hexMatch[1] : undefined;
-                        const displayName = color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, "");
-                        return (
-                          <button
-                            key={color}
-                            type="button"
-                            onClick={() => toggleColor(color)}
-                            className={cn(
-                              "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold border transition-all",
-                              isSelected
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-background text-muted-foreground border-border hover:border-foreground"
-                            )}
-                          >
-                            {hex && (
-                              <span className="w-3 h-3 rounded-full border border-border" style={{ backgroundColor: hex }} />
-                            )}
-                            {displayName}
-                          </button>
-                        );
-                      })}
+
+                    {/* Default colors */}
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Default Colors</p>
+                      <div className="flex flex-wrap gap-2">
+                        {DEFAULT_COLORS.map((color) => {
+                          const isSelected = selectedColors.includes(color);
+                          return (
+                            <button
+                              key={color}
+                              type="button"
+                              onClick={() => toggleColor(color)}
+                              className={cn(
+                                "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold border transition-all",
+                                isSelected
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "bg-background text-muted-foreground border-border hover:border-foreground"
+                              )}
+                            >
+                              {color}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
+
+                    {/* Attribute colors from DB */}
+                    {attributeColors.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Attribute Colors</p>
+                        <div className="flex flex-wrap gap-2">
+                          {attributeColors.map((color) => {
+                            const isSelected = selectedColors.includes(color);
+                            const hexMatch = color.match(/\((#[0-9a-fA-F]{6})\)/);
+                            const hex = hexMatch ? hexMatch[1] : undefined;
+                            const displayName = color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, "");
+                            return (
+                              <button
+                                key={color}
+                                type="button"
+                                onClick={() => toggleColor(color)}
+                                className={cn(
+                                  "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold border transition-all",
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-background text-muted-foreground border-border hover:border-foreground"
+                                )}
+                              >
+                                {hex && (
+                                  <span className="w-3 h-3 rounded-full border border-border" style={{ backgroundColor: hex }} />
+                                )}
+                                {displayName}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Custom colors */}
+                    {customColors.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Custom Colors</p>
+                        <div className="flex flex-wrap gap-2">
+                          {customColors.map((color) => {
+                            const isSelected = selectedColors.includes(color);
+                            const hexMatch = color.match(/\((#[0-9a-fA-F]{6})\)/);
+                            const hex = hexMatch ? hexMatch[1] : undefined;
+                            const displayName = color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, "");
+                            return (
+                              <button
+                                key={color}
+                                type="button"
+                                onClick={() => toggleColor(color)}
+                                className={cn(
+                                  "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold border transition-all",
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-background text-muted-foreground border-border hover:border-foreground"
+                                )}
+                              >
+                                {hex && (
+                                  <span className="w-3 h-3 rounded-full border border-border" style={{ backgroundColor: hex }} />
+                                )}
+                                {displayName}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Add custom color */}
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
@@ -592,7 +785,7 @@ export default function AddProductWizard({
                 </motion.div>
               )}
 
-              {/* STEP 3: Photos */}
+              {/* STEP 3: Photos with Cloud/Local upload */}
               {step === 3 && (
                 <motion.div
                   key="step3"
@@ -606,6 +799,52 @@ export default function AddProductWizard({
                     <h3 className="text-sm font-bold flex items-center gap-2">
                       <ImageIcon className="w-4 h-4" /> Main Product Image
                     </h3>
+
+                    {/* Upload mode toggle */}
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border">
+                      <button
+                        type="button"
+                        onClick={() => setUploadMode("cloud")}
+                        className={cn(
+                          "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                          uploadMode === "cloud"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-background text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <Cloud className="w-4 h-4" /> Cloud
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUploadMode("local")}
+                        className={cn(
+                          "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                          uploadMode === "local"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-background text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <HardDrive className="w-4 h-4" /> Local
+                      </button>
+                    </div>
+
+                    {/* Category selector for cloud */}
+                    {uploadMode === "cloud" && (
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider">Category</Label>
+                        <Select value={imageCategory} onValueChange={setImageCategory}>
+                          <SelectTrigger className="h-9 flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {IMAGE_CATEGORIES.map(cat => (
+                              <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
                     <div
                       className="aspect-[4/5] max-w-xs bg-muted/30 hover:bg-muted/50 transition-colors overflow-hidden rounded-xl relative group cursor-pointer border-2 border-dashed border-border flex items-center justify-center p-4 text-center mx-auto"
                       onClick={() => imageInputRef.current?.click()}
@@ -640,8 +879,9 @@ export default function AddProductWizard({
                         variant="outline"
                         size="sm"
                         onClick={() => imageInputRef.current?.click()}
+                        loading={uploadingCloud}
                       >
-                        <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload
+                        <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload {uploadMode === "cloud" ? "to Cloud" : "Local"}
                       </Button>
                     </div>
                     <input
@@ -652,19 +892,12 @@ export default function AddProductWizard({
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        setUploadingImage(true);
-                        toast({ title: "Uploading main image..." });
-                        try {
-                          const dataUrl = await compressImage(file);
-                          const url = await uploadProductImage(dataUrl);
-                          addForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
-                          toast({ title: "Image uploaded" });
-                        } catch {
-                          toast({ title: "Upload failed", variant: "destructive" });
-                        } finally {
-                          setUploadingImage(false);
-                          e.target.value = "";
+                        if (uploadMode === "cloud") {
+                          await handleCloudUpload(file, "main");
+                        } else {
+                          await handleLocalUpload(file, "main");
                         }
+                        e.target.value = "";
                       }}
                     />
                   </div>
@@ -674,6 +907,52 @@ export default function AddProductWizard({
                     <h3 className="text-sm font-bold flex items-center gap-2">
                       <FolderInput className="w-4 h-4" /> Gallery Images
                     </h3>
+
+                    {/* Upload mode toggle for gallery */}
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border">
+                      <button
+                        type="button"
+                        onClick={() => setGalleryUploadMode("cloud")}
+                        className={cn(
+                          "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                          galleryUploadMode === "cloud"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-background text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <Cloud className="w-4 h-4" /> Cloud
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGalleryUploadMode("local")}
+                        className={cn(
+                          "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                          galleryUploadMode === "local"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-background text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <HardDrive className="w-4 h-4" /> Local
+                      </button>
+                    </div>
+
+                    {/* Category selector for gallery cloud */}
+                    {galleryUploadMode === "cloud" && (
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs font-bold uppercase tracking-wider">Category</Label>
+                        <Select value={galleryImageCategory} onValueChange={setGalleryImageCategory}>
+                          <SelectTrigger className="h-9 flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {IMAGE_CATEGORIES.map(cat => (
+                              <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
                     <div className="flex gap-2">
                       <Button
                         type="button"
@@ -690,8 +969,9 @@ export default function AddProductWizard({
                         size="sm"
                         className="flex-1 border-dashed"
                         onClick={() => galleryInputRef.current?.click()}
+                        loading={uploadingCloud}
                       >
-                        <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload
+                        <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload {galleryUploadMode === "cloud" ? "to Cloud" : "Local"}
                       </Button>
                     </div>
                     <input
@@ -700,6 +980,18 @@ export default function AddProductWizard({
                       accept="image/*"
                       multiple
                       className="hidden"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (!files.length) return;
+                        for (const file of files) {
+                          if (galleryUploadMode === "cloud") {
+                            await handleCloudUpload(file, "gallery");
+                          } else {
+                            await handleLocalUpload(file, "gallery");
+                          }
+                        }
+                        e.target.value = "";
+                      }}
                     />
 
                     <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">

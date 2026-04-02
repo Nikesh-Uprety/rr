@@ -13,7 +13,7 @@ import {
   Share2, FileText, Download, Check, X, Pencil, Search, Table as TableIcon,
   ChevronRight, FileSpreadsheet, Eye, EyeOff, LayoutTemplate, Shirt, Footprints, Tag,
   MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar, Percent,
-  FolderInput, Box, CheckCircle2, ChevronDown, Plus
+  FolderInput, Box, CheckCircle2, ChevronDown, Plus, Star
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -42,6 +42,8 @@ import { fetchCategories, type ProductApi, type CategoryApi } from "@/lib/api";
 import { compressImage } from "@/lib/imageUtils";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
+import { QuantityInput } from "@/components/ui/quantity-input";
+import { PriceInput } from "@/components/ui/price-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MediaLibrary } from "@/components/admin/MediaLibrary";
 import {
@@ -155,12 +157,15 @@ const productSchema = z.object({
   price: z.coerce.number().min(1, "Price required"),
   stockStatus: z.enum(["in_stock", "out_of_stock"]),
   stock: z.coerce.number().min(0).default(0),
+  stockBySize: z.record(z.string(), z.coerce.number().min(0)).default({}),
   imageUrl: z.string().optional(),
   galleryUrlsText: z.string().optional(),
   colorOptions: z.array(z.string()),
   sizeOptions: z.array(z.string()),
   salePercentage: z.coerce.number().min(0).max(100).default(0),
   saleActive: z.boolean().default(false),
+  homeFeatured: z.boolean().default(false),
+  homeFeaturedImageIndex: z.coerce.number().default(2),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -311,6 +316,8 @@ export default function AdminProducts() {
       sizeOptions: [],
       salePercentage: 0,
       saleActive: false,
+      homeFeatured: false,
+      homeFeaturedImageIndex: 2,
     },
   });
 
@@ -330,6 +337,8 @@ export default function AdminProducts() {
       sizeOptions: [],
       salePercentage: 0,
       saleActive: false,
+      homeFeatured: false,
+      homeFeaturedImageIndex: 2,
     },
   });
 
@@ -392,12 +401,15 @@ export default function AdminProducts() {
         price: Number(editProduct.price),
         stockStatus: editProduct.stock === 0 ? "out_of_stock" : "in_stock",
         stock: editProduct.stock,
+        stockBySize: {},
         imageUrl: editProduct.imageUrl ?? "",
         galleryUrlsText: galleryUrls.join("\n"),
         colorOptions,
         sizeOptions,
         salePercentage: editProduct.salePercentage ?? 0,
         saleActive: editProduct.saleActive ?? false,
+        homeFeatured: editProduct.homeFeatured ?? false,
+        homeFeaturedImageIndex: editProduct.homeFeaturedImageIndex ?? 2,
       });
     }
   }, [editProduct, editForm, categories]);
@@ -1230,73 +1242,19 @@ export default function AdminProducts() {
                     </Badge>
                   </div>
 
-                  <div
-                    className="mt-4 space-y-2"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider">
-                        ⭐ Feature on Home
-                      </span>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span>
-                              <Switch
-                                checked={Boolean(product.homeFeatured)}
-                                disabled={
-                                  homeFeaturedMutation.isPending ||
-                                  (!product.homeFeatured && featuredCount >= 8)
-                                }
-                                onCheckedChange={(checked) =>
-                                  homeFeaturedMutation.mutate({
-                                    id: product.id,
-                                    homeFeatured: checked,
-                                    homeFeaturedImageIndex: product.homeFeaturedImageIndex ?? 2,
-                                  })
-                                }
-                              />
-                            </span>
-                          </TooltipTrigger>
-                          {!product.homeFeatured && featuredCount >= 8 && (
-                            <TooltipContent>
-                              Max 8 products allowed in New Arrivals.
-                            </TooltipContent>
-                          )}
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                    {product.homeFeatured && (
-                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-wider">
-                          Display Image
-                        </span>
-                        <Select
-                          value={String(product.homeFeaturedImageIndex ?? 2)}
-                          onValueChange={(value) =>
-                            homeFeaturedMutation.mutate({
-                              id: product.id,
-                              homeFeatured: true,
-                              homeFeaturedImageIndex: Number(value),
-                            })
-                          }
-                        >
-                          <SelectTrigger className="h-7 w-[120px] text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="0">Image 1</SelectItem>
-                            <SelectItem value="1">Image 2</SelectItem>
-                            <SelectItem value="2">Image 3</SelectItem>
-                            <SelectItem value="3">Image 4</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-                  
                   {/* Always Visible Edit/Delete Buttons (as requested) */}
                   <div className="mt-6 pt-4 border-t border-border flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-none w-9 h-9 border-primary/30 text-primary hover:bg-primary/10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(`/product/${product.id}`, '_blank');
+                      }}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </Button>
                     <Button 
                       data-testid={`admin-product-edit-open-${product.id}`}
                       variant="outline" 
@@ -1352,8 +1310,6 @@ export default function AdminProducts() {
                     <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Category</th>
                     <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Price</th>
                     <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Stock</th>
-                    <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Home</th>
-                    <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Display Image</th>
                     <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</th>
                   </tr>
                 </thead>
@@ -1429,60 +1385,19 @@ export default function AdminProducts() {
                           </div>
                         </div>
                       </td>
-                      <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                <Switch
-                                  checked={Boolean(product.homeFeatured)}
-                                  disabled={
-                                    homeFeaturedMutation.isPending ||
-                                    (!product.homeFeatured && featuredCount >= 8)
-                                  }
-                                  onCheckedChange={(checked) =>
-                                    homeFeaturedMutation.mutate({
-                                      id: product.id,
-                                      homeFeatured: checked,
-                                      homeFeaturedImageIndex: product.homeFeaturedImageIndex ?? 2,
-                                    })
-                                  }
-                                />
-                              </span>
-                            </TooltipTrigger>
-                            {!product.homeFeatured && featuredCount >= 8 && (
-                              <TooltipContent>
-                                Max 8 products allowed in New Arrivals.
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        </TooltipProvider>
-                      </td>
-                      <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                        <Select
-                          value={String(product.homeFeaturedImageIndex ?? 2)}
-                          disabled={!product.homeFeatured}
-                          onValueChange={(value) =>
-                            homeFeaturedMutation.mutate({
-                              id: product.id,
-                              homeFeatured: true,
-                              homeFeaturedImageIndex: Number(value),
-                            })
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-[110px] text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="0">Image 1</SelectItem>
-                            <SelectItem value="1">Image 2</SelectItem>
-                            <SelectItem value="2">Image 3</SelectItem>
-                            <SelectItem value="3">Image 4</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
                       <td className="p-4 text-right">
                         <div className="flex justify-end gap-1">
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className="h-8 w-8 border-primary/30 text-primary hover:bg-primary/10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(`/product/${product.id}`, '_blank');
+                            }}
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </Button>
                           <Button 
                             data-testid={`admin-product-edit-open-${product.id}`}
                             variant="outline" 
@@ -1802,7 +1717,13 @@ export default function AdminProducts() {
                           <FormItem>
                             <FormLabel>Price (NPR) *</FormLabel>
                             <FormControl>
-                              <Input data-testid="admin-product-edit-price" type="number" min={0} step="1" {...field} />
+                              <PriceInput
+                                data-testid="admin-product-edit-price"
+                                min={1}
+                                value={field.value}
+                                onChange={(val) => field.onChange(val)}
+                                placeholder="0"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1906,20 +1827,109 @@ export default function AdminProducts() {
                         )}
                       />
                       {editForm.watch("stockStatus") === "in_stock" && (
-                        <FormField
-                          control={editForm.control}
-                          name="stock"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Quantity</FormLabel>
-                              <FormControl>
-                                <Input data-testid="admin-product-edit-stock" type="number" min={0} step="1" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        <div className="space-y-3">
+                          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Stock by Size</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                            {parseJsonArray(editProduct.sizeOptions).map((size: string) => {
+                              const stockBySize = editForm.watch("stockBySize") || {};
+                              const currentStock = stockBySize[size] ?? 0;
+                              return (
+                                <div key={size} className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20">
+                                  <span className="text-xs font-bold shrink-0 w-6">{size}</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={1}
+                                    value={currentStock}
+                                    onChange={(e) => {
+                                      const current = editForm.getValues("stockBySize") || {};
+                                      editForm.setValue("stockBySize", { ...current, [size]: parseInt(e.target.value) || 0 }, { shouldValidate: false, shouldDirty: false });
+                                    }}
+                                    className="w-full h-7 border-0 bg-transparent text-sm font-medium tabular-nums outline-none text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none placeholder:text-muted-foreground/40"
+                                    placeholder="0"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-border/50">
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total</span>
+                            <span className="text-base font-bold tabular-nums">
+                              {parseJsonArray(editProduct.sizeOptions).reduce((total: number, size: string) => {
+                                const stockBySize = editForm.watch("stockBySize") || {};
+                                return total + (stockBySize[size] ?? 0);
+                              }, 0)}
+                            </span>
+                          </div>
+                        </div>
                       )}
+                    </div>
+
+                    {/* Feature on Home */}
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Home Page</h3>
+                      <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label className="text-sm font-bold flex items-center gap-2">
+                              <Star className="w-4 h-4 text-amber-500" /> Feature on Home
+                            </Label>
+                            <p className="text-[10px] text-muted-foreground">Show this product in the New Arrivals section</p>
+                          </div>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Switch
+                                    checked={Boolean(editForm.watch("homeFeatured"))}
+                                    disabled={
+                                      homeFeaturedMutation.isPending ||
+                                      (!editForm.watch("homeFeatured") && featuredCount >= 8)
+                                    }
+                                    onCheckedChange={(checked) => {
+                                      editForm.setValue("homeFeatured", checked, { shouldValidate: false });
+                                      homeFeaturedMutation.mutate({
+                                        id: editProduct.id,
+                                        homeFeatured: checked,
+                                        homeFeaturedImageIndex: editForm.watch("homeFeaturedImageIndex") ?? 2,
+                                      });
+                                    }}
+                                  />
+                                </span>
+                              </TooltipTrigger>
+                              {!editForm.watch("homeFeatured") && featuredCount >= 8 && (
+                                <TooltipContent>Max 8 products allowed in New Arrivals.</TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                        {editForm.watch("homeFeatured") && (
+                          <div className="flex items-center justify-between pt-3 border-t border-border">
+                            <Label className="text-xs font-bold uppercase tracking-wider">Display Image</Label>
+                            <Select
+                              value={String(editForm.watch("homeFeaturedImageIndex") ?? 2)}
+                              onValueChange={(value) => {
+                                editForm.setValue("homeFeaturedImageIndex", Number(value), { shouldValidate: false });
+                                homeFeaturedMutation.mutate({
+                                  id: editProduct.id,
+                                  homeFeatured: true,
+                                  homeFeaturedImageIndex: Number(value),
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="h-8 w-[120px] text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="0">Image 1</SelectItem>
+                                <SelectItem value="1">Image 2</SelectItem>
+                                <SelectItem value="2">Image 3</SelectItem>
+                                <SelectItem value="3">Image 4</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Hidden inputs to keep form state intact but UI on the right */}

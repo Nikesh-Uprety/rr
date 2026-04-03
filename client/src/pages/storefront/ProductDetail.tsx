@@ -407,7 +407,7 @@ export default function ProductDetail() {
         saleActive: hasSale,
         stock: product.stock,
         category: product.category ?? "",
-        sku: "",
+        sku: product.id,
         images: allImages.filter(Boolean),
         variants: (product.variants ?? []).map((variant) => ({
           id: variant.id,

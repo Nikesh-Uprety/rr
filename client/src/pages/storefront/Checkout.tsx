@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { useCartStore } from "@/store/cart";
+import { type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, CheckCircle2, ShoppingBag, Wallet, Banknote, Building2, Smartphone, BadgePercent, Sparkles } from "lucide-react";
@@ -44,7 +44,7 @@ function getCheckoutOriginalPrice(price: number, originalPrice?: number | null, 
 
 export default function Checkout() {
   const [, setLocation] = useLocation();
-  const { items, clearCart } = useCartStore();
+  const { items, clearCart, hasHydrated = true } = useCartStore((state: CartState) => state);
   const { toast } = useToast();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -116,6 +116,10 @@ export default function Checkout() {
       setIsValidatingPromo(false);
     }
   };
+
+  if (!hasHydrated) {
+    return null;
+  }
 
   if (items.length === 0 && step !== 3) {
     setLocation("/cart");

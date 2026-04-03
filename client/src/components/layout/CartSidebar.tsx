@@ -11,6 +11,7 @@ const SHIPPING_FEE = 100;
 export default function CartSidebar() {
   const [, setLocation] = useLocation();
   const items = useCartStore((state) => state.items);
+  const hasHydrated = useCartStore((state) => state.hasHydrated ?? true);
   const isCartSidebarOpen = useCartStore((state) => state.isCartSidebarOpen);
   const closeCartSidebar = useCartStore((state) => state.closeCartSidebar);
   const updateQuantity = useCartStore((state) => state.updateQuantity);
@@ -51,7 +52,11 @@ export default function CartSidebar() {
           </SheetDescription>
         </SheetHeader>
 
-        {items.length === 0 ? (
+        {!hasHydrated ? (
+          <div className="flex h-[calc(100%-85px)] items-center justify-center px-6 text-center">
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Loading bag</p>
+          </div>
+        ) : items.length === 0 ? (
           <div className="flex h-[calc(100%-85px)] flex-col items-center justify-center gap-5 px-6 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full border border-border/60 bg-muted/30">
               <ShoppingBag className="h-6 w-6 text-muted-foreground" />

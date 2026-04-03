@@ -109,6 +109,13 @@ import {
   normalizeAttributeLabel,
   uniqueNormalizedValues,
 } from "@shared/productAttributes";
+import {
+  buildInventorySyncPayload,
+  buildStockBySizeDraft,
+  getTotalStockFromForm,
+  parseStoredSizeOptions,
+  syncStockBySizeToSizes,
+} from "./productStock";
 
 function slugify(s: string): string {
   return s
@@ -175,42 +182,6 @@ type PendingGalleryImage = {
   file: File;
   previewUrl: string;
 };
-
-function buildStockBySizeDraft(product?: ProductApi | null): Record<string, number> {
-  const draft: Record<string, number> = {};
-
-  try {
-    const parsed = product?.sizeOptions ? JSON.parse(product.sizeOptions) : [];
-    if (Array.isArray(parsed)) {
-      parsed.forEach((size) => {
-        if (typeof size === "string" && size.trim()) {
-          draft[size] = product?.stockBySize?.[size] ?? 0;
-        }
-      });
-    }
-  } catch {
-    // Ignore malformed size options and rely on stockBySize directly.
-  }
-
-  Object.entries(product?.stockBySize ?? {}).forEach(([size, stock]) => {
-    draft[size] = stock ?? 0;
-  });
-
-  if (Object.keys(draft).length === 0 && (product?.stock ?? 0) > 0) {
-    draft["M"] = product?.stock ?? 0;
-  }
-
-  return draft;
-}
-
-function getTotalStockFromForm(values: ProductFormValues): number {
-  if (values.stockStatus === "out_of_stock") return 0;
-  const totalBySize = Object.values(values.stockBySize ?? {}).reduce(
-    (sum, value) => sum + (value ?? 0),
-    0,
-  );
-  return totalBySize > 0 ? totalBySize : values.stock;
-}
 
 export default function AdminProducts() {
   const [location, setLocation] = useLocation();
@@ -379,6 +350,8 @@ export default function AdminProducts() {
       homeFeaturedImageIndex: 2,
     },
   });
+  const editSelectedSizes = uniqueNormalizedValues(editForm.watch("sizeOptions") || []);
+  const editStockBySize = editForm.watch("stockBySize") || {};
 
   // Sync default category when categories load
   useEffect(() => {
@@ -478,24 +451,6 @@ export default function AdminProducts() {
     }
   }
 
-  async function syncProductStockBySize(
-    productId: string,
-    sizeStocks: Record<string, number>,
-    sizesToSync: string[],
-  ) {
-    for (const size of sizesToSync) {
-      const response = await fetch(`/api/admin/inventory/${productId}/stock`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ size, newStock: sizeStocks[size] ?? 0 }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to update stock for size ${size}`);
-      }
-    }
-  }
-
   const addMutation = useMutation({
     mutationFn: async (values: ProductFormValues) => {
       const existingGalleryUrls = values.galleryUrlsText
@@ -537,6 +492,11 @@ export default function AdminProducts() {
       }
 
       const galleryUrls = [...existingGalleryUrls, ...uploadedUrls];
+      const { sizeStocks } = buildInventorySyncPayload({
+        stockStatus: values.stockStatus,
+        currentSizes: values.sizeOptions,
+        currentStockBySize: values.stockBySize,
+      });
 
       const createdProduct = await createAdminProduct({
         name: values.name,
@@ -547,19 +507,12 @@ export default function AdminProducts() {
         galleryUrls: galleryUrls.length ? JSON.stringify(galleryUrls) : undefined,
         category: values.category || categories[0]?.slug || "",
         stock,
+        stockBySize: sizeStocks,
         colorOptions: values.colorOptions.length ? JSON.stringify(values.colorOptions) : undefined,
         sizeOptions: values.sizeOptions.length ? JSON.stringify(values.sizeOptions) : undefined,
         salePercentage: values.salePercentage,
         saleActive: values.saleActive,
       });
-
-      if (values.stockStatus === "in_stock") {
-        await syncProductStockBySize(
-          createdProduct.id,
-          values.stockBySize ?? {},
-          Array.from(new Set([...values.sizeOptions, ...Object.keys(values.stockBySize ?? {})])),
-        );
-      }
 
       return createdProduct;
     },
@@ -622,6 +575,13 @@ export default function AdminProducts() {
       }
 
       const galleryUrls = [...existingGalleryUrls, ...uploadedUrls];
+      const { sizeStocks } = buildInventorySyncPayload({
+        stockStatus: values.stockStatus,
+        currentSizes: values.sizeOptions,
+        currentStockBySize: values.stockBySize,
+        previousSizes: parseStoredSizeOptions(editProduct.sizeOptions),
+        previousStockBySize: editProduct.stockBySize,
+      });
 
       const updatedProduct = await updateAdminProduct(editProduct.id, {
         name: values.name,
@@ -636,24 +596,12 @@ export default function AdminProducts() {
           editProduct.category ||
           "",
         stock,
+        stockBySize: sizeStocks,
         colorOptions: values.colorOptions.length ? JSON.stringify(values.colorOptions) : undefined,
         sizeOptions: values.sizeOptions.length ? JSON.stringify(values.sizeOptions) : undefined,
         salePercentage: values.salePercentage,
         saleActive: values.saleActive,
       });
-
-      await syncProductStockBySize(
-        editProduct.id,
-        values.stockStatus === "out_of_stock" ? {} : (values.stockBySize ?? {}),
-        Array.from(
-          new Set([
-            ...parseJsonArray(editProduct.sizeOptions),
-            ...values.sizeOptions,
-            ...Object.keys(editProduct.stockBySize ?? {}),
-            ...Object.keys(values.stockBySize ?? {}),
-          ]),
-        ),
-      );
 
       return updatedProduct;
     },
@@ -726,14 +674,24 @@ export default function AdminProducts() {
     if (!trimmed) return;
     const existing = editForm.getValues("sizeOptions") || [];
     if (!existing.includes(trimmed)) {
-      editForm.setValue("sizeOptions", [...existing, trimmed], { shouldValidate: true, shouldDirty: true });
+      const nextSizes = [...existing, trimmed];
+      editForm.setValue("sizeOptions", nextSizes, { shouldValidate: true, shouldDirty: true });
+      editForm.setValue("stockBySize", syncStockBySizeToSizes(editForm.getValues("stockBySize"), nextSizes), {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
     }
     setEditNewSize("");
   };
 
   const handleRemoveEditSize = (size: string) => {
     const current = editForm.getValues("sizeOptions") || [];
-    editForm.setValue("sizeOptions", current.filter((x: string) => x !== size), { shouldValidate: true, shouldDirty: true });
+    const nextSizes = current.filter((x: string) => x !== size);
+    editForm.setValue("sizeOptions", nextSizes, { shouldValidate: true, shouldDirty: true });
+    editForm.setValue("stockBySize", syncStockBySizeToSizes(editForm.getValues("stockBySize"), nextSizes), {
+      shouldValidate: false,
+      shouldDirty: true,
+    });
   };
 
   const deleteCategoryMutation = useMutation({
@@ -1921,9 +1879,8 @@ export default function AdminProducts() {
                         <div className="space-y-3">
                           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Stock by Size</p>
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                            {parseJsonArray(editProduct.sizeOptions).map((size: string) => {
-                              const stockBySize = editForm.watch("stockBySize") || {};
-                              const currentStock = stockBySize[size] ?? 0;
+                            {editSelectedSizes.map((size) => {
+                              const currentStock = editStockBySize[size] ?? 0;
                               return (
                                 <div key={size} className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20">
                                   <span className="text-xs font-bold shrink-0 w-6">{size}</span>
@@ -1934,7 +1891,14 @@ export default function AdminProducts() {
                                     value={currentStock}
                                     onChange={(e) => {
                                       const current = editForm.getValues("stockBySize") || {};
-                                      editForm.setValue("stockBySize", { ...current, [size]: parseInt(e.target.value) || 0 }, { shouldValidate: false, shouldDirty: false });
+                                      editForm.setValue(
+                                        "stockBySize",
+                                        {
+                                          ...syncStockBySizeToSizes(current, editSelectedSizes),
+                                          [size]: parseInt(e.target.value, 10) || 0,
+                                        },
+                                        { shouldValidate: false, shouldDirty: true },
+                                      );
                                     }}
                                     className="w-full h-7 border-0 bg-transparent text-sm font-medium tabular-nums outline-none text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none placeholder:text-muted-foreground/40"
                                     placeholder="0"
@@ -1946,9 +1910,8 @@ export default function AdminProducts() {
                           <div className="flex justify-between items-center pt-2 border-t border-border/50">
                             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total</span>
                             <span className="text-base font-bold tabular-nums">
-                              {parseJsonArray(editProduct.sizeOptions).reduce((total: number, size: string) => {
-                                const stockBySize = editForm.watch("stockBySize") || {};
-                                return total + (stockBySize[size] ?? 0);
+                              {editSelectedSizes.reduce((total: number, size: string) => {
+                                return total + (editStockBySize[size] ?? 0);
                               }, 0)}
                             </span>
                           </div>
@@ -2438,20 +2401,27 @@ export default function AdminProducts() {
 
                         <div className="flex flex-wrap gap-2 mb-3">
                           {dynamicSizes.map((s) => {
-                            const selectedSizes = editForm.watch("sizeOptions") || [];
-                            const isSelected = selectedSizes.includes(s);
+                            const isSelected = editSelectedSizes.includes(s);
                             return (
                               <button
                                 key={s}
                                 type="button"
                                 onClick={() => {
                                   const next = isSelected
-                                    ? selectedSizes.filter((x) => x !== s)
-                                    : [...selectedSizes, s];
+                                    ? editSelectedSizes.filter((x) => x !== s)
+                                    : [...editSelectedSizes, s];
                                   editForm.setValue("sizeOptions", next, {
                                     shouldValidate: true,
                                     shouldDirty: true,
                                   });
+                                  editForm.setValue(
+                                    "stockBySize",
+                                    syncStockBySizeToSizes(editForm.getValues("stockBySize"), next),
+                                    {
+                                      shouldValidate: false,
+                                      shouldDirty: true,
+                                    },
+                                  );
                                 }}
                                 className={`h-11 w-11 flex items-center justify-center border text-[11px] font-black tracking-tighter transition-all rounded-xl ${
                                   isSelected
@@ -2464,12 +2434,12 @@ export default function AdminProducts() {
                             );
                           })}
                         </div>
-                        <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
+                          <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
                           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
                             Selected Sizes
                           </p>
                           <div className="flex flex-wrap gap-2">
-                            {(editForm.watch("sizeOptions") || []).map((s) => (
+                            {editSelectedSizes.map((s) => (
                               <div
                                 key={s}
                                 className="flex items-center gap-2 px-2 py-1 rounded-full border bg-background text-xs"
@@ -2480,10 +2450,19 @@ export default function AdminProducts() {
                                   className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"
                                   onClick={() => {
                                     const current = editForm.getValues("sizeOptions") || [];
+                                    const nextSizes = current.filter((x) => x !== s);
                                     editForm.setValue(
                                       "sizeOptions",
-                                      current.filter((x) => x !== s),
+                                      nextSizes,
                                       { shouldValidate: true, shouldDirty: true },
+                                    );
+                                    editForm.setValue(
+                                      "stockBySize",
+                                      syncStockBySizeToSizes(editForm.getValues("stockBySize"), nextSizes),
+                                      {
+                                        shouldValidate: false,
+                                        shouldDirty: true,
+                                      },
                                     );
                                   }}
                                 >
@@ -2491,8 +2470,7 @@ export default function AdminProducts() {
                                 </button>
                               </div>
                             ))}
-                            {(!editForm.watch("sizeOptions") ||
-                              editForm.watch("sizeOptions")!.length === 0) && (
+                            {editSelectedSizes.length === 0 && (
                               <p className="text-[11px] text-muted-foreground">
                                 No sizes selected for this product.
                               </p>

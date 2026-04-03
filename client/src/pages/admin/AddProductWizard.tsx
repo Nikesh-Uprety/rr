@@ -37,6 +37,7 @@ import { uploadProductImage, uploadAdminImage, fetchAdminAttributes, type Produc
 import { QuantityInput } from "@/components/ui/quantity-input";
 import { PriceInput } from "@/components/ui/price-input";
 import type { CategoryApi } from "@/lib/api";
+import { syncStockBySizeToSizes } from "./productStock";
 
 const productSchema = z.object({
   name: z.string().min(2, "Name required"),
@@ -160,7 +161,11 @@ export default function AddProductWizard({
     const next = currentSizes.includes(size)
       ? currentSizes.filter((s: string) => s !== size)
       : [...currentSizes, size];
-    addForm.setValue("sizeOptions", next, { shouldValidate: false, shouldDirty: false });
+    addForm.setValue("sizeOptions", next, { shouldValidate: false, shouldDirty: true });
+    addForm.setValue("stockBySize", syncStockBySizeToSizes(addForm.getValues("stockBySize"), next), {
+      shouldValidate: false,
+      shouldDirty: true,
+    });
   }, [addForm]);
 
   const addCustomColor = () => {
@@ -179,7 +184,12 @@ export default function AddProductWizard({
     // Also add to form
     const currentSizes = addForm.getValues("sizeOptions") || [];
     if (!currentSizes.includes(trimmed)) {
-      addForm.setValue("sizeOptions", [...currentSizes, trimmed], { shouldValidate: false, shouldDirty: false });
+      const nextSizes = [...currentSizes, trimmed];
+      addForm.setValue("sizeOptions", nextSizes, { shouldValidate: false, shouldDirty: true });
+      addForm.setValue("stockBySize", syncStockBySizeToSizes(addForm.getValues("stockBySize"), nextSizes), {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
     }
     setNewSizeInput("");
   };
@@ -598,7 +608,14 @@ export default function AddProductWizard({
                                       value={currentStock}
                                       onChange={(newValue) => {
                                         const current = addForm.getValues("stockBySize") || {};
-                                        addForm.setValue("stockBySize", { ...current, [size]: newValue }, { shouldValidate: false, shouldDirty: false });
+                                        addForm.setValue(
+                                          "stockBySize",
+                                          {
+                                            ...syncStockBySizeToSizes(current, selectedSizes),
+                                            [size]: newValue,
+                                          },
+                                          { shouldValidate: false, shouldDirty: true },
+                                        );
                                       }}
                                       placeholder="—"
                                     />

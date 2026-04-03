@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useCartStore } from "@/store/cart";
+import { type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, Trash2, RotateCcw, ShoppingBag, History, BadgePercent, Sparkles } from "lucide-react";
 import { formatPrice } from "@/lib/format";
@@ -33,7 +33,9 @@ function getCartOriginalPrice(price: number, originalPrice?: number | null, sale
 
 export default function Cart() {
   const [, setLocation] = useLocation();
-  const { items, removeItem, updateQuantity, addItem } = useCartStore();
+  const { items, removeItem, updateQuantity, addItem, hasHydrated = true } = useCartStore(
+    (state: CartState) => state,
+  );
   const { toast } = useToast();
 
   const lastOrderId = typeof window !== 'undefined' ? localStorage.getItem("ra_last_order_id") : null;
@@ -173,6 +175,16 @@ export default function Cart() {
       </div>
     );
   };
+
+  if (!hasHydrated) {
+    return (
+      <div className="container mx-auto mt-10 max-w-7xl px-4 py-32">
+        <div className="flex items-center justify-center py-20">
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400">Loading bag</p>
+        </div>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (

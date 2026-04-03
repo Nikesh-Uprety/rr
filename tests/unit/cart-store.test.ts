@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Product } from "@/lib/mockData";
-import { useCartStore } from "@/store/cart";
+import { getOrCreateGuestId, initializeGuestCart, useCartStore } from "@/store/cart";
 
 const { apiRequestMock } = vi.hoisted(() => ({
   apiRequestMock: vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))),
@@ -23,8 +23,18 @@ const product: Product = {
 
 describe("useCartStore", () => {
   beforeEach(() => {
-    useCartStore.setState({ items: [] });
+    localStorage.clear();
+    document.cookie = "ra_guest_id=; Max-Age=0; Path=/";
+    useCartStore.setState({ items: [], hasHydrated: false });
     apiRequestMock.mockClear();
+    apiRequestMock.mockImplementation((method) => {
+      if (method === "GET") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ success: true, found: false, items: [] }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    });
   });
 
   it("adds a new item and computes subtotal", async () => {
@@ -39,6 +49,19 @@ describe("useCartStore", () => {
       .getState()
       .items.reduce((total, item) => total + item.product.price * item.quantity, 0);
     expect(subtotal).toBe(6400);
+    expect(apiRequestMock).toHaveBeenCalledWith(
+      "POST",
+      "/api/cart/guest/sync",
+      expect.objectContaining({
+        guestId: expect.any(String),
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            id: "prod-1-M-Black",
+            quantity: 2,
+          }),
+        ]),
+      }),
+    );
     expect(apiRequestMock).toHaveBeenCalledWith(
       "POST",
       "/api/user-activity/cart",
@@ -91,5 +114,84 @@ describe("useCartStore", () => {
     }).not.toThrow();
 
     await Promise.resolve();
+  });
+
+  it("creates and reuses a stable guest id", () => {
+    const firstGuestId = getOrCreateGuestId();
+    const secondGuestId = getOrCreateGuestId();
+
+    expect(firstGuestId).toBeTruthy();
+    expect(secondGuestId).toBe(firstGuestId);
+    expect(localStorage.getItem("ra-guest-id")).toBe(firstGuestId);
+    expect(document.cookie).toContain(`ra_guest_id=${firstGuestId}`);
+  });
+
+  it("restores the guest id from the cookie when local storage is empty", () => {
+    document.cookie = "ra_guest_id=guest-cookie-id; Path=/";
+
+    const restoredGuestId = getOrCreateGuestId();
+
+    expect(restoredGuestId).toBe("guest-cookie-id");
+    expect(localStorage.getItem("ra-guest-id")).toBe("guest-cookie-id");
+  });
+
+  it("hydrates from the server cart on load", async () => {
+    const guestId = getOrCreateGuestId();
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            found: true,
+            items: [
+              {
+                id: "prod-1-M-Black",
+                product,
+                variant: { size: "M", color: "Black" },
+                quantity: 3,
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      );
+
+    await initializeGuestCart();
+
+    expect(fetchMock).toHaveBeenCalledWith(`/api/cart/guest/${guestId}`, expect.objectContaining({
+      method: "GET",
+      cache: "no-store",
+    }));
+    expect(useCartStore.getState().hasHydrated).toBe(true);
+    expect(useCartStore.getState().items[0]?.quantity).toBe(3);
+    fetchMock.mockRestore();
+  });
+
+  it("falls back to local storage when redis cart is empty", async () => {
+    getOrCreateGuestId();
+    localStorage.setItem(
+      "ra-guest-cart-items",
+      JSON.stringify([
+        {
+          id: "prod-1-M-Black",
+          product,
+          variant: { size: "M", color: "Black" },
+          quantity: 2,
+        },
+      ]),
+    );
+
+    await initializeGuestCart();
+
+    expect(useCartStore.getState().hasHydrated).toBe(true);
+    expect(useCartStore.getState().items[0]?.quantity).toBe(2);
+    expect(apiRequestMock).toHaveBeenCalledWith(
+      "POST",
+      "/api/cart/guest/sync",
+      expect.objectContaining({
+        items: expect.arrayContaining([expect.objectContaining({ quantity: 2 })]),
+      }),
+    );
   });
 });

@@ -67,6 +67,7 @@ import {
   verify2FASchema 
 } from "./authHandlers";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
+import { cartService } from "./services/cartService";
 import {
   uploadToCloudinary,
   deleteFromCloudinary,
@@ -1093,6 +1094,60 @@ export async function registerRoutes(
       } catch (err) {
         console.error("Error in POST /api/user-activity/cart", err);
         return res.status(500).json({ success: false, error: "Failed to broadcast cart activity" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/cart/guest/sync",
+    rateLimit({ windowSec: 60, maxRequests: 120 }),
+    validateRequest(
+      z.object({
+        guestId: z.string().uuid(),
+        // Guest cart payloads are normalized on the client before use.
+        // The server only needs a durable snapshot, so keep this permissive.
+        items: z.array(z.unknown()),
+      }),
+    ),
+    async (req: Request, res: Response) => {
+      try {
+        res.set("Cache-Control", "no-store");
+        await cartService.saveGuestCart(req.body.guestId, req.body.items);
+        res.cookie("ra_guest_id", req.body.guestId, {
+          httpOnly: false,
+          sameSite: "lax",
+          maxAge: 1000 * 60 * 60 * 24 * 7,
+          secure: process.env.NODE_ENV === "production",
+          path: "/",
+        });
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in POST /api/cart/guest/sync", err);
+        return res.status(500).json({ success: false, error: "Failed to sync guest cart" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/cart/guest/:guestId",
+    rateLimit({ windowSec: 60, maxRequests: 120 }),
+    async (req: Request, res: Response) => {
+      try {
+        res.set("Cache-Control", "no-store");
+        const guestIdParse = z.string().uuid().safeParse(req.params.guestId);
+        if (!guestIdParse.success) {
+          return res.status(400).json({ success: false, error: "Invalid guest id" });
+        }
+
+        const cart = await cartService.getGuestCart(guestIdParse.data);
+        if (!cart) {
+          return res.json({ success: true, found: false, items: [] });
+        }
+
+        return res.json({ success: true, found: true, items: cart.items });
+      } catch (err) {
+        console.error("Error in GET /api/cart/guest/:guestId", err);
+        return res.status(500).json({ success: false, error: "Failed to load guest cart" });
       }
     },
   );
@@ -2161,6 +2216,7 @@ export async function registerRoutes(
     galleryUrls: z.string().optional().nullable(),
     category: z.string().optional().nullable(),
     stock: z.number().int().nonnegative(),
+    stockBySize: z.record(z.string(), z.number().int().nonnegative()).optional(),
     colorOptions: z.string().optional().nullable(),
     sizeOptions: z.string().optional().nullable(),
     salePercentage: z.number().int().min(0).max(100).optional().default(0),
@@ -2169,6 +2225,79 @@ export async function registerRoutes(
     homeFeatured: z.boolean().optional().default(false),
     homeFeaturedImageIndex: z.number().int().min(0).max(3).optional().default(2),
   });
+
+  const parseSizeOptions = (value: unknown): string[] => {
+    if (typeof value !== "string" || !value.trim()) return [];
+
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed)
+        ? Array.from(
+            new Set(
+              parsed.filter(
+                (item): item is string => typeof item === "string" && item.trim().length > 0,
+              ),
+            ),
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const sanitizeStockBySize = (
+    stockBySize: Record<string, number> | undefined,
+    activeSizes: string[],
+  ): Record<string, number> => {
+    return activeSizes.reduce<Record<string, number>>((draft, size) => {
+      const rawValue = stockBySize?.[size] ?? 0;
+      draft[size] = Number.isFinite(rawValue) ? Math.max(0, Math.trunc(rawValue)) : 0;
+      return draft;
+    }, {});
+  };
+
+  const syncProductVariantStocks = async (input: {
+    productId: string;
+    sizeStocks: Record<string, number>;
+    sizesToSync: string[];
+  }) => {
+    for (const size of input.sizesToSync) {
+      if (!size.trim()) continue;
+
+      const newStock = input.sizeStocks[size] ?? 0;
+      const existing = await db
+        .select()
+        .from(productVariants)
+        .where(and(eq(productVariants.productId, input.productId), eq(productVariants.size, size)))
+        .limit(1);
+
+      if (existing.length > 0) {
+        await db
+          .update(productVariants)
+          .set({ stock: newStock, updatedAt: new Date() })
+          .where(eq(productVariants.id, existing[0].id));
+      } else {
+        await db.insert(productVariants).values({
+          productId: input.productId,
+          size,
+          stock: newStock,
+          sku: `RR-${input.productId}-${size}`,
+        });
+      }
+    }
+
+    const allVariants = await db
+      .select()
+      .from(productVariants)
+      .where(eq(productVariants.productId, input.productId));
+
+    const totalStock = allVariants.reduce((sum, variant) => sum + (variant.stock ?? 0), 0);
+
+    await db
+      .update(products)
+      .set({ stock: totalStock })
+      .where(eq(products.id, input.productId));
+  };
 
   app.get(
     "/api/admin/products",
@@ -2284,6 +2413,17 @@ export async function registerRoutes(
           homeFeaturedImageIndex: req.body.homeFeaturedImageIndex ?? 2,
         };
         const product = await storage.createProduct(data);
+        const sizeOptions = parseSizeOptions(req.body.sizeOptions);
+        const sizeStocks = sanitizeStockBySize(req.body.stockBySize, sizeOptions);
+
+        if (sizeOptions.length > 0 || Object.keys(sizeStocks).length > 0) {
+          await syncProductVariantStocks({
+            productId: product.id,
+            sizeStocks,
+            sizesToSync: Array.from(new Set([...sizeOptions, ...Object.keys(sizeStocks)])),
+          });
+        }
+
         return res.status(201).json({ success: true, data: product });
       } catch (err) {
         console.error("Error in POST /api/admin/products", err);
@@ -2325,6 +2465,44 @@ export async function registerRoutes(
         };
 
         const updated = await storage.updateProduct(productId, data);
+        const previousSizes = parseSizeOptions(exists.sizeOptions);
+        const previousVariants = await db
+          .select({
+            size: productVariants.size,
+            stock: productVariants.stock,
+          })
+          .from(productVariants)
+          .where(eq(productVariants.productId, productId));
+        const previousStockBySize = previousVariants.reduce<Record<string, number>>((draft, variant) => {
+          draft[variant.size] = variant.stock ?? 0;
+          return draft;
+        }, {});
+        const nextSizes =
+          req.body.sizeOptions === undefined ? previousSizes : parseSizeOptions(req.body.sizeOptions);
+        const nextStockBySize =
+          req.body.stockBySize === undefined
+            ? sanitizeStockBySize(previousStockBySize, nextSizes)
+            : sanitizeStockBySize(req.body.stockBySize, nextSizes);
+
+        if (
+          req.body.sizeOptions !== undefined ||
+          req.body.stockBySize !== undefined ||
+          req.body.stock !== undefined
+        ) {
+          await syncProductVariantStocks({
+            productId,
+            sizeStocks: nextStockBySize,
+            sizesToSync: Array.from(
+              new Set([
+                ...previousSizes,
+                ...nextSizes,
+                ...Object.keys(previousStockBySize),
+                ...Object.keys(req.body.stockBySize ?? {}),
+              ]),
+            ),
+          });
+        }
+
         return res.json({ success: true, data: updated });
       } catch (err) {
         console.error("Error in PUT /api/admin/products/:id", err);

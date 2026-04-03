@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useMemo, useEffect, useRef } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
@@ -10,7 +10,7 @@ import { fetchProductById, fetchProducts, type ProductApi, type ProductSizeChart
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { Helmet } from "react-helmet-async";
-import SizeFitGuide from "@/components/product/SizeFitGuide";
+const SizeFitGuide = lazy(() => import("@/components/product/SizeFitGuide"));
 
 function parseJsonArray(s: string | null | undefined): string[] {
   if (!s || !s.trim()) return [];
@@ -119,6 +119,7 @@ export default function ProductDetail() {
     queryKey: ["products", { category: product?.category, limit: 5 }],
     queryFn: () => fetchProducts({ category: product?.category || undefined, limit: 5 }),
     enabled: !!product?.category,
+    staleTime: 5 * 60 * 1000,
   });
 
   const relatedProducts = useMemo(() => {
@@ -1105,14 +1106,18 @@ export default function ProductDetail() {
         </aside>
       </div>
 
-      <SizeFitGuide
-        open={showSizeGuide}
-        onClose={() => setShowSizeGuide(false)}
-        productName={product.name}
-        sizeChart={productSizeChart}
-        productImage={allImages.find(Boolean) ?? null}
-        selectedSize={selectedSize}
-      />
+      <Suspense fallback={null}>
+        {showSizeGuide ? (
+          <SizeFitGuide
+            open={showSizeGuide}
+            onClose={() => setShowSizeGuide(false)}
+            productName={product.name}
+            sizeChart={productSizeChart}
+            productImage={allImages.find(Boolean) ?? null}
+            selectedSize={selectedSize}
+          />
+        ) : null}
+      </Suspense>
 
       <div className="mt-24 pt-16 border-t border-gray-100">
         <h2 className="text-xl font-black uppercase tracking-tighter text-center mb-12">

@@ -5,8 +5,6 @@ import {
   Loader2, Plus, Trash2, Palette, Ruler, Tags, Pipette, 
   Share2, FileText, Download, X, Eye, EyeOff, FileSpreadsheet, Tag, Shirt, Footprints, LayoutTemplate
 } from "lucide-react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import { 
   fetchAdminAttributes, 
   createAdminAttribute, 
@@ -200,6 +198,7 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
       const text = "RARE ATELIER Size Chart Guidelines\nCheck our latest sizing for a perfect fit!";
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     } else {
+      const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(sizeChartRef.current);
       if (type === 'image') {
         const link = document.createElement('a');
@@ -207,6 +206,7 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
         link.href = canvas.toDataURL();
         link.click();
       } else {
+        const jsPDF = (await import("jspdf")).default;
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF();
         pdf.addImage(imgData, 'PNG', 10, 10, 190, 0);

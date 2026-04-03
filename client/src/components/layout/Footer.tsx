@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { fetchPageConfig } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import {
   PreviewLinkCard,
@@ -21,17 +22,8 @@ export default function Footer() {
   }, []);
   const { data: pageConfig } = useQuery({
     queryKey: ["page-config", previewTemplateId],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (previewTemplateId) {
-        params.set("templateId", previewTemplateId);
-      }
-      const url = params.toString()
-        ? `/api/public/page-config?${params.toString()}`
-        : "/api/public/page-config";
-      return fetch(url).then((r) => r.json());
-    },
-    staleTime: 30 * 1000,
+    queryFn: () => fetchPageConfig(previewTemplateId),
+    staleTime: 5 * 60 * 1000,
   });
 
   const newsletterMutation = useMutation({

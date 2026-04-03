@@ -1,19 +1,20 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchHomeFeaturedProducts, fetchProducts, type ProductApi } from "@/lib/api";
+import { fetchHomeFeaturedProducts, fetchPageConfig, fetchProducts, type ProductApi } from "@/lib/api";
 import { useScroll, useTransform, motion, AnimatePresence } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 import { ArrowUp } from "lucide-react";
-import OurServices from "@/components/home/OurServices";
 import HeroSection from "@/components/home/HeroSection";
-import QuoteSection from "@/components/home/QuoteSection";
-import FeaturedCollection from "@/components/home/FeaturedCollection";
-import CampaignBanner from "@/components/home/CampaignBanner";
-import NewArrivalsSection from "@/components/home/NewArrivalsSection";
-import GoldTickerSection from "@/components/home/GoldTickerSection";
-import FreshReleaseSection from "@/components/home/FreshReleaseSection";
-import ContactSection from "@/components/home/ContactSection";
 import { ScrollProgress } from "@/components/ScrollProgress";
+
+const QuoteSection = lazy(() => import("@/components/home/QuoteSection"));
+const FeaturedCollection = lazy(() => import("@/components/home/FeaturedCollection"));
+const CampaignBanner = lazy(() => import("@/components/home/CampaignBanner"));
+const NewArrivalsSection = lazy(() => import("@/components/home/NewArrivalsSection"));
+const GoldTickerSection = lazy(() => import("@/components/home/GoldTickerSection"));
+const FreshReleaseSection = lazy(() => import("@/components/home/FreshReleaseSection"));
+const OurServices = lazy(() => import("@/components/home/OurServices"));
+const ContactSection = lazy(() => import("@/components/home/ContactSection"));
 
 type SiteAsset = {
   id: string;
@@ -116,6 +117,47 @@ const PREVIEW_PRODUCTS: ProductApi[] = [
   },
 ];
 
+function DeferredSection({
+  children,
+  minHeightClassName = "min-h-[32rem]",
+}: {
+  children: ReactNode;
+  minHeightClassName?: string;
+}) {
+  const [isVisible, setIsVisible] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "320px 0px" },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef}>
+      {isVisible ? (
+        <Suspense fallback={<div className={`${minHeightClassName} animate-pulse rounded-[2rem] bg-muted/30`} />}>
+          {children}
+        </Suspense>
+      ) : (
+        <div className={`${minHeightClassName} rounded-[2rem] bg-transparent`} aria-hidden="true" />
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
@@ -201,17 +243,8 @@ export default function Home() {
 
   const { data: pageConfig, isLoading: pageConfigLoading } = useQuery({
     queryKey: ["page-config", previewTemplateId],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (previewTemplateId) {
-        params.set("templateId", previewTemplateId);
-      }
-      const url = params.toString()
-        ? `/api/public/page-config?${params.toString()}`
-        : "/api/public/page-config";
-      return fetch(url).then((r) => r.json());
-    },
-    staleTime: 30 * 1000,
+    queryFn: () => fetchPageConfig(previewTemplateId),
+    staleTime: 5 * 60 * 1000,
   });
 
   // Device detection
@@ -560,78 +593,77 @@ export default function Home() {
         );
       case "quote":
         return (
-          <QuoteSection
-            key={section.id}
-            config={section.config}
-          />
+          <DeferredSection key={section.id} minHeightClassName="min-h-[18rem]">
+            <QuoteSection config={section.config} />
+          </DeferredSection>
         );
       case "featured":
         return (
-          <FeaturedCollection
-            key={section.id}
-            featuredProducts={featuredProductsSource ?? []}
-            isFeaturedSuccess={isCanvasPreview || isFeaturedSuccess}
-            featureCollectionImages={lifestyleImages}
-            carouselIndex={carouselIndex}
-            isTransitioning={isTransitioning}
-            onCarouselNext={handleCarouselNext}
-            onCarouselPrev={handleCarouselPrev}
-            onCarouselGoTo={handleCarouselGoTo}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
-            config={section.config}
-          />
+          <DeferredSection key={section.id} minHeightClassName="min-h-[44rem]">
+            <FeaturedCollection
+              featuredProducts={featuredProductsSource ?? []}
+              isFeaturedSuccess={isCanvasPreview || isFeaturedSuccess}
+              featureCollectionImages={lifestyleImages}
+              carouselIndex={carouselIndex}
+              isTransitioning={isTransitioning}
+              onCarouselNext={handleCarouselNext}
+              onCarouselPrev={handleCarouselPrev}
+              onCarouselGoTo={handleCarouselGoTo}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+              config={section.config}
+            />
+          </DeferredSection>
         );
       case "ticker":
         return (
-          <GoldTickerSection
-            key={section.id}
-            config={section.config}
-          />
+          <DeferredSection key={section.id} minHeightClassName="min-h-[10rem]">
+            <GoldTickerSection config={section.config} />
+          </DeferredSection>
         );
       case "campaign":
         return (
-          <CampaignBanner
-            key={section.id}
-            exploreCollectionImage={campaignBannerImage}
-            parallaxOffset={parallaxY}
-            imageAlt={campaignBannerAltText}
-            config={section.config}
-          />
+          <DeferredSection key={section.id} minHeightClassName="min-h-[34rem]">
+            <CampaignBanner
+              exploreCollectionImage={campaignBannerImage}
+              parallaxOffset={parallaxY}
+              imageAlt={campaignBannerAltText}
+              config={section.config}
+            />
+          </DeferredSection>
         );
       case "arrivals":
         return (
-          <NewArrivalsSection
-            key={section.id}
-            newArrivals={normalizedNewArrivals}
-            isNewArrivalsSuccess={isCanvasPreview || isNewArrivalsSuccess}
-            config={section.config}
-          />
+          <DeferredSection key={section.id} minHeightClassName="min-h-[34rem]">
+            <NewArrivalsSection
+              newArrivals={normalizedNewArrivals}
+              isNewArrivalsSuccess={isCanvasPreview || isNewArrivalsSuccess}
+              config={section.config}
+            />
+          </DeferredSection>
         );
       case "services":
         return (
-          <OurServices
-            key={section.id}
-            config={section.config}
-          />
+          <DeferredSection key={section.id} minHeightClassName="min-h-[22rem]">
+            <OurServices config={section.config} />
+          </DeferredSection>
         );
       case "contact":
         return (
-          <ContactSection
-            key={section.id}
-          />
+          <DeferredSection key={section.id} minHeightClassName="min-h-[26rem]">
+            <ContactSection />
+          </DeferredSection>
         );
       case "fresh-release":
         return (
-          <FreshReleaseSection
-            key={section.id}
-            config={section.config}
-          />
+          <DeferredSection key={section.id} minHeightClassName="min-h-[30rem]">
+            <FreshReleaseSection config={section.config} />
+          </DeferredSection>
         );
       default:
         return null;
@@ -658,7 +690,9 @@ export default function Home() {
         {activeSections.map(renderSection)}
         {/* Always render ContactSection at the bottom when not already present */}
         {!activeSections.some((s: any) => s.sectionType === "contact") && (
-          <ContactSection />
+          <DeferredSection minHeightClassName="min-h-[26rem]">
+            <ContactSection />
+          </DeferredSection>
         )}
       </main>
     </div>

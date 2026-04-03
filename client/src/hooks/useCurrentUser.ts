@@ -33,7 +33,7 @@ export function useCurrentUser(options?: { enabled?: boolean }) {
     },
     staleTime: 1000 * 60 * 5, // 5 minutes - data considered fresh
     gcTime: 1000 * 60 * 60, // 1 hour - keep in cache even if unused
-    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnWindowFocus: false, // Avoid extra auth checks during normal storefront browsing
     refetchOnReconnect: true, // Refetch on network reconnect
     enabled: options?.enabled ?? true,
   });

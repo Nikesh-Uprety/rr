@@ -127,6 +127,21 @@ export async function fetchHomeFeaturedProducts(): Promise<ProductApi[]> {
   return json.data ?? [];
 }
 
+export async function fetchPageConfig(previewTemplateId?: string | null) {
+  const params = new URLSearchParams();
+  if (previewTemplateId) {
+    params.set("templateId", previewTemplateId);
+  }
+  const url = params.toString()
+    ? `/api/public/page-config?${params.toString()}`
+    : "/api/public/page-config";
+  const res = await fetch(url, { cache: "force-cache" });
+  if (!res.ok) {
+    throw new Error(`Failed to load page config: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function fetchCategories(): Promise<CategoryApi[]> {
   const res = await apiRequest("GET", "/api/categories");
   const json = (await res.json()) as { success: boolean; data: CategoryApi[] };

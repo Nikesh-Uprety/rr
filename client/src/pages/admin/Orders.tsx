@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { lazy, Suspense, useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
@@ -30,11 +30,14 @@ import {
   fetchBillByOrder,
 } from "@/lib/adminApi";
 import type { AdminOrder, AdminBill } from "@/lib/adminApi";
-import { BillViewer } from "@/components/admin/BillViewer";
 import { ExportButton } from "@/components/admin/ExportButton";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+const BillViewer = lazy(() =>
+  import("@/components/admin/BillViewer").then((module) => ({ default: module.BillViewer })),
+);
 
 function BillButton({ orderId }: { orderId: string }) {
   const [showBill, setShowBill] = useState(false);
@@ -65,7 +68,9 @@ function BillButton({ orderId }: { orderId: string }) {
       {showBill && (
         <div className="bill-modal-overlay" onClick={() => setShowBill(false)}>
           <div className="bill-modal" onClick={e => e.stopPropagation()}>
-            <BillViewer bill={data} onClose={() => setShowBill(false)} />
+            <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading bill viewer...</div>}>
+              <BillViewer bill={data} onClose={() => setShowBill(false)} />
+            </Suspense>
           </div>
         </div>
       )}

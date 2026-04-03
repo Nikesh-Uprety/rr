@@ -237,12 +237,6 @@ export default function NewCollection() {
     ].slice(0, maxItems);
   }, [bannerAssets]);
 
-  // Debug: Log gallery images
-  useEffect(() => {
-    console.log('Hero Gallery Images:', heroGalleryImages);
-    console.log('Hero Gallery Length:', heroGalleryImages.length);
-  }, [heroGalleryImages]);
-
   useEffect(() => {
     const scriptId = "instagram-embed-script";
     const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;

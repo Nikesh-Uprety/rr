@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -98,7 +98,6 @@ import {
   SheetTrigger 
 } from "@/components/ui/sheet";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { AttributesManager } from "./AttributesManager";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import AddProductWizard from "./AddProductWizard";
 import {
@@ -116,6 +115,10 @@ import {
   parseStoredSizeOptions,
   syncStockBySizeToSizes,
 } from "./productStock";
+
+const AttributesManager = lazy(() =>
+  import("./AttributesManager").then((module) => ({ default: module.AttributesManager })),
+);
 
 function slugify(s: string): string {
   return s
@@ -2596,7 +2599,9 @@ export default function AdminProducts() {
       {/* Attributes Manager Sheet */}
       <Sheet open={attrSheetOpen} onOpenChange={setAttrSheetOpen}>
         <SheetContent side="right" className="w-full sm:max-w-[680px] p-0 overflow-hidden border-l border-[#D4E0D2] shadow-[0_24px_48px_rgba(20,36,25,0.22)]">
-          <AttributesManager onClose={() => setAttrSheetOpen(false)} />
+          <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading attribute tools...</div>}>
+            <AttributesManager onClose={() => setAttrSheetOpen(false)} />
+          </Suspense>
         </SheetContent>
       </Sheet>
     </div>

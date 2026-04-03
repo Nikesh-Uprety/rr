@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Printer, Download, X, Share2 } from "lucide-react";
 import Barcode from "react-barcode";
 import { formatPrice } from "@/lib/format";
+import "@/styles/bill-viewer.css";
 
 interface BillItem {
   productName: string;

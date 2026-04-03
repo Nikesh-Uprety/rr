@@ -57,9 +57,16 @@ function FreshReleaseCard({ product }: { product: ProductApi }) {
 }
 
 export default function FreshReleaseSection({ config }: FreshReleaseSectionProps) {
+  const productIds = Array.isArray(config?.productIds)
+    ? config.productIds.map((id: unknown) => String(id))
+    : [];
+  const productFetchLimit = productIds.length > 0
+    ? Math.min(Math.max(productIds.length * 2, 24), 200)
+    : 24;
+
   const { data: products = [] } = useQuery<ProductApi[]>({
-    queryKey: ["products", "fresh-release", { limit: 2000 }],
-    queryFn: () => fetchProducts({ limit: 2000 }),
+    queryKey: ["products", "fresh-release", { limit: productFetchLimit, productIds }],
+    queryFn: () => fetchProducts({ limit: productFetchLimit }),
     staleTime: 60 * 1000,
   });
 
@@ -67,9 +74,6 @@ export default function FreshReleaseSection({ config }: FreshReleaseSectionProps
   const title = resolvedConfig.title ?? "Fresh Release";
   const text =
     resolvedConfig.text ?? "A selected grid of recent pieces with enough room to highlight product density and clean merchandising.";
-  const productIds = Array.isArray(resolvedConfig.productIds)
-    ? resolvedConfig.productIds.map((id: unknown) => String(id))
-    : [];
   const desktopColumns = Number.isFinite(Number(resolvedConfig.columns))
     ? Math.max(2, Math.min(4, Number(resolvedConfig.columns)))
     : 4;

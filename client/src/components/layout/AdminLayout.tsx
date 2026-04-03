@@ -31,6 +31,7 @@ import {
   SidebarInset,
 } from "@/components/animate-ui/sidebar";
 import { cn } from "@/lib/utils";
+import "@/styles/admin-shell.css";
 
 const ADMIN_SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
 const ADMIN_SIDEBAR_EXPANDED_WIDTH_KEY = "sidebar-width-expanded";

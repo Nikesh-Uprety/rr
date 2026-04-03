@@ -1,4 +1,4 @@
-import { BillViewer } from "@/components/admin/BillViewer";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ViewToggle } from "@/components/admin/ViewToggle";
 import { Badge } from "@/components/ui/badge";
@@ -75,7 +75,9 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Label } from "@/components/ui/label";
-import { useEffect, useMemo, useRef, useState } from "react";
+const BillViewer = lazy(() =>
+  import("@/components/admin/BillViewer").then((module) => ({ default: module.BillViewer })),
+);
 
 interface CartItem {
   productId: string;
@@ -682,10 +684,12 @@ export default function AdminPOS() {
   if (completedBill) {
     return (
       <div className="max-w-lg mx-auto py-8 animate-in fade-in">
-        <BillViewer
-          bill={completedBill}
-          onClose={() => setCompletedBill(null)}
-        />
+        <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading bill viewer...</div>}>
+          <BillViewer
+            bill={completedBill}
+            onClose={() => setCompletedBill(null)}
+          />
+        </Suspense>
         <div className="text-center mt-6">
           <Button
             className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white"

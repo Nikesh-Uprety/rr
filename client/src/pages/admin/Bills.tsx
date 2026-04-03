@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { lazy, Suspense, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
@@ -6,12 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, Eye, Download, XCircle } from "lucide-react";
-import { BillViewer } from "@/components/admin/BillViewer";
 import { fetchBills, voidBill } from "@/lib/adminApi";
 import type { AdminBill } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+const BillViewer = lazy(() =>
+  import("@/components/admin/BillViewer").then((module) => ({ default: module.BillViewer })),
+);
 
 export default function AdminBills() {
   const [search, setSearch] = useState("");
@@ -334,7 +337,9 @@ export default function AdminBills() {
       {selectedBill && (
         <div className="bill-modal-overlay" onClick={() => setSelectedBill(null)}>
           <div className="bill-modal" onClick={(e) => e.stopPropagation()}>
-            <BillViewer bill={selectedBill} onClose={() => setSelectedBill(null)} />
+            <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading bill viewer...</div>}>
+              <BillViewer bill={selectedBill} onClose={() => setSelectedBill(null)} />
+            </Suspense>
           </div>
         </div>
       )}

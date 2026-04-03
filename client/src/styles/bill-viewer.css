@@ -1,0 +1,247 @@
+.bill-wrapper {
+  max-width: 380px;
+  margin: 0 auto;
+  font-family: 'DM Sans', 'Inter', monospace;
+}
+
+.bill-document {
+  background: #ffffff;
+  color: #111111;
+  padding: 24px 20px;
+  position: relative;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.bill-header {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.bill-header h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin: 0 0 4px;
+}
+
+.bill-header p {
+  font-size: 11px;
+  color: #555;
+  margin: 2px 0;
+}
+
+.bill-divider {
+  color: #ccc;
+  font-size: 11px;
+  letter-spacing: -1px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.bill-meta-row,
+.bill-total-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 3px 0;
+  font-size: 12px;
+}
+
+.bill-grand-total {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 6px 0;
+}
+
+.bill-items {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0;
+}
+
+.bill-items th {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 2px;
+  border-bottom: 1px solid #eee;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.bill-items td {
+  padding: 5px 2px;
+  vertical-align: top;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.bill-customer {
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.bill-footer {
+  text-align: center;
+  font-size: 11px;
+  color: #777;
+  margin-top: 12px;
+}
+
+.bill-footer p {
+  margin: 2px 0;
+}
+
+.bill-void-stamp {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-30deg);
+  font-size: 64px;
+  font-weight: 900;
+  color: rgba(200, 0, 0, 0.15);
+  pointer-events: none;
+  letter-spacing: 0.1em;
+  border: 8px solid rgba(200, 0, 0, 0.15);
+  padding: 8px 16px;
+}
+
+.bill-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  justify-content: flex-end;
+}
+
+.bill-actions button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  transition: all 0.15s;
+}
+
+.bill-actions button:hover {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+
+.bill-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.bill-modal {
+  background: hsl(var(--card));
+  border-radius: 16px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.view-bill-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  transition: all 0.15s;
+  width: 100%;
+  justify-content: center;
+  font-weight: 500;
+}
+
+.view-bill-btn:hover {
+  background: #2C3E2D;
+  color: white;
+  border-color: #2C3E2D;
+}
+
+@keyframes pos-digit-roll-in {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pos-paid-icon-pop-fade {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.pos-digit-roll {
+  display: inline-block;
+  animation: pos-digit-roll-in 260ms ease-out both;
+}
+
+.pos-paid-icon-pop {
+  animation: pos-paid-icon-pop-fade 1s ease-out both;
+}
+
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  html, body {
+    width: 80mm;
+    margin: 0;
+    padding: 0;
+  }
+
+  * { visibility: hidden; }
+
+  .bill-document,
+  .bill-document * {
+    visibility: visible;
+  }
+
+  .bill-document {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 80mm;
+    padding: 4mm;
+    margin: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .no-print { display: none !important; }
+}

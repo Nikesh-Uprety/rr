@@ -6,6 +6,7 @@ import { useCartStore } from "@/store/cart";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { fetchPageConfig } from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import SearchBar from "./SearchBar";
 import { canAccessAdminPanel } from "@shared/auth-policy";
@@ -42,17 +43,8 @@ export default function Navbar() {
   const queryClient = useQueryClient();
   const { data: pageConfig } = useQuery({
     queryKey: ["page-config", previewTemplateId],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (previewTemplateId) {
-        params.set("templateId", previewTemplateId);
-      }
-      const url = params.toString()
-        ? `/api/public/page-config?${params.toString()}`
-        : "/api/public/page-config";
-      return fetch(url).then((r) => r.json());
-    },
-    staleTime: 30 * 1000,
+    queryFn: () => fetchPageConfig(previewTemplateId),
+    staleTime: 5 * 60 * 1000,
   });
 
   const isStorefront = !location.startsWith("/admin");

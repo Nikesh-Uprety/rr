@@ -13,7 +13,6 @@ import { getDefaultAdminPath } from "@/lib/adminAccess";
 import { canAccessAdminPanel } from "@shared/auth-policy";
 
 import React, { lazy, Suspense, useCallback, useEffect, useState, startTransition } from "react";
-import Home from "@/pages/storefront/Home";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import Footer from "@/components/layout/Footer";
 import { TopLoadingBar } from "@/components/layout/TopLoadingBar";
@@ -23,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Wifi, WifiOff } from "lucide-react";
 import SentryTest from "@/components/SentryTest";
 
+const loadHomePage = () => import("@/pages/storefront/Home");
 const loadProductsPage = () => import("@/pages/storefront/Products");
 const loadProductDetailPage = () => import("@/pages/storefront/ProductDetail");
 const loadNewCollectionPage = () => import("@/pages/storefront/NewCollection");
@@ -53,6 +53,7 @@ const loadLoginPage = () => import("@/pages/auth/Login");
 const loadNotFoundPage = () => import("@/pages/not-found");
 const loadLegalPlaceholderPage = () => import("@/pages/storefront/LegalPlaceholder");
 
+const Home = lazy(loadHomePage);
 const Products = lazy(loadProductsPage);
 const ProductDetail = lazy(loadProductDetailPage);
 const NewCollection = lazy(loadNewCollectionPage);
@@ -111,7 +112,7 @@ function normalizePath(path: string): string {
 function preloadRouteModule(path: string): Promise<unknown> {
   const cleanPath = normalizePath(path);
 
-  if (cleanPath === "/" || cleanPath === "") return Promise.resolve();
+  if (cleanPath === "/" || cleanPath === "") return loadHomePage();
   if (cleanPath === "/products" || cleanPath === "/shop") return loadProductsPage();
   if (cleanPath.startsWith("/product/")) return loadProductDetailPage();
   if (cleanPath === "/new-collection") return loadNewCollectionPage();

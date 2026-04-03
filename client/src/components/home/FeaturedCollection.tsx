@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, type TouchEvent } from "react";
+import { useState, useRef, type MouseEvent, type TouchEvent } from "react";
 import { ChevronLeft, ChevronRight, Plus, X, ZoomIn } from "lucide-react";
 import { Link } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
@@ -54,6 +54,7 @@ function ImageGalleryModal({
   onClose: () => void;
 }) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const touchStartX = useRef(0);
 
   const goNext = () => setCurrentIndex((i) => (i + 1) % images.length);
   const goPrev = () => setCurrentIndex((i) => (i - 1 + images.length) % images.length);
@@ -76,42 +77,78 @@ function ImageGalleryModal({
           <X className="h-6 w-6" />
         </button>
 
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4">
+        <div
+          className="absolute inset-0 z-10"
+          onTouchStart={(event) => {
+            touchStartX.current = event.touches[0].clientX;
+          }}
+          onTouchEnd={(event) => {
+            const deltaX = touchStartX.current - event.changedTouches[0].clientX;
+            if (Math.abs(deltaX) < 48) return;
+            if (deltaX > 0) goNext();
+            else goPrev();
+          }}
+        />
+
+        <div className="absolute left-1/2 top-6 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2 backdrop-blur-xl">
+          <ZoomIn className="h-4 w-4 text-white/70" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/70">
+            Lookbook Viewer
+          </span>
+        </div>
+
+        <div className="absolute bottom-8 left-1/2 z-30 flex w-[min(92vw,980px)] -translate-x-1/2 flex-col items-center gap-4">
           <button
             onClick={(e) => { e.stopPropagation(); goPrev(); }}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 hover:scale-110"
+            className="absolute left-0 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-white/20 md:flex"
             aria-label="Previous image"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-
-          <div className="flex gap-2">
-            {images.map((_, i) => (
-              <button
-                key={i}
-                onClick={(e) => { e.stopPropagation(); setCurrentIndex(i); }}
-                className={`rounded-full transition-all duration-300 ${
-                  i === currentIndex
-                    ? "w-8 h-2 bg-white"
-                    : "w-2 h-2 bg-white/40 hover:bg-white/70"
-                }`}
-                aria-label={`Go to image ${i + 1}`}
-              />
-            ))}
-          </div>
-
           <button
             onClick={(e) => { e.stopPropagation(); goNext(); }}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-all hover:bg-white/20 hover:scale-110"
+            className="absolute right-0 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-sm transition-all hover:scale-110 hover:bg-white/20 md:flex"
             aria-label="Next image"
           >
             <ChevronRight className="h-5 w-5" />
           </button>
+          <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/8 px-4 py-2 backdrop-blur-xl">
+            <button
+              onClick={(e) => { e.stopPropagation(); goPrev(); }}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:bg-white/20 md:hidden"
+              aria-label="Previous image"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-white/70">
+              {currentIndex + 1} / {images.length}
+            </p>
+            <button
+              onClick={(e) => { e.stopPropagation(); goNext(); }}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:bg-white/20 md:hidden"
+              aria-label="Next image"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex max-w-full gap-3 overflow-x-auto px-2 pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            {images.map((src, i) => (
+              <button
+                key={`${src}-${i}`}
+                onClick={(e) => { e.stopPropagation(); setCurrentIndex(i); }}
+                className={`relative h-16 w-12 shrink-0 overflow-hidden rounded-2xl border transition-all duration-300 sm:h-20 sm:w-14 ${
+                  i === currentIndex
+                    ? "scale-100 border-white/70 shadow-[0_12px_30px_rgba(255,255,255,0.14)]"
+                    : "scale-95 border-white/10 opacity-65 hover:opacity-100"
+                }`}
+                aria-label={`Go to image ${i + 1}`}
+              >
+                <img src={src} alt={`Thumbnail ${i + 1}`} className="h-full w-full object-cover" />
+                <div className={`absolute inset-0 transition-colors ${i === currentIndex ? "bg-transparent" : "bg-black/30"}`} />
+              </button>
+            ))}
+          </div>
         </div>
-
-        <p className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 text-xs text-white/60 font-mono tracking-widest uppercase">
-          {currentIndex + 1} / {images.length}
-        </p>
 
         <AnimatePresence mode="wait">
           <motion.img
@@ -282,9 +319,9 @@ function NikeshDesignFeatured({
   const hint = config?.hint ?? "Drag to explore →";
 
   return (
-    <section className="products-wrap py-20 sm:py-24" style={{ background: "var(--bg2)" }}>
+    <section className="products-wrap py-12 sm:py-20" style={{ background: "var(--bg2)" }}>
       <div className="w-full px-2 sm:px-3 lg:px-4 xl:px-6">
-        <div className="products-head reveal mb-12 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="products-head reveal mb-8 flex flex-col gap-3 md:mb-12 md:flex-row md:items-end md:justify-between">
           <div>
             <p
               className="text-[10px] uppercase tracking-[0.28em] text-[var(--gold)]"
@@ -305,8 +342,8 @@ function NikeshDesignFeatured({
           </div>
         </div>
 
-        <div className="products-scroll overflow-x-auto pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex min-w-max gap-5 px-1">
+        <div className="products-scroll overflow-x-auto pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:overflow-visible md:pb-0">
+          <div className="grid min-w-full grid-cols-2 gap-3 px-1 md:flex md:min-w-max md:gap-5">
             {products.slice(0, 6).map((product: any, index: number) => {
               const colors = (() => {
                 try {
@@ -326,8 +363,8 @@ function NikeshDesignFeatured({
                 <Link
                   key={product.id}
                   href={`/product/${product.id}`}
-                  className="group p-card block shrink-0"
-                  style={{ width: "clamp(320px, 33vw, 500px)", scrollSnapAlign: "start" }}
+                  className="group p-card block w-full md:w-[clamp(320px,33vw,500px)] md:shrink-0"
+                  style={{ scrollSnapAlign: "start" }}
                 >
                   <div className="relative overflow-hidden border border-[var(--border)] bg-black/20">
                     <div className="aspect-[3/4] overflow-hidden">
@@ -435,9 +472,9 @@ export default function FeaturedCollection({
   }
 
   return (
-    <section className="py-20 sm:py-24">
+    <section className="py-12 sm:py-20">
       <div className="w-full px-2 sm:px-3 lg:px-4 xl:px-6">
-        <div className="mb-16 flex items-end justify-between">
+        <div className="mb-8 flex items-end justify-between md:mb-16">
         <div>
           <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2">
             Editor's Choice
@@ -454,7 +491,7 @@ export default function FeaturedCollection({
 
         {/* Lookbook Carousel - Clickable images with gallery */}
         <div
-          className="group/carousel relative mb-16 aspect-[16/10] overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-900 md:aspect-[2/1] xl:aspect-[21/9] cursor-grab active:cursor-grabbing select-none"
+          className="group/carousel relative mb-10 aspect-[4/5] overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-900 sm:aspect-[16/10] md:mb-16 md:aspect-[2/1] xl:aspect-[21/9] cursor-grab active:cursor-grabbing select-none"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -525,7 +562,7 @@ export default function FeaturedCollection({
         </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-8">
           {products.map((product, i) => (
             <FeaturedProductCard key={product.id} product={product} index={i} />
           ))}

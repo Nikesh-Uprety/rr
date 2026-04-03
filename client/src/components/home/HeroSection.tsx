@@ -85,8 +85,6 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
   );
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStartX = useRef(0);
-  const progressTrackColor = "rgba(255,255,255,0.16)";
-  const progressFillColor = "#ffffff";
   const primaryButtonStyle = {
     background: "#ffffff",
     color: "#111111",
@@ -119,32 +117,6 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
         background: "#0b0b0c",
       }}
     >
-      <div className="absolute inset-x-0 bottom-0 z-30 flex gap-0">
-        {slides.map((_, index) => {
-          const isDone = index < activeIndex;
-          const isActive = index === activeIndex;
-          return (
-            <button
-              key={index}
-              type="button"
-              className="relative h-[4px] flex-1 overflow-hidden"
-              style={{ background: progressTrackColor }}
-              onClick={() => goTo(index)}
-              aria-label={`Go to story ${index + 1}`}
-            >
-              <span
-                className={`absolute inset-y-0 left-0 ${isActive ? "rare-story-bar-fill" : ""}`}
-                style={{
-                  background: progressFillColor,
-                  width: isDone ? "100%" : "0%",
-                  animationDuration: `${durations[index]}ms`, // Reduced from 2400ms
-                }}
-              />
-            </button>
-          );
-        })}
-      </div>
-
       <div
         className="absolute inset-0 z-10"
         onTouchStart={(event) => {
@@ -312,31 +284,6 @@ function NikeshDesignHero({ heroImages, config }: { heroImages: string[]; config
 
   return (
     <section id="hero" className="relative w-full overflow-hidden" style={{ minHeight: "100dvh", background: "var(--bg)" }}>
-      <div className="absolute left-0 right-0 z-20 flex gap-2 px-4 sm:px-6 lg:px-10" style={{ top: "calc(var(--nav-h) + 14px)" }}>
-        {slides.map((_, index) => {
-          const isDone = index < activeIndex;
-          const isActive = index === activeIndex;
-          return (
-            <button
-              key={index}
-              type="button"
-              className="relative h-[1.5px] flex-1 overflow-hidden rounded-full"
-              style={{ background: "rgba(255,255,255,0.2)" }}
-              onClick={() => goTo(index)}
-              aria-label={`Go to slide ${index + 1}`}
-            >
-              <span
-                className={`absolute inset-y-0 left-0 bg-[var(--gold)] ${isActive ? "rare-story-bar-fill" : ""}`}
-                style={{
-                  width: isDone ? "100%" : "0%",
-                  animationDuration: `${durations[index]}ms`, // Reduced from 2400ms
-                }}
-              />
-            </button>
-          );
-        })}
-      </div>
-
       <div
         className="absolute inset-0 z-10"
         onTouchStart={(event) => {

@@ -117,7 +117,7 @@ function FeaturedProductCard({
 
   return (
     <Link href={`/product/${product.id}`} className="group cursor-pointer relative">
-      <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5] rounded-xl shadow-2xl transition-all duration-300 hover:shadow-white/5">
+      <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5] rounded-xl shadow-xl transition-all duration-300 hover:shadow-white/5 md:shadow-2xl">
         <div className="hidden lg:block absolute inset-0 z-0">
           <AnimatePresence mode="wait">
             <motion.div
@@ -205,15 +205,15 @@ function FeaturedProductCard({
           </div>
         </div>
 
-        <div className="lg:hidden absolute inset-x-3 bottom-3 z-20 p-4 backdrop-blur-xl bg-black/40 border border-white/10 rounded-xl shadow-xl">
+        <div className="lg:hidden absolute inset-x-2.5 bottom-2.5 z-20 p-3 backdrop-blur-xl bg-black/40 border border-white/10 rounded-xl shadow-xl">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-white text-base font-black uppercase tracking-tighter mb-0.5 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              <h3 className="text-sm text-white font-black uppercase tracking-tighter mb-0.5 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 {product.name}
               </h3>
               {product.saleActive && Number(product.salePercentage) > 0 ? (
                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-700">
-                  <p className="text-white font-black text-sm">
+                  <p className="text-white font-black text-[13px]">
                     {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
                   </p>
                   <p className="text-white/50 font-medium text-xs line-through">
@@ -224,12 +224,12 @@ function FeaturedProductCard({
                   </span>
                 </div>
               ) : (
-                <p className="text-white/70 font-medium text-sm animate-in fade-in slide-in-from-bottom-2 duration-700">
+                <p className="text-white/70 font-medium text-[13px] animate-in fade-in slide-in-from-bottom-2 duration-700">
                   {formatPrice(product.price)}
                 </p>
               )}
             </div>
-            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-white">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-white">
               <ArrowRight className="w-4 h-4" />
             </div>
           </div>

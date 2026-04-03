@@ -176,6 +176,42 @@ type PendingGalleryImage = {
   previewUrl: string;
 };
 
+function buildStockBySizeDraft(product?: ProductApi | null): Record<string, number> {
+  const draft: Record<string, number> = {};
+
+  try {
+    const parsed = product?.sizeOptions ? JSON.parse(product.sizeOptions) : [];
+    if (Array.isArray(parsed)) {
+      parsed.forEach((size) => {
+        if (typeof size === "string" && size.trim()) {
+          draft[size] = product?.stockBySize?.[size] ?? 0;
+        }
+      });
+    }
+  } catch {
+    // Ignore malformed size options and rely on stockBySize directly.
+  }
+
+  Object.entries(product?.stockBySize ?? {}).forEach(([size, stock]) => {
+    draft[size] = stock ?? 0;
+  });
+
+  if (Object.keys(draft).length === 0 && (product?.stock ?? 0) > 0) {
+    draft["M"] = product?.stock ?? 0;
+  }
+
+  return draft;
+}
+
+function getTotalStockFromForm(values: ProductFormValues): number {
+  if (values.stockStatus === "out_of_stock") return 0;
+  const totalBySize = Object.values(values.stockBySize ?? {}).reduce(
+    (sum, value) => sum + (value ?? 0),
+    0,
+  );
+  return totalBySize > 0 ? totalBySize : values.stock;
+}
+
 export default function AdminProducts() {
   const [location, setLocation] = useLocation();
   const [search, setSearch] = useState("");
@@ -310,6 +346,7 @@ export default function AdminProducts() {
       price: 0,
       stockStatus: "in_stock",
       stock: 0,
+      stockBySize: {},
       imageUrl: "",
       galleryUrlsText: "",
       colorOptions: [],
@@ -331,6 +368,7 @@ export default function AdminProducts() {
       price: 0,
       stockStatus: "in_stock",
       stock: 0,
+      stockBySize: {},
       imageUrl: "",
       galleryUrlsText: "",
       colorOptions: [],
@@ -361,6 +399,7 @@ export default function AdminProducts() {
       price: 0,
       stockStatus: "in_stock",
       stock: 0,
+      stockBySize: {},
       imageUrl: "",
       galleryUrlsText: "",
       colorOptions: [],
@@ -401,7 +440,7 @@ export default function AdminProducts() {
         price: Number(editProduct.price),
         stockStatus: editProduct.stock === 0 ? "out_of_stock" : "in_stock",
         stock: editProduct.stock,
-        stockBySize: {},
+        stockBySize: buildStockBySizeDraft(editProduct),
         imageUrl: editProduct.imageUrl ?? "",
         galleryUrlsText: galleryUrls.join("\n"),
         colorOptions,
@@ -439,12 +478,30 @@ export default function AdminProducts() {
     }
   }
 
+  async function syncProductStockBySize(
+    productId: string,
+    sizeStocks: Record<string, number>,
+    sizesToSync: string[],
+  ) {
+    for (const size of sizesToSync) {
+      const response = await fetch(`/api/admin/inventory/${productId}/stock`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ size, newStock: sizeStocks[size] ?? 0 }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update stock for size ${size}`);
+      }
+    }
+  }
+
   const addMutation = useMutation({
     mutationFn: async (values: ProductFormValues) => {
       const existingGalleryUrls = values.galleryUrlsText
         ? values.galleryUrlsText.split(/\n/).map((u) => u.trim()).filter(Boolean)
         : [];
-      const stock = values.stockStatus === "out_of_stock" ? 0 : values.stock;
+      const stock = getTotalStockFromForm(values);
 
       let uploadedUrls: string[] = [];
       let failedCount = 0;
@@ -481,7 +538,7 @@ export default function AdminProducts() {
 
       const galleryUrls = [...existingGalleryUrls, ...uploadedUrls];
 
-      return createAdminProduct({
+      const createdProduct = await createAdminProduct({
         name: values.name,
         shortDetails: values.shortDetails || undefined,
         description: values.description ?? "",
@@ -495,9 +552,22 @@ export default function AdminProducts() {
         salePercentage: values.salePercentage,
         saleActive: values.saleActive,
       });
+
+      if (values.stockStatus === "in_stock") {
+        await syncProductStockBySize(
+          createdProduct.id,
+          values.stockBySize ?? {},
+          Array.from(new Set([...values.sizeOptions, ...Object.keys(values.stockBySize ?? {})])),
+        );
+      }
+
+      return createdProduct;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-products"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Product added" });
       setAddOpen(false);
       resetAddProductDraft();
@@ -516,7 +586,7 @@ export default function AdminProducts() {
       const existingGalleryUrls = values.galleryUrlsText
         ? values.galleryUrlsText.split(/\n/).map((u) => u.trim()).filter(Boolean)
         : [];
-      const stock = values.stockStatus === "out_of_stock" ? 0 : values.stock;
+      const stock = getTotalStockFromForm(values);
 
       let uploadedUrls: string[] = [];
       let failedCount = 0;
@@ -553,7 +623,7 @@ export default function AdminProducts() {
 
       const galleryUrls = [...existingGalleryUrls, ...uploadedUrls];
 
-      return updateAdminProduct(editProduct.id, {
+      const updatedProduct = await updateAdminProduct(editProduct.id, {
         name: values.name,
         shortDetails: values.shortDetails || undefined,
         description: values.description ?? "",
@@ -571,9 +641,30 @@ export default function AdminProducts() {
         salePercentage: values.salePercentage,
         saleActive: values.saleActive,
       });
+
+      await syncProductStockBySize(
+        editProduct.id,
+        values.stockStatus === "out_of_stock" ? {} : (values.stockBySize ?? {}),
+        Array.from(
+          new Set([
+            ...parseJsonArray(editProduct.sizeOptions),
+            ...values.sizeOptions,
+            ...Object.keys(editProduct.stockBySize ?? {}),
+            ...Object.keys(values.stockBySize ?? {}),
+          ]),
+        ),
+      );
+
+      return updatedProduct;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-products"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      if (editProduct?.id) {
+        queryClient.invalidateQueries({ queryKey: ["product", editProduct.id] });
+      }
       toast({ title: "Product updated" });
       setEditOpen(false);
       setEditProduct(null);

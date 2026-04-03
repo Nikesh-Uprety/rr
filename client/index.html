@@ -45,6 +45,16 @@
       root.style.colorScheme = theme;
     })();
   </script>
+  <script>
+    // Disable native browser scroll restoration before React mounts.
+    (function () {
+      try {
+        if ("scrollRestoration" in window.history) {
+          window.history.scrollRestoration = "manual";
+        }
+      } catch (e) {}
+    })();
+  </script>
   <style>
     /* Prevent white flash before any CSS loads by forcing dark background immediately */
     html {

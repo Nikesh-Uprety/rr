@@ -1171,18 +1171,20 @@ export async function registerRoutes(
         .where(eq(productVariants.productId, id))
         .orderBy(productVariants.size);
 
-      const stockBySize = {
-        S: variants.find((variant) => variant.size === "S")?.stock ?? 0,
-        M: variants.find((variant) => variant.size === "M")?.stock ?? 0,
-        L: variants.find((variant) => variant.size === "L")?.stock ?? 0,
-        XL: variants.find((variant) => variant.size === "XL")?.stock ?? 0,
-      };
+      const stockBySize = variants.reduce<Record<string, number>>((acc, variant) => {
+        const sizeKey = variant.size?.trim();
+        if (!sizeKey) return acc;
+        acc[sizeKey] = variant.stock ?? 0;
+        return acc;
+      }, {});
+      const totalStock = Object.values(stockBySize).reduce((sum, value) => sum + value, 0);
 
       res.set("Cache-Control", "public, max-age=30");
       return res.json({
         success: true,
         data: {
           ...product,
+          stock: Object.keys(stockBySize).length > 0 ? totalStock : product.stock,
           variants,
           stockBySize,
         },
@@ -2178,13 +2180,43 @@ export async function registerRoutes(
         const page = getQueryParam(req.query.page);
         const limit = getQueryParam(req.query.limit);
 
-        const products = await storage.getProducts({
+        const productRows = await storage.getProducts({
           category,
           search,
           page: page ? Number(page) || 1 : undefined,
           limit: limit ? Number(limit) || 24 : undefined,
           includeInactive: true,
         });
+        const variants = await db
+          .select({
+            productId: productVariants.productId,
+            size: productVariants.size,
+            stock: productVariants.stock,
+          })
+          .from(productVariants);
+
+        const stockByProduct = variants.reduce<Record<string, Record<string, number>>>(
+          (acc, variant) => {
+            const productId = variant.productId;
+            const sizeKey = variant.size?.trim();
+            if (!productId || !sizeKey) return acc;
+            if (!acc[productId]) acc[productId] = {};
+            acc[productId][sizeKey] = variant.stock ?? 0;
+            return acc;
+          },
+          {},
+        );
+
+        const products = productRows.map((product) => {
+          const stockBySize = stockByProduct[product.id] ?? {};
+          const totalStock = Object.values(stockBySize).reduce((sum, value) => sum + value, 0);
+          return {
+            ...product,
+            stock: Object.keys(stockBySize).length > 0 ? totalStock : product.stock,
+            stockBySize,
+          };
+        });
+
         return res.json({ success: true, data: products });
       } catch (err) {
         console.error("Error in GET /api/admin/products", err);

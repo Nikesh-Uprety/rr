@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { Search, X, Loader2, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation } from "wouter";
@@ -6,7 +6,11 @@ import { fetchProducts, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { useClickAway } from "react-use";
 
-export default function SearchBar() {
+interface SearchBarProps {
+  iconColor?: string;
+}
+
+export default function SearchBar({ iconColor }: SearchBarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<ProductApi[]>([]);
@@ -83,6 +87,7 @@ export default function SearchBar() {
         <button
           onClick={toggleSearch}
           className="flex-shrink-0 w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+          style={iconColor ? ({ color: iconColor } satisfies CSSProperties) : undefined}
           aria-label="Toggle search"
         >
           <Search className="w-5 h-5" />
@@ -104,6 +109,7 @@ export default function SearchBar() {
               type="button"
               onClick={() => setQuery("")}
               className="p-1 text-muted-foreground hover:text-primary"
+              style={iconColor ? ({ color: iconColor } satisfies CSSProperties) : undefined}
             >
               <X className="w-4 h-4" />
             </button>

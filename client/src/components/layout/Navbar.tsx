@@ -57,12 +57,13 @@ export default function Navbar() {
 
   const isStorefront = !location.startsWith("/admin");
   const isHomeRoute = location === "/";
-  const isNewCollectionRoute = location === "/new-collection";
   const isAtelierRoute = location === "/atelier";
+  const isHeroRoute = isHomeRoute || isAtelierRoute;
+  const isInnerStorefrontRoute = isStorefront && !isHeroRoute;
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] = useState(false);
   const isTransparentState = !hasScrolledPastThreshold;
-  const shouldUseChrome = hasScrolledPastThreshold;
-  const useHeroContrastState = isTransparentState;
+  const shouldUseChrome = hasScrolledPastThreshold || isInnerStorefrontRoute;
+  const useHeroContrastState = isTransparentState && isHeroRoute;
   const isDark = theme === "dark";
   const dashboardPath = user
     ? canAccessAdminPanel(user.role)
@@ -179,23 +180,43 @@ export default function Navbar() {
         };
   };
 
+  const getInnerPageChrome = (darkMode: boolean) => {
+    if (!darkMode) {
+      return getGlassChrome("light", { active: true });
+    }
+
+    return {
+      background:
+        "linear-gradient(135deg, rgba(255,255,255,0.84) 0%, rgba(255,255,255,0.74) 42%, rgba(248,246,242,0.68) 100%)",
+      backdropFilter: "blur(18px) saturate(145%)",
+      WebkitBackdropFilter: "blur(18px) saturate(145%)",
+      borderColor: "rgba(255,255,255,0.38)",
+      boxShadow: "0 1px 0 rgba(255,255,255,0.18), 0 12px 40px rgba(0,0,0,0.14)",
+    };
+  };
+
   const announcementItems = [...ANNOUNCEMENT_ITEMS, ...ANNOUNCEMENT_ITEMS];
   const announceHeight = announceRef.current?.offsetHeight ?? 28;
-  const navLinkColor = useHeroContrastState
-    ? "rgba(255,255,255,0.98)"
-    : isDark
+  const forceSolidLightNavbar = isInnerStorefrontRoute;
+  const navForegroundColor = forceSolidLightNavbar
+    ? "#111111"
+    : useHeroContrastState
       ? "#ffffff"
-      : "#111111";
-  const navChrome = getGlassChrome(isDark ? "light" : "dark", { active: shouldUseChrome });
-  const logoFilter = useHeroContrastState
-    ? "brightness(0) invert(1)"
-    : isDark
-      ? "brightness(0) invert(1)"
-      : "brightness(0)";
-  const navUnderlineColor = useHeroContrastState ? "#ffffff" : isDark ? "#ffffff" : "#111111";
+      : isDark
+        ? "#111111"
+        : "#ffffff";
+  const navLinkColor = navForegroundColor;
+  const navChrome = forceSolidLightNavbar
+    ? getInnerPageChrome(isDark)
+    : getGlassChrome(isDark ? "light" : "dark", { active: shouldUseChrome });
+  const logoFilter = navForegroundColor === "#111111"
+    ? "brightness(0)"
+    : "brightness(0) invert(1)";
+  const navUnderlineColor = useHeroContrastState ? "#ffffff" : navForegroundColor;
   const navTextShadow = useHeroContrastState
     ? "0 0 16px rgba(255,255,255,0.34), 0 2px 16px rgba(0,0,0,0.2)"
     : "none";
+  const useLightMobileMenu = forceSolidLightNavbar || isDark;
 
   return (
     <header
@@ -245,7 +266,11 @@ export default function Navbar() {
                     className="absolute bottom-0 left-0 h-px w-full origin-left transition-transform duration-300"
                     style={{
                       background: navUnderlineColor,
-                      boxShadow: shouldUseChrome ? "0 0 12px rgba(255,255,255,0.34)" : "none",
+                      boxShadow: shouldUseChrome
+                        ? navForegroundColor === "#111111"
+                          ? "0 0 12px rgba(0,0,0,0.16)"
+                          : "0 0 12px rgba(255,255,255,0.34)"
+                        : "none",
                       transform:
                         location === item.href || hoveredNavHref === item.href
                           ? "scaleX(1)"
@@ -261,7 +286,7 @@ export default function Navbar() {
                 type="button"
                 onClick={() => setIsMobileMenuOpen((prev) => !prev)}
                 className="flex h-10 w-10 items-center justify-center"
-                style={{ color: useHeroContrastState ? "#ffffff" : isDark ? "#ffffff" : "#111111" }}
+                style={{ color: navForegroundColor }}
                 aria-label="Toggle menu"
               >
                 {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -273,29 +298,28 @@ export default function Navbar() {
                 src="/images/logo.webp"
                 alt="Rare Atelier"
                 className="mx-auto h-11 w-auto object-contain sm:h-12 lg:h-14"
+                width={1449}
+                height={289}
                 style={{
-                  filter: useHeroContrastState
-                    ? `${logoFilter} drop-shadow(0 0 18px rgba(255,255,255,0.42))`
-                    : !isDark && shouldUseChrome
-                      ? `${logoFilter} drop-shadow(0 0 14px rgba(255,255,255,0.28))`
-                    : `${logoFilter} drop-shadow(0 4px 14px rgba(0,0,0,0.18))`,
-                  transition: "filter 0.25s ease, transform 0.25s ease",
+                  filter: logoFilter,
+                  transition: "filter 0.25s ease",
                   opacity: 1,
-                  transform: "translateZ(0)",
+                  imageRendering: "-webkit-optimize-contrast",
+                  backfaceVisibility: "hidden",
                 }}
               />
             </Link>
 
             <div className="ml-auto flex items-center justify-end gap-1 sm:gap-2">
               <div className="hidden sm:block [&>div>div]:border-none [&>div>div]:bg-transparent">
-                <SearchBar />
+                <SearchBar iconColor={navForegroundColor} />
               </div>
               <ThemeTogglerButton
                 theme={theme}
                 onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
                 className="flex h-10 w-10 items-center justify-center"
                 style={{
-                  color: useHeroContrastState ? "#ffffff" : isDark ? "#ffffff" : "#111111",
+                  color: navForegroundColor,
                   textShadow: useHeroContrastState ? "0 0 14px rgba(255,255,255,0.28)" : "none",
                 }}
                 iconClassName="h-4.5 w-4.5"
@@ -305,7 +329,7 @@ export default function Navbar() {
                 onClick={() => openCartSidebar()}
                 className="relative flex h-10 w-10 items-center justify-center"
                 style={{
-                  color: useHeroContrastState ? "#ffffff" : isDark ? "#ffffff" : "#111111",
+                  color: navForegroundColor,
                   textShadow: useHeroContrastState ? "0 0 14px rgba(255,255,255,0.28)" : "none",
                 }}
               >
@@ -329,9 +353,9 @@ export default function Navbar() {
                   title="Admin Dashboard"
                   onClick={() => setLocation(dashboardPath)}
                   className="flex h-10 w-10 items-center justify-center"
-                  style={{ color: "var(--fg)" }}
+                  style={{ color: navForegroundColor }}
                 >
-                  <LayoutDashboard className="h-4.5 w-4.5 text-[var(--gold)]" />
+                  <LayoutDashboard className="h-4.5 w-4.5" />
                 </button>
               ) : null}
             </div>
@@ -346,11 +370,11 @@ export default function Navbar() {
               exit={{ opacity: 0, y: -12 }}
               className="border-t px-5 py-5 lg:hidden"
               style={{
-                background: isDark
+                background: useLightMobileMenu
                   ? "linear-gradient(135deg, rgba(250,247,243,0.9) 0%, rgba(255,255,255,0.78) 100%)"
                   : "linear-gradient(135deg, rgba(12,11,9,0.92) 0%, rgba(18,18,20,0.82) 100%)",
-                backdropFilter: isDark ? "blur(20px) saturate(150%)" : "blur(26px) saturate(185%)",
-                borderColor: isDark ? "rgba(255,255,255,0.52)" : "rgba(255,255,255,0.08)",
+                backdropFilter: useLightMobileMenu ? "blur(20px) saturate(150%)" : "blur(26px) saturate(185%)",
+                borderColor: useLightMobileMenu ? "rgba(255,255,255,0.52)" : "rgba(255,255,255,0.08)",
               }}
             >
               <div className="mb-4 sm:hidden">
@@ -358,7 +382,7 @@ export default function Navbar() {
                   type="button"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="flex h-11 w-full items-center rounded-full border px-4"
-                  style={{ borderColor: isDark ? "rgba(24,20,17,0.08)" : "var(--border)", color: isDark ? "rgba(24,20,17,0.6)" : "var(--fg-dim)" }}
+                  style={{ borderColor: useLightMobileMenu ? "rgba(24,20,17,0.08)" : "var(--border)", color: useLightMobileMenu ? "rgba(24,20,17,0.6)" : "var(--fg-dim)" }}
                 >
                   <Search className="mr-3 h-4 w-4" />
                   Search products
@@ -373,9 +397,9 @@ export default function Navbar() {
                     style={{
                       fontFamily: "var(--font-mono)",
                       letterSpacing: "0.18em",
-                      color: location === item.href ? "var(--bg)" : isDark ? "#181411" : "var(--fg)",
+                      color: location === item.href ? "var(--bg)" : useLightMobileMenu ? "#181411" : "var(--fg)",
                       background: location === item.href ? "var(--gold)" : "transparent",
-                      border: `1px solid ${location === item.href ? "var(--gold)" : (isDark ? "rgba(24,20,17,0.08)" : "var(--border)")}`,
+                      border: `1px solid ${location === item.href ? "var(--gold)" : (useLightMobileMenu ? "rgba(24,20,17,0.08)" : "var(--border)")}`,
                     }}
                   >
                     {item.name}
@@ -383,12 +407,12 @@ export default function Navbar() {
                 ))}
               </nav>
               {isAuthenticated && user ? (
-                <div className="mt-4 flex items-center justify-between rounded-3xl border px-4 py-3" style={{ borderColor: isDark ? "rgba(24,20,17,0.08)" : "var(--border)" }}>
+                <div className="mt-4 flex items-center justify-between rounded-3xl border px-4 py-3" style={{ borderColor: useLightMobileMenu ? "rgba(24,20,17,0.08)" : "var(--border)" }}>
                   <div>
-                    <p className="text-sm font-medium" style={{ color: isDark ? "#181411" : "var(--fg)" }}>
+                    <p className="text-sm font-medium" style={{ color: useLightMobileMenu ? "#181411" : "var(--fg)" }}>
                       {user.name || user.email}
                     </p>
-                    <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: isDark ? "rgba(24,20,17,0.6)" : "var(--fg-dim)", fontFamily: "var(--font-mono)" }}>
+                    <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: useLightMobileMenu ? "rgba(24,20,17,0.6)" : "var(--fg-dim)", fontFamily: "var(--font-mono)" }}>
                       {user.role}
                     </p>
                   </div>
@@ -396,7 +420,7 @@ export default function Navbar() {
                     <button
                       onClick={() => setLocation(dashboardPath)}
                       className="rounded-full border px-3 py-2 text-[10px] uppercase"
-                      style={{ borderColor: isDark ? "rgba(24,20,17,0.08)" : "var(--border)", color: isDark ? "#181411" : "var(--fg)", fontFamily: "var(--font-mono)" }}
+                      style={{ borderColor: useLightMobileMenu ? "rgba(24,20,17,0.08)" : "var(--border)", color: useLightMobileMenu ? "#181411" : "var(--fg)", fontFamily: "var(--font-mono)" }}
                     >
                       Dashboard
                     </button>

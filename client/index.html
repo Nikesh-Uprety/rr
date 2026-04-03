@@ -183,11 +183,25 @@
     var finishLoading; // Global for the skip button
     
     (function() {
+      var isCanvasPreview = false;
+      try {
+        isCanvasPreview = new URLSearchParams(window.location.search).has('canvasPreviewTemplateId');
+      } catch (e) {}
+
       var loader = document.getElementById('pre-loader');
       var progress = document.getElementById('loader-progress');
       var root = document.getElementById('root');
       var brandContainer = document.getElementById('brand-loader');
       var body = document.body;
+
+      if (isCanvasPreview) {
+        if (loader) loader.style.display = 'none';
+        if (root) root.classList.add('ready');
+        if (body) body.classList.remove('loading');
+        finishLoading = function() {};
+        window.finishLoading = finishLoading;
+        return;
+      }
       
       var BRAND_NAME = "RARE ATELIER";
       

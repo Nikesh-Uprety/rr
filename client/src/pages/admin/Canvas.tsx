@@ -14,8 +14,11 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  Monitor,
+  Smartphone,
   ArrowRightLeft,
   Trash2,
+  Lock,
 } from "lucide-react";
 
 import { useToast } from "@/hooks/use-toast";
@@ -59,6 +62,11 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { MAISON_NOCTURNE_DEFAULT_HERO_SLIDES, type CanvasHeroSlide } from "@shared/canvasDefaults";
+import {
+  STOREFRONT_FONT_FAMILIES,
+  STOREFRONT_FONT_OPTIONS,
+  type StorefrontFontPreset,
+} from "@/lib/storefrontFonts";
 
 type CanvasTemplate = {
   id: number;
@@ -86,6 +94,7 @@ type CanvasSettings = {
   id?: number;
   activeTemplateId?: number | null;
   activeTemplate?: CanvasTemplate | null;
+  fontPreset?: StorefrontFontPreset | null;
 };
 
 const TEMPLATE_PREVIEW_FALLBACKS: Record<string, string> = {
@@ -135,22 +144,6 @@ const SECTION_PREVIEW_STYLES: Record<string, string> = {
   arrivals: "from-slate-100 via-white to-slate-300 dark:from-slate-900 dark:via-slate-800 dark:to-slate-700",
   services: "from-emerald-100 via-white to-emerald-200 dark:from-emerald-950 dark:via-neutral-900 dark:to-emerald-900/50",
   "fresh-release": "from-neutral-950 via-neutral-900 to-sky-900",
-};
-
-const THEME_FONT_OPTIONS = [
-  { id: "inter", label: "Inter", description: "Clean sans for fast UI validation." },
-  { id: "roboto-slab", label: "Roboto Slab", description: "Editorial serif weight for hierarchy testing." },
-  { id: "space-grotesk", label: "Space Grotesk", description: "Sharper modern product feel." },
-  { id: "ibm-plex-sans", label: "IBM Plex Sans", description: "Structured SaaS-style reading rhythm." },
-] as const;
-
-type ThemeFontPreset = (typeof THEME_FONT_OPTIONS)[number]["id"];
-
-const THEME_FONT_FAMILIES: Record<ThemeFontPreset, string> = {
-  inter: "'Inter', ui-sans-serif, system-ui, sans-serif",
-  "roboto-slab": "'Roboto Slab', ui-serif, Georgia, serif",
-  "space-grotesk": "'Space Grotesk', 'Inter', ui-sans-serif, sans-serif",
-  "ibm-plex-sans": "'IBM Plex Sans', 'Inter', ui-sans-serif, sans-serif",
 };
 
 const CANVAS_ELEVATED_CARD_CLASS =
@@ -259,7 +252,6 @@ const DEFAULT_MAISON_HERO_SLIDE_DRAFTS = MAISON_NOCTURNE_DEFAULT_HERO_SLIDES.map
   formatHeroSlideDraft(slide),
 );
 const DEFAULT_MAISON_HERO_SLIDES_TEXT = serializeHeroSlides(DEFAULT_MAISON_HERO_SLIDE_DRAFTS);
-
 export default function Canvas() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -267,7 +259,8 @@ export default function Canvas() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
   const [draggedSectionId, setDraggedSectionId] = useState<number | null>(null);
-  const [previewFontPreset, setPreviewFontPreset] = useState<ThemeFontPreset>("inter");
+  const [previewFontPreset, setPreviewFontPreset] = useState<StorefrontFontPreset>("inter");
+  const [previewViewport, setPreviewViewport] = useState<"desktop" | "mobile">("desktop");
   const [draggedHeroSlideIndex, setDraggedHeroSlideIndex] = useState<number | null>(null);
   const [draggedCampaignImageIndex, setDraggedCampaignImageIndex] = useState<number | null>(null);
   const [openSectionGroups, setOpenSectionGroups] = useState<Record<string, boolean>>({
@@ -279,6 +272,13 @@ export default function Canvas() {
   const [mediaPickerTarget, setMediaPickerTarget] = useState<MediaPickerTarget | null>(null);
   const [mediaProvider, setMediaProvider] = useState<"local" | "cloudinary">("local");
   const [savingSectionId, setSavingSectionId] = useState<number | null>(null);
+  const [bootedPreviewViewports, setBootedPreviewViewports] = useState({
+    desktop: false,
+    mobile: false,
+  });
+  const [previewLoaderVisible, setPreviewLoaderVisible] = useState(true);
+  const [previewBootProgress, setPreviewBootProgress] = useState(8);
+  const [warmedPreviewTemplateIds, setWarmedPreviewTemplateIds] = useState<number[]>([]);
   const [sectionDraft, setSectionDraft] = useState<SectionDraft>({
     label: "",
     variant: "",
@@ -362,6 +362,31 @@ export default function Canvas() {
     onError: (error: Error) => {
       toast({
         title: "Failed to publish homepage",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const settingsMutation = useMutation({
+    mutationFn: async (fontPreset: StorefrontFontPreset) => {
+      const res = await apiRequest("PATCH", "/api/admin/canvas/settings", {
+        fontPreset,
+      });
+      return res.json();
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin", "canvas", "settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["page-config"] });
+      toast({
+        title: "Storefront font updated",
+        variant: "success",
+      });
+      setPreviewKey((prev) => prev + 1);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to update font theme",
         description: error.message,
         variant: "destructive",
       });
@@ -849,6 +874,32 @@ export default function Canvas() {
   }, [selectedSectionId, sortedSections]);
 
   useEffect(() => {
+    if (!settings?.fontPreset) return;
+    setPreviewFontPreset(settings.fontPreset);
+  }, [settings?.fontPreset]);
+
+  useEffect(() => {
+    if (!previewLoaderVisible) return;
+    setPreviewBootProgress(8);
+    const timer = window.setInterval(() => {
+      setPreviewBootProgress((current) => {
+        if (current >= 72) return current;
+        return Math.min(72, current + Math.max(2, (76 - current) * 0.12));
+      });
+    }, 120);
+
+    return () => window.clearInterval(timer);
+  }, [previewLoaderVisible]);
+
+  useEffect(() => {
+    if (!bootedPreviewViewports[previewViewport]) {
+      setPreviewLoaderVisible(true);
+    } else {
+      setPreviewLoaderVisible(false);
+    }
+  }, [bootedPreviewViewports, previewViewport]);
+
+  useEffect(() => {
     if (!selectedSection) {
       setSectionDraft(getDefaultDraftForSection(null));
       return;
@@ -948,8 +999,9 @@ export default function Canvas() {
   };
 
   const previewTemplateId = effectiveTemplateId ?? visibleTemplates[0]?.id ?? settings?.activeTemplateId ?? null;
-  const selectedThemeFont = THEME_FONT_OPTIONS.find((font) => font.id === previewFontPreset) ?? THEME_FONT_OPTIONS[0];
-  const selectedThemeFontFamily = THEME_FONT_FAMILIES[selectedThemeFont.id];
+  const selectedThemeFont =
+    STOREFRONT_FONT_OPTIONS.find((font) => font.id === previewFontPreset) ?? STOREFRONT_FONT_OPTIONS[0];
+  const selectedThemeFontFamily = STOREFRONT_FONT_FAMILIES[selectedThemeFont.id].preview;
   const buildPreviewUrl = (templateId: number) =>
     typeof window !== "undefined"
       ? `${window.location.origin}/?${new URLSearchParams(
@@ -962,6 +1014,43 @@ export default function Canvas() {
           ),
         ).toString()}`
       : "/";
+
+  const previewFrameStyle =
+    previewViewport === "mobile"
+      ? {
+          transform: "scale(0.94)",
+          width: "106.383%",
+          height: "calc(812px / 0.94)",
+        }
+      : {
+          transform: "scale(0.88)",
+          width: "113.6364%",
+          height: "calc(1080px / 0.88)",
+        };
+
+  const previewViewportShellClass =
+    previewViewport === "mobile"
+      ? "mx-auto w-[min(100%,390px)] rounded-[2.6rem] border border-black/10 bg-[#0b0b0d] p-3 shadow-[0_24px_64px_rgba(15,23,42,0.22)] dark:border-white/[0.10] dark:bg-black dark:shadow-[0_28px_72px_rgba(0,0,0,0.58)]"
+      : "h-[760px] overflow-hidden rounded-3xl border border-border/40 bg-white xl:h-[860px] 2xl:h-[920px] dark:border-white/[0.06] dark:bg-neutral-950";
+
+  const previewCardTitle =
+    activeTab === "theme"
+      ? "Theme Preview"
+      : activeTab === "sections"
+        ? "Section Preview"
+        : "Full Page Preview";
+  const currentPreviewTemplate =
+    visibleTemplates.find((template) => template.id === previewTemplateId) ?? visibleTemplates[0] ?? null;
+  const renderablePreviewTemplates = visibleTemplates.filter(
+    (template) => template.id === previewTemplateId || warmedPreviewTemplateIds.includes(template.id),
+  );
+
+  useEffect(() => {
+    if (!previewTemplateId) return;
+    setWarmedPreviewTemplateIds((current) =>
+      current.includes(previewTemplateId) ? current : [...current, previewTemplateId],
+    );
+  }, [previewTemplateId]);
 
   const handleSaveSectionDraft = () => {
     if (!selectedSection) return;
@@ -1821,16 +1910,15 @@ export default function Canvas() {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="space-y-6">
         <Card className={CANVAS_ELEVATED_CARD_CLASS}>
           <CardContent className="p-4">
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
-              orientation="vertical"
-              className="grid gap-4 md:grid-cols-[152px_minmax(0,1fr)] xl:grid-cols-1"
+              className="space-y-5"
             >
-              <TabsList className="grid h-auto grid-cols-1 gap-2 rounded-3xl border border-black/10 bg-white/80 p-2 shadow-[0_8px_18px_rgba(15,23,42,0.08)] dark:border-white/[0.10] dark:bg-white/[0.03] dark:shadow-[0_10px_24px_rgba(0,0,0,0.35)]">
+              <TabsList className="grid h-auto grid-cols-3 gap-2 rounded-3xl border border-black/10 bg-white/80 p-2 shadow-[0_8px_18px_rgba(15,23,42,0.08)] dark:border-white/[0.10] dark:bg-white/[0.03] dark:shadow-[0_10px_24px_rgba(0,0,0,0.35)]">
                 {CANVAS_TAB_ITEMS.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -1859,32 +1947,268 @@ export default function Canvas() {
                   );
                 })}
               </TabsList>
-
               <div className="space-y-4">
                 <TabsContent value="templates" className="mt-0 space-y-5">
-                  <div>
-                    <h2 className="text-sm font-black uppercase tracking-[0.18em] text-muted-foreground">
-                      Premium Templates
-                    </h2>
-                    <div className="mt-3 grid gap-4">
+                  <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
+                    <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <CardTitle>Live Preview</CardTitle>
+                        <CardDescription>
+                          Preview the current homepage selection and switch templates quickly from one compact panel.
+                        </CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="inline-flex items-center rounded-xl border border-border/60 bg-background/70 p-1">
+                          <Button
+                            type="button"
+                            variant={previewViewport === "desktop" ? "default" : "ghost"}
+                            size="sm"
+                            className="rounded-lg"
+                            onClick={() => setPreviewViewport("desktop")}
+                          >
+                            <Monitor className="mr-2 h-4 w-4" />
+                            Desktop
+                            <span className="ml-2 text-[11px] font-medium opacity-75">1440px</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={previewViewport === "mobile" ? "default" : "ghost"}
+                            size="sm"
+                            className="rounded-lg"
+                            onClick={() => setPreviewViewport("mobile")}
+                          >
+                            <Smartphone className="mr-2 h-4 w-4" />
+                            Mobile
+                          </Button>
+                        </div>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl"
+                          onClick={() => {
+                            setPreviewLoaderVisible(true);
+                            setPreviewBootProgress(8);
+                            setPreviewKey((prev) => prev + 1);
+                          }}
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Refresh
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
+                      <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "space-y-3 p-4")}>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                            Current Template
+                          </p>
+                          <p className="mt-2 text-lg font-semibold text-foreground">
+                            {currentPreviewTemplate?.name ?? "No template selected"}
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {currentPreviewTemplate?.description ?? "Choose a template to preview it live here."}
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          {visibleTemplates.map((template) => {
+                            const isSelected = template.id === previewTemplateId;
+                            const isActive = settings?.activeTemplate?.id === template.id || settings?.activeTemplateId === template.id;
+                            return (
+                              <button
+                                key={`preview-switch-${template.id}`}
+                                type="button"
+                                onClick={() => {
+                                  const isWarmed = warmedPreviewTemplateIds.includes(template.id);
+                                  if (!isWarmed) {
+                                    setPreviewLoaderVisible(true);
+                                    setPreviewBootProgress(8);
+                                    setWarmedPreviewTemplateIds((current) =>
+                                      current.includes(template.id) ? current : [...current, template.id],
+                                    );
+                                  }
+                                  setSelectedTemplateId(template.id);
+                                }}
+                                className={cn(
+                                  "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-all",
+                                  isSelected
+                                    ? "border-sky-400 bg-sky-50/70 shadow-[0_8px_20px_rgba(56,189,248,0.16)] dark:bg-sky-950/25"
+                                    : "border-black/10 bg-white/80 hover:border-black/20 dark:border-white/[0.10] dark:bg-white/[0.03] dark:hover:border-white/20",
+                                )}
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-foreground">{template.name}</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {template.tier === "premium" ? "Premium template" : "Free template"}
+                                  </p>
+                                </div>
+                                {isActive ? (
+                                  <Badge className="shrink-0 bg-emerald-600 hover:bg-emerald-600">Live</Badge>
+                                ) : isSelected ? (
+                                  <Badge className="shrink-0 bg-sky-600 hover:bg-sky-600">Selected</Badge>
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <div className={previewViewportShellClass}>
+                          <div
+                            className={cn(
+                              "relative overflow-hidden",
+                              previewViewport === "mobile"
+                                ? "h-[760px] rounded-[2rem] bg-white dark:bg-neutral-950"
+                                : "h-full",
+                            )}
+                          >
+                            {previewViewport === "mobile" ? (
+                              <>
+                                <div className="pointer-events-none absolute left-1/2 top-2 z-20 h-7 w-36 -translate-x-1/2 rounded-full bg-black shadow-[0_8px_20px_rgba(0,0,0,0.28)]">
+                                  <div className="absolute left-1/2 top-1/2 h-2 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full bg-neutral-800" />
+                                  <div className="absolute right-3 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-neutral-700 ring-2 ring-neutral-900" />
+                                </div>
+                                <div className="relative h-full overflow-hidden rounded-[1.7rem] border border-black/10 bg-white dark:border-white/[0.08] dark:bg-neutral-950">
+                                  {previewLoaderVisible ? (
+                                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#050505] text-white">
+                                      <div className="loader-content">
+                                        <div className="loader-logo whitespace-nowrap" aria-hidden="true">
+                                          RARE ATELIER
+                                        </div>
+                                        <div className="loader-bar-container">
+                                          <div
+                                            id="loader-progress"
+                                            style={{ width: `${previewBootProgress}%` }}
+                                          />
+                                        </div>
+                                        <div className="loader-status">Loading</div>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  <div className="relative origin-top-left" style={previewFrameStyle}>
+                                    {renderablePreviewTemplates.map((template) => (
+                                      <iframe
+                                        key={`${template.id}-${previewKey}-${previewViewport}`}
+                                        src={buildPreviewUrl(template.id)}
+                                        title={`Canvas preview — ${template.name}`}
+                                        loading="eager"
+                                        onLoad={() => {
+                                          if (template.id === previewTemplateId) {
+                                            setPreviewBootProgress(100);
+                                            window.setTimeout(() => {
+                                              setBootedPreviewViewports((current) => ({
+                                                ...current,
+                                                [previewViewport]: true,
+                                              }));
+                                              setPreviewLoaderVisible(false);
+                                            }, 140);
+                                          }
+                                        }}
+                                        className={cn(
+                                          "absolute inset-0 h-full w-full border-0 transition-opacity duration-150",
+                                          template.id === previewTemplateId
+                                            ? "opacity-100"
+                                            : "pointer-events-none opacity-0",
+                                        )}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="relative h-full origin-top-left" style={previewFrameStyle}>
+                                {previewLoaderVisible ? (
+                                  <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#050505] text-white">
+                                    <div className="loader-content">
+                                      <div className="loader-logo whitespace-nowrap" aria-hidden="true">
+                                        RARE ATELIER
+                                      </div>
+                                      <div className="loader-bar-container">
+                                        <div
+                                          id="loader-progress"
+                                          style={{ width: `${previewBootProgress}%` }}
+                                        />
+                                      </div>
+                                      <div className="loader-status">Loading</div>
+                                    </div>
+                                  </div>
+                                ) : null}
+                                {renderablePreviewTemplates.map((template) => (
+                                  <iframe
+                                    key={`${template.id}-${previewKey}-${previewViewport}`}
+                                    src={buildPreviewUrl(template.id)}
+                                    title={`Canvas preview — ${template.name}`}
+                                    loading="eager"
+                                    onLoad={() => {
+                                      if (template.id === previewTemplateId) {
+                                        setPreviewBootProgress(100);
+                                        window.setTimeout(() => {
+                                          setBootedPreviewViewports((current) => ({
+                                            ...current,
+                                            [previewViewport]: true,
+                                          }));
+                                          setPreviewLoaderVisible(false);
+                                        }, 140);
+                                      }
+                                    }}
+                                    className={cn(
+                                      "absolute inset-0 h-full w-full border-0 transition-opacity duration-150",
+                                      template.id === previewTemplateId
+                                        ? "opacity-100"
+                                        : "pointer-events-none opacity-0",
+                                    )}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Live preview shows only the current selected template. Use the compact switcher to move between templates faster.
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="space-y-4">
+                    <div className="flex items-end justify-between gap-4">
+                      <div>
+                        <h2 className="text-sm font-black uppercase tracking-[0.18em] text-muted-foreground">
+                          Premium Templates
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Premium homepage designs. Unowned premium templates are locked until purchased.
+                        </p>
+                      </div>
+                      <Badge className="bg-amber-500 text-black hover:bg-amber-500">Premium Collection</Badge>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                       {premiumTemplates.map((template) => {
                         const isActive = settings?.activeTemplate?.id === template.id || settings?.activeTemplateId === template.id;
                         const isSelected = effectiveTemplateId === template.id;
+                        const isLocked = !template.isPurchased;
+                        const isRareDarkLuxury = template.slug === "rare-dark-luxury";
                         return (
                           <Card
                             key={template.id}
                             role="button"
-                            tabIndex={0}
-                            onClick={() => setSelectedTemplateId(template.id)}
+                            tabIndex={isLocked ? -1 : 0}
+                            onClick={() => {
+                              if (isLocked) return;
+                              setSelectedTemplateId(template.id);
+                            }}
                             onKeyDown={(event) => {
+                              if (isLocked) return;
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
                                 setSelectedTemplateId(template.id);
                               }
                             }}
-                            className={`cursor-pointer overflow-hidden rounded-2xl border transition-all ${
-                              isActive ? "border-emerald-500 shadow-emerald-100 dark:shadow-none" : "border-border/50 dark:border-white/[0.06]"
-                            } ${isSelected ? "ring-2 ring-fuchsia-300 dark:ring-fuchsia-700" : ""} hover:-translate-y-0.5 hover:shadow-sm dark:hover:shadow-none`}
+                            className={`overflow-hidden rounded-2xl border transition-all ${
+                              isLocked
+                                ? "border-border/50 opacity-85 dark:border-white/[0.06]"
+                                : isActive
+                                  ? "cursor-pointer border-emerald-500 shadow-emerald-100 dark:shadow-none"
+                                  : "cursor-pointer border-border/50 dark:border-white/[0.06]"
+                            } ${isSelected ? "ring-2 ring-fuchsia-300 dark:ring-fuchsia-700" : ""} ${isLocked ? "" : "hover:-translate-y-0.5 hover:shadow-sm dark:hover:shadow-none"}`}
                           >
                             {renderTemplatePreview(template)}
                             <CardContent className="space-y-3 p-4">
@@ -1906,25 +2230,48 @@ export default function Canvas() {
                                   <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-400">
                                     Owned
                                   </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300">
+                                    <Lock className="mr-1 h-3 w-3" />
+                                    Locked
+                                  </Badge>
+                                )}
+                                {isRareDarkLuxury ? (
+                                  <Badge variant="outline" className="border-black/20 text-foreground dark:border-white/20">
+                                    One-time purchase
+                                  </Badge>
                                 ) : null}
                               </div>
+                              {isLocked ? (
+                                <div className="rounded-xl border border-dashed border-amber-500/50 bg-amber-50/60 p-3 text-xs text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+                                  {isRareDarkLuxury
+                                    ? "RARE Dark Luxury is locked and will only unlock after a one-time purchase."
+                                    : "Purchase this premium template before applying it to the storefront."}
+                                </div>
+                              ) : null}
                               <div className="flex gap-2">
                                 <Button
                                   variant="outline"
                                   className="flex-1 rounded-xl"
-                                  onClick={() => setSelectedTemplateId(template.id)}
+                                  disabled={isLocked}
+                                  onClick={() => {
+                                    if (isLocked) return;
+                                    setSelectedTemplateId(template.id);
+                                  }}
                                 >
-                                  Select
+                                  {isLocked ? "Locked" : "Select"}
                                 </Button>
                                 <Button
                                   className="flex-1 rounded-xl"
+                                  disabled={isLocked}
                                   onClick={(event) => {
                                     event.stopPropagation();
+                                    if (isLocked) return;
                                     setSelectedTemplateId(template.id);
                                     activateMutation.mutate(template.id);
                                   }}
                                 >
-                                  Activate
+                                  {isLocked ? "Purchase Required" : "Activate"}
                                 </Button>
                               </div>
                             </CardContent>
@@ -1936,11 +2283,19 @@ export default function Canvas() {
 
                   <Separator />
 
-                  <div>
-                    <h2 className="text-sm font-black uppercase tracking-[0.18em] text-muted-foreground">
-                      Free Templates
-                    </h2>
-                    <div className="mt-3 grid gap-4">
+                  <div className="space-y-4">
+                    <div className="flex items-end justify-between gap-4">
+                      <div>
+                        <h2 className="text-sm font-black uppercase tracking-[0.18em] text-muted-foreground">
+                          Free Templates
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Free templates available for instant selection and activation.
+                        </p>
+                      </div>
+                      <Badge className="bg-emerald-600 hover:bg-emerald-600">Free Collection</Badge>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                       {freeTemplates.map((template) => {
                         const isActive = settings?.activeTemplate?.id === template.id || settings?.activeTemplateId === template.id;
                         const isSelected = effectiveTemplateId === template.id;
@@ -2056,173 +2411,10 @@ export default function Canvas() {
                     </Popover>
                   </div>
 
-                  <div className="space-y-3">
-                    {sortedSections.map((section, index) => (
-                      <div
-                        key={section.id}
-                        role="button"
-                        tabIndex={0}
-                        draggable
-                        onClick={() => setSelectedSectionId(section.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            setSelectedSectionId(section.id);
-                          }
-                        }}
-                        onDragStart={() => setDraggedSectionId(section.id)}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={() => {
-                          if (!draggedSectionId || draggedSectionId === section.id) return;
-                          reorderSectionsMutation.mutate({ sourceId: draggedSectionId, targetId: section.id });
-                          setDraggedSectionId(null);
-                        }}
-                        onDragEnd={() => setDraggedSectionId(null)}
-                        className={`w-full rounded-2xl p-3 text-left transition-all ${
-                          selectedSection?.id === section.id
-                            ? "border border-sky-400 bg-sky-50/70 shadow-[0_10px_22px_rgba(14,165,233,0.16)] dark:bg-sky-950/25 dark:shadow-[0_14px_28px_rgba(2,132,199,0.2)]"
-                            : `${CANVAS_ELEVATED_PANEL_CLASS} hover:border-black/20 dark:hover:border-white/20`
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <GripVertical className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1 space-y-3">
-                            {renderSectionMiniPreview(section)}
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold">
-                                  {section.label ?? section.sectionType}
-                                </p>
-                                <div className="mt-1 flex flex-wrap items-center gap-2">
-                                  <Badge variant="outline" className="text-[10px] uppercase">
-                                    {section.sectionType}
-                                  </Badge>
-                                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                                    #{section.orderIndex}
-                                  </span>
-                                  <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                                    {section.isVisible ? "Visible" : "Hidden"}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-1">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="rounded-xl"
-                                      onClick={(event) => event.stopPropagation()}
-                                    >
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-56 rounded-xl">
-                                    <DropdownMenuLabel>Section Actions</DropdownMenuLabel>
-                                    <DropdownMenuItem
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        setSelectedSectionId(section.id);
-                                      }}
-                                    >
-                                      Edit section
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        sectionMutation.mutate({
-                                          sectionId: section.id,
-                                          payload: { isVisible: !section.isVisible },
-                                        });
-                                      }}
-                                    >
-                                      {section.isVisible ? (
-                                        <>
-                                          <EyeOff className="mr-2 h-4 w-4" />
-                                          Hide section
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Eye className="mr-2 h-4 w-4" />
-                                          Show section
-                                        </>
-                                      )}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      disabled={index === 0}
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleMoveSection(section, -1);
-                                      }}
-                                    >
-                                      <ArrowUp className="mr-2 h-4 w-4" />
-                                      Move up
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      disabled={index === sortedSections.length - 1}
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        handleMoveSection(section, 1);
-                                      }}
-                                    >
-                                      <ArrowDown className="mr-2 h-4 w-4" />
-                                      Move down
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        duplicateSectionMutation.mutate(section.id);
-                                      }}
-                                    >
-                                      <Copy className="mr-2 h-4 w-4" />
-                                      Duplicate
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSub>
-                                      <DropdownMenuSubTrigger>
-                                        <ArrowRightLeft className="mr-2 h-4 w-4" />
-                                        Move to template
-                                      </DropdownMenuSubTrigger>
-                                      <DropdownMenuSubContent className="w-56 rounded-xl">
-                                        {templatesForMove.length ? (
-                                          templatesForMove.map((template) => (
-                                            <DropdownMenuItem
-                                              key={template.id}
-                                              onClick={(event) => {
-                                                event.stopPropagation();
-                                                moveSectionTemplateMutation.mutate({
-                                                  sectionId: section.id,
-                                                  templateId: template.id,
-                                                });
-                                              }}
-                                            >
-                                              {template.name}
-                                            </DropdownMenuItem>
-                                          ))
-                                        ) : (
-                                          <DropdownMenuItem disabled>No other templates</DropdownMenuItem>
-                                        )}
-                                      </DropdownMenuSubContent>
-                                    </DropdownMenuSub>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                      className="text-destructive focus:text-destructive"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        deleteSectionMutation.mutate(section.id);
-                                      }}
-                                    >
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      Remove
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "p-4")}>
+                    <p className="text-sm text-muted-foreground">
+                      The full section navigator and editor are shown in the workspace below, with the section list on the left and the selected section details on the right.
+                    </p>
                   </div>
 
                 </TabsContent>
@@ -2232,52 +2424,50 @@ export default function Canvas() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-base">
                         <Palette className="h-4 w-4" />
-                        Preview Fonts
+                        Storefront Fonts
                       </CardTitle>
                       <CardDescription>
-                        Pick a font preset and inspect its style in a focused text preview.
+                        Pick the default storefront font theme. The selected preset applies across all storefront pages and sections.
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-                      <div className="grid gap-3">
-                        {THEME_FONT_OPTIONS.map((font) => (
-                          <button
-                            key={font.id}
-                            type="button"
-                            onClick={() => setPreviewFontPreset(font.id)}
-                            className={`rounded-2xl p-4 text-left transition-all ${
-                              previewFontPreset === font.id
-                                ? "border border-sky-400 bg-sky-50/70 shadow-[0_8px_20px_rgba(56,189,248,0.16)] dark:bg-sky-950/25 dark:shadow-[0_12px_24px_rgba(14,116,144,0.25)]"
-                                : `${CANVAS_ELEVATED_PANEL_CLASS} hover:border-black/20 dark:hover:border-white/20`
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold">{font.label}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">{font.description}</p>
-                              </div>
-                              {previewFontPreset === font.id ? <Badge className="bg-sky-600 hover:bg-sky-600">Previewing</Badge> : null}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "p-4")}>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-                          Live Font Preview
-                        </p>
-                        <div
-                          className="mt-3 rounded-xl border border-black/10 bg-white/85 p-4 dark:border-white/[0.10] dark:bg-black/25"
-                          style={{ fontFamily: selectedThemeFontFamily }}
+                    <CardContent className="grid gap-3">
+                      {STOREFRONT_FONT_OPTIONS.map((font) => (
+                        <button
+                          key={font.id}
+                          type="button"
+                          onClick={() => {
+                            setPreviewFontPreset(font.id);
+                            settingsMutation.mutate(font.id);
+                          }}
+                          className={`rounded-2xl border p-4 text-left transition-all ${
+                            previewFontPreset === font.id
+                              ? "border-sky-400 bg-sky-50/70 shadow-[0_8px_20px_rgba(56,189,248,0.16)] dark:bg-sky-950/25 dark:shadow-[0_12px_24px_rgba(14,116,144,0.25)]"
+                              : "border-black/10 bg-white/80 hover:border-black/20 dark:border-white/[0.10] dark:bg-white/[0.03] dark:hover:border-white/20"
+                          }`}
+                          disabled={settingsMutation.isPending}
                         >
-                          <p className="text-2xl font-semibold text-foreground">The quick brown fox</p>
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            Jumps over the lazy dog. 0123456789
-                          </p>
-                          <p className="mt-4 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                            {selectedThemeFont.label}
-                          </p>
-                        </div>
-                      </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-sm font-semibold">{font.label}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">{font.description}</p>
+                            </div>
+                            {previewFontPreset === font.id ? (
+                              <Badge className="bg-sky-600 hover:bg-sky-600">
+                                {settingsMutation.isPending ? "Saving" : "Active"}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <div
+                            className="mt-4 rounded-xl border border-black/10 bg-white/85 p-4 text-left dark:border-white/[0.10] dark:bg-black/20"
+                            style={{ fontFamily: STOREFRONT_FONT_FAMILIES[font.id].preview }}
+                          >
+                            <p className="text-xl font-semibold text-foreground">Rare Atelier</p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              Editorial storefront typography preview.
+                            </p>
+                          </div>
+                        </button>
+                      ))}
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -2286,65 +2476,191 @@ export default function Canvas() {
           </CardContent>
         </Card>
 
-        {activeTab === "templates" ? (
-          <Card className="rounded-3xl border-border/50 bg-white/90 shadow-sm dark:border-white/[0.06] dark:bg-neutral-950/85 dark:shadow-none">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle>Full Page Preview</CardTitle>
-                <CardDescription>
-                  {selectedTemplate?.name ?? "Homepage preview"}
-                </CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                className="rounded-xl"
-                onClick={() => setPreviewKey((prev) => prev + 1)}
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Refresh Preview
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="overflow-hidden rounded-3xl border border-border/40 bg-white dark:border-white/[0.06] dark:bg-neutral-950">
-                <div
-                  className="relative origin-top-left"
-                  style={{ transform: "scale(0.6)", width: "166.6667%", height: "calc(100vh / 0.6)" }}
-                >
-                  {visibleTemplates.map((template) => (
-                    <iframe
-                      key={`${template.id}-${previewKey}`}
-                      src={buildPreviewUrl(template.id)}
-                      title={`Canvas preview — ${template.name}`}
-                      loading="eager"
-                      className={cn(
-                        "absolute inset-0 h-full w-full border-0 transition-opacity duration-200",
-                        template.id === previewTemplateId
-                          ? "opacity-100"
-                          : "pointer-events-none opacity-0",
-                      )}
-                    />
+        <div className="space-y-6">
+        {activeTab === "sections" ? (
+          <>
+            <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+              <Card className={CANVAS_ELEVATED_CARD_CLASS}>
+                <CardHeader>
+                  <CardTitle>Section Workspace</CardTitle>
+                  <CardDescription>
+                    Manage the sections for {selectedTemplate?.name ?? settings?.activeTemplate?.name ?? "the selected template"}.
+                    Choose a section on the left, then edit its details on the right.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {sortedSections.map((section, index) => (
+                    <div
+                      key={section.id}
+                      role="button"
+                      tabIndex={0}
+                      draggable
+                      onClick={() => setSelectedSectionId(section.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedSectionId(section.id);
+                        }
+                      }}
+                      onDragStart={() => setDraggedSectionId(section.id)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => {
+                        if (!draggedSectionId || draggedSectionId === section.id) return;
+                        reorderSectionsMutation.mutate({ sourceId: draggedSectionId, targetId: section.id });
+                        setDraggedSectionId(null);
+                      }}
+                      onDragEnd={() => setDraggedSectionId(null)}
+                      className={`w-full rounded-2xl p-3 text-left transition-all ${
+                        selectedSection?.id === section.id
+                          ? "border border-sky-400 bg-sky-50/70 shadow-[0_10px_22px_rgba(14,165,233,0.16)] dark:bg-sky-950/25 dark:shadow-[0_14px_28px_rgba(2,132,199,0.2)]"
+                          : `${CANVAS_ELEVATED_PANEL_CLASS} hover:border-black/20 dark:hover:border-white/20`
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <GripVertical className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1 space-y-3">
+                          {renderSectionMiniPreview(section)}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">
+                                {section.label ?? section.sectionType}
+                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className="text-[10px] uppercase">
+                                  {section.sectionType}
+                                </Badge>
+                                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                                  #{section.orderIndex}
+                                </span>
+                                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                                  {section.isVisible ? "Visible" : "Hidden"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="rounded-xl"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56 rounded-xl">
+                                  <DropdownMenuLabel>Section Actions</DropdownMenuLabel>
+                                  <DropdownMenuItem
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setSelectedSectionId(section.id);
+                                    }}
+                                  >
+                                    Edit section
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      sectionMutation.mutate({
+                                        sectionId: section.id,
+                                        payload: { isVisible: !section.isVisible },
+                                      });
+                                    }}
+                                  >
+                                    {section.isVisible ? (
+                                      <>
+                                        <EyeOff className="mr-2 h-4 w-4" />
+                                        Hide section
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Eye className="mr-2 h-4 w-4" />
+                                        Show section
+                                      </>
+                                    )}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={index === 0}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleMoveSection(section, -1);
+                                    }}
+                                  >
+                                    <ArrowUp className="mr-2 h-4 w-4" />
+                                    Move up
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={index === sortedSections.length - 1}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleMoveSection(section, 1);
+                                    }}
+                                  >
+                                    <ArrowDown className="mr-2 h-4 w-4" />
+                                    Move down
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      duplicateSectionMutation.mutate(section.id);
+                                    }}
+                                  >
+                                    <Copy className="mr-2 h-4 w-4" />
+                                    Duplicate
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                      <ArrowRightLeft className="mr-2 h-4 w-4" />
+                                      Move to template
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="w-56 rounded-xl">
+                                      {templatesForMove.length ? (
+                                        templatesForMove.map((template) => (
+                                          <DropdownMenuItem
+                                            key={template.id}
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              moveSectionTemplateMutation.mutate({
+                                                sectionId: section.id,
+                                                templateId: template.id,
+                                              });
+                                            }}
+                                          >
+                                            {template.name}
+                                          </DropdownMenuItem>
+                                        ))
+                                      ) : (
+                                        <DropdownMenuItem disabled>No other templates</DropdownMenuItem>
+                                      )}
+                                    </DropdownMenuSubContent>
+                                  </DropdownMenuSub>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      deleteSectionMutation.mutate(section.id);
+                                    }}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Remove
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Templates are preloaded here for faster switching, so you can compare layouts without waiting on a full refresh every time.
-              </p>
-            </CardContent>
-          </Card>
-        ) : activeTab === "sections" ? (
-          <div className="space-y-6">
-            <Card className={CANVAS_ELEVATED_CARD_CLASS}>
-              <CardHeader>
-                <CardTitle>Section Workspace</CardTitle>
-                <CardDescription>
-                  Manage the sections for {selectedTemplate?.name ?? settings?.activeTemplate?.name ?? "the selected template"}.
-                  Hide, reorder, edit, or remove sections here without the full-page preview getting in the way.
-                </CardDescription>
-              </CardHeader>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {selectedSection ? (
-              <>
+              <div className="space-y-6">
+              {selectedSection ? (
+                <>
                 <Card className={CANVAS_ELEVATED_CARD_CLASS}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0">
                     <div>
@@ -3096,27 +3412,43 @@ export default function Canvas() {
                           "Save Section"
                         )}
                       </Button>
+                      <Button
+                        className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
+                        disabled={!effectiveTemplateId || activateMutation.isPending}
+                        onClick={() => effectiveTemplateId && activateMutation.mutate(effectiveTemplateId)}
+                      >
+                        {activateMutation.isPending ? (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            Publishing
+                          </>
+                        ) : (
+                          "Publish Site"
+                        )}
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
-              </>
-            ) : (
-              <Card className={CANVAS_ELEVATED_CARD_CLASS}>
-                <CardContent className="p-8 text-sm text-muted-foreground">
-                  Select a section from the left to edit it.
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        ) : (
+                </>
+              ) : (
+                <Card className={CANVAS_ELEVATED_CARD_CLASS}>
+                  <CardContent className="p-8 text-sm text-muted-foreground">
+                    Select a section from the left to edit it.
+                  </CardContent>
+                </Card>
+              )}
+              </div>
+            </div>
+          </>
+        ) : activeTab === "theme" ? (
           <Card className={CANVAS_ELEVATED_CARD_CLASS}>
             <CardHeader>
               <CardTitle>Theme Controls</CardTitle>
               <CardDescription>
-                Theme controls now include a live font preview that tracks your selected preset.
+                The active font preset is applied globally across the storefront.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <CardContent className="grid gap-5">
               <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "p-5")}>
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
                   Active Font Preset
@@ -3124,12 +3456,12 @@ export default function Canvas() {
                 <p className="mt-2 text-lg font-semibold text-foreground">{selectedThemeFont.label}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{selectedThemeFont.description}</p>
                 <p className="mt-4 text-xs text-muted-foreground">
-                  Use the Theme tab on the left to switch font presets. This panel updates instantly.
+                  Switching fonts updates the storefront theme for every public page and section, including navbar, footer, homepage, products, and checkout.
                 </p>
               </div>
               <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "p-5")}>
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-                  Font Preview
+                  Live Font Preview
                 </p>
                 <div
                   className="mt-3 rounded-xl border border-black/10 bg-white/85 p-4 dark:border-white/[0.10] dark:bg-black/25"
@@ -3146,7 +3478,8 @@ export default function Canvas() {
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
+        </div>
       </div>
 
       <Dialog

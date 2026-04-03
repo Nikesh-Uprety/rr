@@ -193,10 +193,6 @@ export default function Home() {
     const rawValue = new URLSearchParams(window.location.search).get("canvasSectionId");
     return rawValue && /^-?\d+$/.test(rawValue) ? Number(rawValue) : null;
   }, []);
-  const previewFontPreset = useMemo(() => {
-    if (typeof window === "undefined") return null;
-    return new URLSearchParams(window.location.search).get("canvasFontPreset");
-  }, []);
   const isCanvasPreview = previewTemplateId !== null;
 
   const { data: featuredProducts = [], isSuccess: isFeaturedSuccess } = useQuery({
@@ -517,62 +513,6 @@ export default function Home() {
     nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
   }, [activeSections, isCanvasPreview, isLuxuryEditorialTemplate]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const root = document.documentElement;
-    const originalDisplay = root.style.getPropertyValue("--font-display");
-    const originalBody = root.style.getPropertyValue("--font-body");
-    const originalMono = root.style.getPropertyValue("--font-mono");
-
-    const presets: Record<string, { display: string; body: string; mono: string }> = {
-      inter: {
-        display: "'Playfair Display', Georgia, serif",
-        body: "'Inter', sans-serif",
-        mono: "'DM Mono', monospace",
-      },
-      "roboto-slab": {
-        display: "'Roboto Slab', 'Playfair Display', serif",
-        body: "'Roboto Slab', Georgia, serif",
-        mono: "'DM Mono', monospace",
-      },
-      "space-grotesk": {
-        display: "'Playfair Display', Georgia, serif",
-        body: "'Space Grotesk', 'DM Sans', sans-serif",
-        mono: "'DM Mono', monospace",
-      },
-      "ibm-plex-sans": {
-        display: "'Playfair Display', Georgia, serif",
-        body: "'IBM Plex Sans', 'DM Sans', sans-serif",
-        mono: "'DM Mono', monospace",
-      },
-    };
-
-    const preset = previewFontPreset ? presets[previewFontPreset] : null;
-    if (!preset) {
-      root.style.removeProperty("--font-display");
-      root.style.removeProperty("--font-body");
-      root.style.removeProperty("--font-mono");
-      return () => {
-        if (originalDisplay) root.style.setProperty("--font-display", originalDisplay);
-        if (originalBody) root.style.setProperty("--font-body", originalBody);
-        if (originalMono) root.style.setProperty("--font-mono", originalMono);
-      };
-    }
-
-    root.style.setProperty("--font-display", preset.display);
-    root.style.setProperty("--font-body", preset.body);
-    root.style.setProperty("--font-mono", preset.mono);
-
-    return () => {
-      if (originalDisplay) root.style.setProperty("--font-display", originalDisplay);
-      else root.style.removeProperty("--font-display");
-      if (originalBody) root.style.setProperty("--font-body", originalBody);
-      else root.style.removeProperty("--font-body");
-      if (originalMono) root.style.setProperty("--font-mono", originalMono);
-      else root.style.removeProperty("--font-mono");
-    };
-  }, [previewFontPreset]);
 
   function renderSection(section: any) {
     switch (section.sectionType) {

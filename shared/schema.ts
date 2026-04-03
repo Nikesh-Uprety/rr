@@ -543,6 +543,7 @@ export const siteSettings = pgTable('site_settings', {
   id: serial('id').primaryKey(),
   activeTemplateId: integer('active_template_id')
     .references(() => pageTemplates.id),
+  fontPreset: varchar('font_preset', { length: 50 }).default('inter'),
   publishedAt: timestamp('published_at'),
   publishedBy: varchar('published_by')
     .references(() => users.id),

@@ -1,6 +1,6 @@
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider, onlineManager } from "@tanstack/react-query";
+import { QueryClientProvider, onlineManager, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { HelmetProvider } from "react-helmet-async";
@@ -12,15 +12,19 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { getDefaultAdminPath } from "@/lib/adminAccess";
 import { canAccessAdminPanel } from "@shared/auth-policy";
 
-import React, { lazy, Suspense, useCallback, useEffect, useState, startTransition } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState, startTransition } from "react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import Footer from "@/components/layout/Footer";
 import { TopLoadingBar } from "@/components/layout/TopLoadingBar";
 import CartSidebar from "@/components/layout/CartSidebar";
-import { fetchCategories, fetchProducts } from "@/lib/api";
+import { fetchCategories, fetchPageConfig, fetchProducts } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Wifi, WifiOff } from "lucide-react";
 import SentryTest from "@/components/SentryTest";
+import {
+  applyStorefrontFontPreset,
+  isStorefrontFontPreset,
+} from "@/lib/storefrontFonts";
 
 const loadHomePage = () => import("@/pages/storefront/Home");
 const loadProductsPage = () => import("@/pages/storefront/Products");
@@ -187,6 +191,22 @@ async function preloadRouteBeforeNavigate(path: string): Promise<void> {
 }
 
 function StorefrontLayout({ children }: { children: React.ReactNode }) {
+  const previewTemplateId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
+    return rawValue && /^\d+$/.test(rawValue) ? rawValue : null;
+  }, []);
+  const previewFontPreset = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const rawValue = new URLSearchParams(window.location.search).get("canvasFontPreset");
+    return isStorefrontFontPreset(rawValue) ? rawValue : null;
+  }, []);
+  const { data: pageConfig } = useQuery({
+    queryKey: ["page-config", previewTemplateId],
+    queryFn: () => fetchPageConfig(previewTemplateId),
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Finish the pre-loader when the main app layout has mounted
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).finishLoading) {
@@ -196,6 +216,16 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
       }, 40);
     }
   }, []);
+
+  useEffect(() => {
+    const effectivePreset = previewFontPreset
+      ?? (isStorefrontFontPreset(pageConfig?.fontPreset) ? pageConfig.fontPreset : null);
+    applyStorefrontFontPreset(effectivePreset);
+
+    return () => {
+      applyStorefrontFontPreset(null);
+    };
+  }, [pageConfig?.fontPreset, previewFontPreset]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col transition-colors duration-200 ease-in-out">
@@ -501,10 +531,10 @@ function RouterShell({
 
   return (
     <>
-      <TopLoadingBar isLoading={routeTransitioning} />
+      <TopLoadingBar isLoading={routeTransitioning && !isCanvasPreview} />
       <div
         className={
-          routeTransitioning
+          routeTransitioning && !isCanvasPreview
             ? "opacity-85 transition-opacity duration-150 ease-out"
             : "opacity-100"
         }

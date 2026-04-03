@@ -400,6 +400,7 @@ export async function registerRoutes(
 
       res.set("Cache-Control", "public, max-age=30");
       return res.json({
+        fontPreset: settings[0]?.fontPreset ?? "inter",
         template: template[0] ?? null,
         sections: normalizedSections.filter((s) => s.isVisible),
       });
@@ -945,6 +946,43 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Error in GET /api/admin/canvas/settings", err);
       return res.status(500).json({ error: "Failed to load canvas settings" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/settings", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const fontPreset =
+        typeof req.body?.fontPreset === "string" && req.body.fontPreset.trim()
+          ? req.body.fontPreset.trim()
+          : "inter";
+      const updatedAt = new Date();
+      const existing = await db.select().from(siteSettings).limit(1);
+
+      if (existing.length > 0) {
+        const [updated] = await db
+          .update(siteSettings)
+          .set({
+            fontPreset,
+            updatedAt,
+          })
+          .where(eq(siteSettings.id, existing[0].id))
+          .returning();
+
+        return res.json(updated);
+      }
+
+      const [created] = await db
+        .insert(siteSettings)
+        .values({
+          fontPreset,
+          updatedAt,
+        })
+        .returning();
+
+      return res.json(created);
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/settings", err);
+      return res.status(500).json({ error: "Failed to update canvas settings" });
     }
   });
 

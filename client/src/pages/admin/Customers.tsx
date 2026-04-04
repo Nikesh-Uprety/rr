@@ -71,6 +71,7 @@ export default function AdminCustomers() {
   const [editingCustomer, setEditingCustomer] = useState<AdminCustomer | null>(null);
   const [deletingCustomer, setDeletingCustomer] = useState<AdminCustomer | null>(null);
   const [isExportingCustomers, setIsExportingCustomers] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -437,8 +438,18 @@ export default function AdminCustomers() {
                                           <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Customer Stats</h4>
                                           <div className="grid grid-cols-2 gap-3">
                                             <div className="p-3 rounded-lg bg-muted/20 border border-border/50">
+                                              <div className="text-xs text-muted-foreground mb-1 uppercase tracking-tighter">Website Orders</div>
+                                              <div className="text-xl font-bold">
+                                                {ordersLoading
+                                                  ? detail.orderCount
+                                                  : orders.filter((order) => order.source === "online").length}
+                                              </div>
+                                            </div>
+                                            <div className="p-3 rounded-lg bg-muted/20 border border-border/50">
                                               <div className="text-xs text-muted-foreground mb-1 uppercase tracking-tighter">Lifetime Orders</div>
-                                              <div className="text-xl font-bold">{detail.orderCount}</div>
+                                              <div className="text-xl font-bold">
+                                                {ordersLoading ? detail.orderCount : orders.length}
+                                              </div>
                                             </div>
                                             <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
                                               <div className="text-xs text-primary/70 mb-1 uppercase tracking-tighter">Total Revenue</div>
@@ -555,6 +566,56 @@ export default function AdminCustomers() {
                                                         </div>
                                                       )}
                                                     </div>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        setExpandedOrderId((current) =>
+                                                          current === order.id ? null : order.id,
+                                                        )
+                                                      }
+                                                      className="mt-2 inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary hover:text-primary/80"
+                                                    >
+                                                      <ChevronRight
+                                                        className={cn(
+                                                          "h-3 w-3 transition-transform",
+                                                          expandedOrderId === order.id && "rotate-90",
+                                                        )}
+                                                      />
+                                                      Order details
+                                                    </button>
+                                                    {expandedOrderId === order.id ? (
+                                                      <div className="mt-3 rounded-lg border border-border/60 bg-background/80 p-3">
+                                                        <div className="flex items-start gap-2 text-[10px] text-muted-foreground">
+                                                          <MapPin className="mt-0.5 h-3 w-3" />
+                                                          <span>
+                                                            {order.deliveryAddress || "No delivery address on file"}
+                                                          </span>
+                                                        </div>
+                                                        <div className="mt-3 space-y-2">
+                                                          {order.items.map((item, index) => (
+                                                            <div key={`${order.id}-item-${index}`} className="flex items-center gap-3">
+                                                              <div className="h-9 w-9 overflow-hidden rounded-md border border-border bg-muted/30">
+                                                                {item.imageUrl ? (
+                                                                  <img
+                                                                    src={item.imageUrl}
+                                                                    alt={item.name}
+                                                                    className="h-full w-full object-cover"
+                                                                  />
+                                                                ) : (
+                                                                  <div className="flex h-full w-full items-center justify-center text-[9px] text-muted-foreground">
+                                                                    N/A
+                                                                  </div>
+                                                                )}
+                                                              </div>
+                                                              <div className="min-w-0 flex-1">
+                                                                <p className="truncate text-xs font-semibold">{item.name}</p>
+                                                                <p className="text-[10px] text-muted-foreground">Qty {item.quantity}</p>
+                                                              </div>
+                                                            </div>
+                                                          ))}
+                                                        </div>
+                                                      </div>
+                                                    ) : null}
                                                   </div>
                                                 </div>
 

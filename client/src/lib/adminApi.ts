@@ -64,7 +64,8 @@ export interface AdminCustomerDetail extends AdminCustomer {
 export interface AdminCustomerOrderHistoryItem {
   id: string;
   createdAt: string;
-  items: { name: string; quantity: number }[];
+  deliveryAddress?: string | null;
+  items: { name: string; quantity: number; productId?: string; imageUrl?: string | null }[];
   total: string | number;
   paymentMethod: string;
   status: string;

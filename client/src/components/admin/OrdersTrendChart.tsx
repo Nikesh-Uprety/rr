@@ -10,6 +10,7 @@ import {
 } from "@mui/x-charts/ChartsLabel";
 import type { AdminOrder } from "@/lib/adminApi";
 import { format, subDays, eachDayOfInterval, startOfDay } from "date-fns";
+import { useThemeStore } from "@/store/theme";
 
 function Line({ className, color }: ChartsLabelCustomMarkProps) {
   return (
@@ -33,6 +34,8 @@ interface OrdersTrendChartProps {
 }
 
 export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTrendChartProps) {
+  const theme = useThemeStore((state) => state.theme);
+  const isDark = theme === "dark";
   const chartData = useMemo(() => {
     const now = new Date();
     let days: number;
@@ -78,14 +81,14 @@ export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTre
         label: "Revenue",
         id: "revenue",
         labelMarkType: Line,
-        color: "#2C5234",
+        color: isDark ? "#d4a843" : "#2C5234",
       },
       {
         data: chartData.map((d) => d.total),
         label: "Orders",
         id: "orders",
         labelMarkType: Line,
-        color: "#81a074",
+        color: isDark ? "#7fbf8a" : "#81a074",
       },
     ],
     xAxis: [
@@ -116,6 +119,18 @@ export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTre
       [`.${lineElementClasses.root}[data-series="orders"]`]: {
         strokeDasharray: "5 5",
       },
+      "& .MuiChartsAxis-tickLabel": {
+        fill: isDark ? "rgba(255,255,255,0.78)" : "rgba(24,24,24,0.6)",
+      },
+      "& .MuiChartsAxis-line": {
+        stroke: isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)",
+      },
+      "& .MuiChartsAxis-tick": {
+        stroke: isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)",
+      },
+      "& .MuiChartsGrid-line": {
+        stroke: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+      },
     },
   };
 
@@ -132,11 +147,17 @@ export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTre
         </div>
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
-            <div className="w-6 h-[2px] bg-[#2C5234]" />
+            <div className="w-6 h-[2px]" style={{ background: isDark ? "#d4a843" : "#2C5234" }} />
             <span className="text-muted-foreground">Revenue</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-6 h-[2px] bg-[#81a074]" style={{ borderTop: "1px dashed #81a074" }} />
+            <div
+              className="w-6 h-[2px]"
+              style={{
+                background: isDark ? "#7fbf8a" : "#81a074",
+                borderTop: `1px dashed ${isDark ? "#7fbf8a" : "#81a074"}`,
+              }}
+            />
             <span className="text-muted-foreground">Orders</span>
           </div>
         </div>

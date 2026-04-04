@@ -1415,20 +1415,27 @@ export class PgStorage implements IStorage {
         total: orders.total,
         status: orders.status,
         paymentMethod: orders.paymentMethod,
+        addressLine1: orders.addressLine1,
+        addressLine2: orders.addressLine2,
+        city: orders.city,
+        region: orders.region,
+        deliveryAddress: orders.deliveryAddress,
       })
       .from(orders)
       .where(eq(orders.email, customerRow.email))
       .orderBy(desc(orders.createdAt));
 
     const orderIds = onlineOrders.map((o) => o.id);
-    const itemsByOrder = new Map<string, { name: string; quantity: number }[]>();
+    const itemsByOrder = new Map<string, { name: string; quantity: number; productId?: string; imageUrl?: string | null }[]>();
 
     if (orderIds.length) {
       const itemRows = await db
         .select({
           orderId: orderItems.orderId,
           quantity: orderItems.quantity,
+          productId: orderItems.productId,
           productName: products.name,
+          productImage: products.imageUrl,
         })
         .from(orderItems)
         .leftJoin(products, eq(orderItems.productId, products.id))
@@ -1440,20 +1447,29 @@ export class PgStorage implements IStorage {
         list.push({
           name: row.productName ?? "Unknown",
           quantity: Number(row.quantity ?? 0),
+          productId: row.productId,
+          imageUrl: row.productImage ?? null,
         });
         itemsByOrder.set(row.orderId, list);
       }
     }
 
-    const onlineMapped = onlineOrders.map((o) => ({
-      id: o.id,
-      createdAt: o.createdAt ?? new Date(),
-      items: itemsByOrder.get(o.id) ?? [],
-      total: typeof o.total === "string" ? o.total : String(o.total ?? "0"),
-      paymentMethod: o.paymentMethod,
-      status: o.status,
-      source: "online" as const,
-    }));
+    const onlineMapped = onlineOrders.map((o) => {
+      const fallbackAddress = [o.addressLine1, o.addressLine2, o.city, o.region]
+        .filter(Boolean)
+        .join(", ");
+      const deliveryAddress = o.deliveryAddress || fallbackAddress || null;
+      return {
+        id: o.id,
+        createdAt: o.createdAt ?? new Date(),
+        items: itemsByOrder.get(o.id) ?? [],
+        total: typeof o.total === "string" ? o.total : String(o.total ?? "0"),
+        paymentMethod: o.paymentMethod,
+        status: o.status,
+        source: "online" as const,
+        deliveryAddress,
+      };
+    });
 
     // POS orders (stored as bills)
     const billConditions = [eq(bills.customerName, customerFullName)];
@@ -1472,10 +1488,29 @@ export class PgStorage implements IStorage {
         status: bills.status,
         paymentMethod: bills.paymentMethod,
         items: bills.items,
+        deliveryAddress: bills.deliveryAddress,
       })
       .from(bills)
       .where(and(isNull(bills.orderId), or(...billConditions)))
       .orderBy(desc(bills.createdAt));
+
+    const posProductIds = new Set<string>();
+    posBills.forEach((bill) => {
+      const rawItems = Array.isArray(bill.items) ? (bill.items as any[]) : [];
+      rawItems.forEach((it) => {
+        if (typeof it?.productId === "string" && it.productId) {
+          posProductIds.add(it.productId);
+        }
+      });
+    });
+    const posProductMap = new Map<string, string | null>();
+    if (posProductIds.size) {
+      const rows = await db
+        .select({ id: products.id, imageUrl: products.imageUrl })
+        .from(products)
+        .where(inArray(products.id, Array.from(posProductIds)));
+      rows.forEach((row) => posProductMap.set(row.id, row.imageUrl ?? null));
+    }
 
     const posMapped = posBills.map((b) => {
       const rawItems = Array.isArray(b.items) ? (b.items as any[]) : [];
@@ -1485,6 +1520,11 @@ export class PgStorage implements IStorage {
         items: rawItems.map((it) => ({
           name: it.productName ?? "Unknown",
           quantity: Number(it.quantity ?? 0),
+          productId: typeof it.productId === "string" ? it.productId : undefined,
+          imageUrl:
+            typeof it.productId === "string"
+              ? posProductMap.get(it.productId) ?? null
+              : null,
         })),
         total:
           typeof b.totalAmount === "string"
@@ -1493,6 +1533,7 @@ export class PgStorage implements IStorage {
         paymentMethod: b.paymentMethod,
         status: b.status ?? "issued",
         source: "pos" as const,
+        deliveryAddress: b.deliveryAddress ?? null,
       };
     });
 

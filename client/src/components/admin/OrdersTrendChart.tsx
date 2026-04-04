@@ -5,10 +5,8 @@ import {
   lineElementClasses,
   markElementClasses,
 } from "@mui/x-charts/LineChart";
-import { legendClasses } from "@mui/x-charts/ChartsLegend";
 import {
   ChartsLabelCustomMarkProps,
-  labelMarkClasses,
 } from "@mui/x-charts/ChartsLabel";
 import type { AdminOrder } from "@/lib/adminApi";
 import { format, subDays, eachDayOfInterval, startOfDay } from "date-fns";
@@ -107,34 +105,16 @@ export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTre
     ],
     height: 300,
     margin: { left: 90, right: 24, top: 10, bottom: 10 },
-    slotProps: {
-      legend: {
-        direction: "horizontal",
-        position: { vertical: "top", horizontal: "end" },
-      },
-    },
     sx: {
       backgroundColor: "transparent",
       [`.${lineElementClasses.root}, .${markElementClasses.root}`]: {
         strokeWidth: 2,
       },
-      [`.${lineElementClasses.root}[data-series="revenue"], .${legendClasses.item}[data-series="revenue"] .${labelMarkClasses.fill}`]:
-        {
-          strokeDasharray: "none",
-        },
-      [`.${lineElementClasses.root}[data-series="orders"], .${legendClasses.item}[data-series="orders"] .${labelMarkClasses.fill}`]:
-        {
-          strokeDasharray: "5 5",
-        },
-      [`.${legendClasses.mark}`]: {
-        width: 24,
+      [`.${lineElementClasses.root}[data-series="revenue"]`]: {
+        strokeDasharray: "none",
       },
-      [`.${legendClasses.root}`]: {
-        "& text": {
-          fontSize: "11px",
-          fontWeight: 600,
-          fill: "currentColor",
-        },
+      [`.${lineElementClasses.root}[data-series="orders"]`]: {
+        strokeDasharray: "5 5",
       },
     },
   };

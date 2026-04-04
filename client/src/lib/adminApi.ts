@@ -218,7 +218,7 @@ type UploadProgressHandler = (value: number) => void;
 
 function uploadWithProgress<T>(options: {
   url: string;
-  body: BodyInit | Document | null;
+  body: XMLHttpRequestBodyInit | Document | null;
   method?: string;
   headers?: Record<string, string>;
   onProgress?: UploadProgressHandler;
@@ -436,6 +436,25 @@ export async function uploadProductImage(
     headers: { "Content-Type": "application/json" },
     onProgress,
   });
+  if (!json.success || !json.url) {
+    throw new Error(json.error ?? "Upload failed");
+  }
+  return json.url;
+}
+
+export async function uploadProductImageFile(
+  file: File,
+  onProgress?: UploadProgressHandler,
+): Promise<string> {
+  const form = new FormData();
+  form.append("image", file);
+
+  const json = await uploadWithProgress<{ success: boolean; url?: string; error?: string }>({
+    url: "/api/admin/upload-product-image-file",
+    body: form,
+    onProgress,
+  });
+
   if (!json.success || !json.url) {
     throw new Error(json.error ?? "Upload failed");
   }

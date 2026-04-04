@@ -2047,6 +2047,32 @@ export async function registerRoutes(
   // Product image upload (admin only)
   const productImageSchema = z.object({ imageBase64: z.string().min(1) });
   app.post(
+    "/api/admin/upload-product-image-file",
+    requireAdmin,
+    memoryUpload.single("image"),
+    async (req: Request, res: Response) => {
+      try {
+        const file = req.file;
+        if (!file) {
+          return res.status(400).json({ success: false, error: "No file uploaded" });
+        }
+
+        const fileName = `product_${Date.now()}_${file.originalname.replace(/\s+/g, "-")}`;
+        const asset = await storageService.uploadFile(
+          file.buffer,
+          fileName,
+          file.mimetype || "image/jpeg",
+        );
+
+        return res.json({ success: true, url: asset });
+      } catch (err) {
+        console.error("Error in product image upload (file)", err);
+        return res.status(500).json({ success: false, error: "Upload failed" });
+      }
+    },
+  );
+
+  app.post(
     "/api/admin/upload-product-image",
     requireAdmin,
     validateRequest(productImageSchema),

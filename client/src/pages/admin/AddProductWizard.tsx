@@ -34,8 +34,8 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/format";
-import { compressImage } from "@/lib/imageUtils";
-import { uploadProductImage, uploadAdminImage, fetchAdminAttributes, type ProductAttribute } from "@/lib/adminApi";
+import { compressImageFile } from "@/lib/imageUtils";
+import { uploadProductImageFile, uploadAdminImage, fetchAdminAttributes, type ProductAttribute } from "@/lib/adminApi";
 import { QuantityInput } from "@/components/ui/quantity-input";
 import { PriceInput } from "@/components/ui/price-input";
 import { UploadProgress } from "@/components/ui/upload-progress";
@@ -345,8 +345,8 @@ export default function AddProductWizard({
       setGalleryUploadProgress(0);
     }
     try {
-      const dataUrl = await compressImage(file);
-      const url = await uploadProductImage(dataUrl, (value) => {
+      const compressedFile = await compressImageFile(file);
+      const url = await uploadProductImageFile(compressedFile, (value) => {
         if (target === "main") {
           setMainUploadProgress(value);
         } else {

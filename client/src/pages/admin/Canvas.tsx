@@ -583,13 +583,9 @@ export default function Canvas() {
       const [moved] = next.splice(sourceIndex, 1);
       next.splice(targetIndex, 0, moved);
 
-      await Promise.all(
-        next.map((section, index) =>
-          apiRequest("PATCH", `/api/admin/canvas/sections/${section.id}`, {
-            orderIndex: index + 1,
-          }),
-        ),
-      );
+      await apiRequest("PATCH", "/api/admin/canvas/sections/reorder", {
+        orderedIds: next.map((section) => section.id),
+      });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "canvas", "sections", effectiveTemplateId] });

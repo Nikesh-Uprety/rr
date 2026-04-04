@@ -32,7 +32,7 @@ import {
   updateAdminProduct, 
   updateAdminProductHomeFeatured,
   deleteAdminProduct, 
-  uploadProductImage, 
+  uploadProductImageFile, 
   fetchAdminAttributes, 
   ProductAttribute,
   createCategory,
@@ -41,7 +41,7 @@ import {
   bulkCategorizeProducts,
 } from "@/lib/adminApi";
 import { fetchCategories, type ProductApi, type CategoryApi } from "@/lib/api";
-import { compressImage } from "@/lib/imageUtils";
+import { compressImageFile } from "@/lib/imageUtils";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
 import { QuantityInput } from "@/components/ui/quantity-input";
@@ -500,11 +500,11 @@ export default function AdminProducts() {
               progressMap.set(fileIndex, 0);
               updateGalleryProgress();
               try {
-                const dataUrl = await compressImage(file);
-                const url = await uploadProductImage(dataUrl, (value) => {
-                  progressMap.set(fileIndex, value);
-                  updateGalleryProgress();
-                });
+              const compressedFile = await compressImageFile(file);
+              const url = await uploadProductImageFile(compressedFile, (value) => {
+                progressMap.set(fileIndex, value);
+                updateGalleryProgress();
+              });
                 return url;
               } finally {
                 progressMap.set(fileIndex, 100);
@@ -606,8 +606,8 @@ export default function AdminProducts() {
               progressMap.set(fileIndex, 0);
               updateGalleryProgress();
               try {
-                const dataUrl = await compressImage(file);
-                const url = await uploadProductImage(dataUrl, (value) => {
+                const compressedFile = await compressImageFile(file);
+                const url = await uploadProductImageFile(compressedFile, (value) => {
                   progressMap.set(fileIndex, value);
                   updateGalleryProgress();
                 });
@@ -2193,8 +2193,8 @@ export default function AdminProducts() {
                         setEditUploadProgress(0);
                         toast({ title: "Uploading main image..." });
                         try {
-                          const dataUrl = await compressImage(file);
-                          const url = await uploadProductImage(dataUrl, (value) => {
+                          const compressedFile = await compressImageFile(file);
+                          const url = await uploadProductImageFile(compressedFile, (value) => {
                             setEditUploadProgress(value);
                           });
                           editForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });

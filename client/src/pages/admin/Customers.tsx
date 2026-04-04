@@ -104,6 +104,45 @@ export default function AdminCustomers() {
   });
 
   const list = customers ?? [];
+  const displayCustomers = React.useMemo(() => {
+    const normalized = new Map<string, AdminCustomer>();
+    list.forEach((customer) => {
+      const first = (customer.firstName ?? "").trim();
+      const last = (customer.lastName ?? "").trim();
+      const nameKey = `${first} ${last}`.trim().toLowerCase();
+      const emailKey = (customer.email ?? "").trim().toLowerCase();
+      const phoneKey = (customer.phoneNumber ?? "").trim().replace(/\s+/g, "");
+      const key = nameKey || emailKey || phoneKey || customer.id;
+
+      if ((customer.orderCount ?? 0) <= 0) return;
+
+      const existing = normalized.get(key);
+      if (!existing) {
+        normalized.set(key, customer);
+        return;
+      }
+
+      const existingOrders = existing.orderCount ?? 0;
+      const candidateOrders = customer.orderCount ?? 0;
+      const existingRevenue = Number(existing.totalSpent ?? 0);
+      const candidateRevenue = Number(customer.totalSpent ?? 0);
+
+      if (
+        candidateOrders > existingOrders ||
+        (candidateOrders === existingOrders && candidateRevenue > existingRevenue)
+      ) {
+        normalized.set(key, customer);
+      }
+    });
+
+    return Array.from(normalized.values())
+      .sort((a, b) => {
+        const orderDiff = (b.orderCount ?? 0) - (a.orderCount ?? 0);
+        if (orderDiff !== 0) return orderDiff;
+        return Number(b.totalSpent ?? 0) - Number(a.totalSpent ?? 0);
+      })
+      .slice(0, 20);
+  }, [list]);
 
   const handleToggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
@@ -251,13 +290,13 @@ export default function AdminCustomers() {
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto justify-end">
           <div className="text-sm text-muted-foreground hidden sm:block">
-            Showing {list.length} customers
+            Showing {displayCustomers.length} customers
           </div>
           <ViewToggle view={viewMode} onViewChange={setViewMode} />
         </div>
       </div>
 
-      <CustomerSpendingChart customers={list} />
+      <CustomerSpendingChart customers={displayCustomers} />
 
       <AnimatePresence mode="wait">
         {viewMode === "list" ? (
@@ -293,14 +332,14 @@ export default function AdminCustomers() {
                       <TableCell className="text-right"><div className="h-8 w-8 bg-muted animate-pulse float-right rounded" /></TableCell>
                     </TableRow>
                   ))
-                ) : list.length === 0 ? (
+                ) : displayCustomers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                       No customers found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  list.map((customer, i) => (
+                  displayCustomers.map((customer, i) => (
                     <React.Fragment key={customer.id}>
                       <TableRow 
                         className={cn(
@@ -584,7 +623,13 @@ export default function AdminCustomers() {
                   </CardContent>
                 </Card>
               ))
-            ) : list.map((customer, i) => (
+            ) : displayCustomers.length === 0 ? (
+              <Card className="border-border shadow-sm sm:col-span-2 lg:col-span-3 xl:col-span-4">
+                <CardContent className="p-10 text-center text-muted-foreground">
+                  No customers found
+                </CardContent>
+              </Card>
+            ) : displayCustomers.map((customer, i) => (
               <Card 
                 key={customer.id} 
                 className={cn(

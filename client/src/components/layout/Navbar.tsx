@@ -25,6 +25,7 @@ export default function Navbar() {
   const { theme, setTheme } = useThemeStore();
   const [location, setLocation] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isTabletViewport, setIsTabletViewport] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [hoveredNavHref, setHoveredNavHref] = useState<string | null>(null);
   const [hideAnnouncement, setHideAnnouncement] = useState(false);
@@ -78,6 +79,16 @@ export default function Navbar() {
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location]);
+
+  useEffect(() => {
+    const updateViewport = () => {
+      const width = window.innerWidth;
+      setIsTabletViewport(width >= 768 && width < 1024);
+    };
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
 
   useEffect(() => {
     document.body.style.overflow = isMobileMenuOpen ? "hidden" : "auto";
@@ -139,12 +150,20 @@ export default function Navbar() {
       .join("")
       .toUpperCase() || (user?.email?.[0] || "U").toUpperCase();
 
-  const navLinks = [
+  const baseNavLinks = [
     { name: "Home", href: "/" },
     { name: "Shop", href: "/products" },
     { name: "New Collection", href: "/new-collection" },
     { name: "Atelier", href: "/atelier" },
   ];
+  const navLinks = useMemo(() => {
+    if (!isTabletViewport || previewTemplateId !== null) {
+      return baseNavLinks;
+    }
+    return baseNavLinks.map((item) =>
+      item.href === "/new-collection" ? { ...item, name: "Collection" } : item,
+    );
+  }, [baseNavLinks, isTabletViewport, previewTemplateId]);
 
   const getGlassChrome = (mode: "light" | "dark", options?: { active?: boolean }) => {
     if (options?.active === false) {

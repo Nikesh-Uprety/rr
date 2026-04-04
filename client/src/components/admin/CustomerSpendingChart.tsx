@@ -132,15 +132,43 @@ export default function CustomerSpendingChart({ customers }: CustomerSpendingCha
   const [timeRange, setTimeRange] = useState<TimeRange>("1w");
 
   const chartData = useMemo(() => {
-    const sorted = [...customers].sort((a, b) =>
+    const normalized = new Map<string, AdminCustomer>();
+    customers.forEach((customer) => {
+      const first = (customer.firstName ?? "").trim();
+      const last = (customer.lastName ?? "").trim();
+      const nameKey = `${first} ${last}`.trim().toLowerCase();
+      const emailKey = (customer.email ?? "").trim().toLowerCase();
+      const phoneKey = (customer.phoneNumber ?? "").trim().replace(/\s+/g, "");
+      const key = nameKey || emailKey || phoneKey || customer.id;
+
+      if ((customer.orderCount ?? 0) <= 0) return;
+
+      const existing = normalized.get(key);
+      if (!existing) {
+        normalized.set(key, customer);
+        return;
+      }
+
+      const existingOrders = existing.orderCount ?? 0;
+      const candidateOrders = customer.orderCount ?? 0;
+      const existingRevenue = Number(existing.totalSpent ?? 0);
+      const candidateRevenue = Number(customer.totalSpent ?? 0);
+
+      if (
+        candidateOrders > existingOrders ||
+        (candidateOrders === existingOrders && candidateRevenue > existingRevenue)
+      ) {
+        normalized.set(key, customer);
+      }
+    });
+
+    const sorted = Array.from(normalized.values()).sort((a, b) =>
       viewMode === "revenue"
         ? Number(b.totalSpent) - Number(a.totalSpent)
         : b.orderCount - a.orderCount,
     );
 
-    const displayCustomers = sorted.length < 15
-      ? sorted
-      : sorted.slice(0, Math.max(15, sorted.length));
+    const displayCustomers = sorted.slice(0, 15);
 
     return displayCustomers.map((c, i) => {
       const name = `${c.firstName} ${c.lastName}`.trim() || c.email || `Customer ${i + 1}`;

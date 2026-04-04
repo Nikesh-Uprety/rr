@@ -2633,12 +2633,32 @@ export async function registerRoutes(
           };
         });
 
-        return res.json({ success: true, data: products });
+        const total = await storage.getProductsCount({
+          category: category || undefined,
+          search: search || undefined,
+          includeInactive: true,
+        });
+
+        return res.json({ success: true, data: products, total });
       } catch (err) {
         console.error("Error in GET /api/admin/products", err);
         return res
           .status(500)
           .json({ success: false, error: "Failed to load products" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/products/stats",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const stats = await storage.getProductStats();
+        return res.json({ success: true, data: stats });
+      } catch (err) {
+        console.error("Error in GET /api/admin/products/stats", err);
+        return res.status(500).json({ success: false, error: "Failed to load product stats" });
       }
     },
   );

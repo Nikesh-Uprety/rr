@@ -27,6 +27,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { 
   fetchAdminProducts, 
+  fetchAdminProductsPage,
+  fetchAdminProductStats,
   createAdminProduct, 
   updateAdminProduct, 
   updateAdminProductHomeFeatured,
@@ -284,39 +286,44 @@ export default function AdminProducts() {
     queryFn: fetchCategories,
   });
 
+  useEffect(() => {
+    setProductPage(1);
+  }, [search, categoryFilter, productPageSize]);
+
   const filters = useMemo(
     () => ({
       search: search || undefined,
       category: categoryFilter === "all" ? undefined : categoryFilter,
-      limit: 2000,
+      page: productPage,
+      limit: productPageSize,
     }),
-    [search, categoryFilter],
+    [search, categoryFilter, productPage, productPageSize],
   );
 
   const {
-    data: products,
+    data: productPageData,
     isLoading,
     isError,
-  } = useQuery<ProductApi[]>({
+  } = useQuery<{ data: ProductApi[]; total: number }>({
     queryKey: ["admin", "products", filters],
-    queryFn: () => fetchAdminProducts(filters),
+    queryFn: () => fetchAdminProductsPage(filters),
   });
 
-  const { data: allAdminProducts = [] } = useQuery<ProductApi[]>({
-    queryKey: ["admin", "products", "all-counts"],
-    queryFn: () => fetchAdminProducts({ limit: 2000 }),
+  const { data: productStats } = useQuery({
+    queryKey: ["admin", "products", "stats"],
+    queryFn: () => fetchAdminProductStats(),
   });
 
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: allAdminProducts.length };
-    allAdminProducts.forEach(p => {
-      if (p.category) {
-        const slug = p.category.toLowerCase();
-        counts[slug] = (counts[slug] || 0) + 1;
-      }
-    });
+    const counts: Record<string, number> = {
+      all: productStats?.total ?? 0,
+      ...(productStats?.categoryCounts ?? {}),
+    };
     return counts;
-  }, [allAdminProducts]);
+  }, [productStats]);
+
+  const products = productPageData?.data ?? [];
+  const totalProducts = productPageData?.total ?? 0;
 
   const addForm = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -832,24 +839,10 @@ export default function AdminProducts() {
     },
   });
 
-  const filteredProducts = useMemo(() => {
-    if (!products) return [];
-    return products.filter((p) => {
-      const matchesCategory =
-        categoryFilter === "all" || (p.category ?? "").toLowerCase() ===
-          categoryFilter.toLowerCase();
-      return matchesCategory;
-    });
-  }, [products, categoryFilter]);
-  const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / productPageSize));
-  const paginatedProducts = filteredProducts.slice(
-    (productPage - 1) * productPageSize,
-    productPage * productPageSize,
-  );
-  const featuredCount = useMemo(
-    () => allAdminProducts.filter((p) => p.homeFeatured).length,
-    [allAdminProducts],
-  );
+  const filteredProducts = products;
+  const productTotalPages = Math.max(1, Math.ceil(totalProducts / productPageSize));
+  const paginatedProducts = filteredProducts;
+  const featuredCount = productStats?.featuredCount ?? 0;
   const categoryTabs = useMemo(
     () => [{ id: "all", slug: "all", name: "All" }, ...categories],
     [categories],
@@ -1618,7 +1611,7 @@ export default function AdminProducts() {
             setProductPage(page);
             setSelectedProductIds(new Set());
           }}
-          totalItems={filteredProducts.length}
+          totalItems={totalProducts}
           pageSize={productPageSize}
           onPageSizeChange={setProductPageSize}
         />

@@ -41,7 +41,10 @@ export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTre
     let days: number;
     if (timeRange === "all") {
       if (orders.length === 0) return null;
-      const oldest = new Date(orders[orders.length - 1].createdAt);
+      const oldest = orders.reduce((min, order) => {
+        const createdAt = new Date(order.createdAt);
+        return createdAt < min ? createdAt : min;
+      }, new Date(orders[0].createdAt));
       days = Math.max(1, Math.ceil((now.getTime() - oldest.getTime()) / (1000 * 60 * 60 * 24)));
     } else {
       days = timeRange === "1d" ? 1 : timeRange === "3d" ? 3 : timeRange === "30d" ? 30 : 7;

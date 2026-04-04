@@ -47,6 +47,49 @@ import { broadcastNotification } from "./websocket";
 
 const ARCHIVED_PRODUCT_CATEGORY = "__archived__";
 
+type ProductFilterInput = {
+  category?: string;
+  search?: string;
+  includeInactive?: boolean;
+};
+
+const buildProductConditions = (filters?: ProductFilterInput) => {
+  const conditions = [];
+
+  if (filters?.category) {
+    conditions.push(eq(products.category, filters.category));
+  } else {
+    conditions.push(
+      or(
+        isNull(products.category),
+        ne(products.category, ARCHIVED_PRODUCT_CATEGORY),
+      )!,
+    );
+  }
+
+  if (filters?.search) {
+    const terms = filters.search.trim().split(/\s+/).filter(Boolean);
+    if (terms.length > 0) {
+      const termConditions = terms.map((term) => {
+        const baseTerm = term.replace(/s$/i, "");
+        return or(
+          ilike(products.name, `%${baseTerm}%`),
+          ilike(products.category, `%${baseTerm}%`),
+          ilike(products.description, `%${baseTerm}%`),
+        );
+      });
+      conditions.push(and(...termConditions)!);
+    }
+  }
+
+  if (!filters?.includeInactive && "isActive" in products) {
+    // @ts-expect-error isActive may not exist in older schemas
+    conditions.push(eq(products.isActive, true));
+  }
+
+  return conditions;
+};
+
 export interface CreateOrderItemInput {
   productId: string;
   variantId?: number | null;
@@ -185,6 +228,16 @@ export interface IStorage {
     limit?: number;
     includeInactive?: boolean;
   }): Promise<Product[]>;
+  getProductsCount(filters?: {
+    category?: string;
+    search?: string;
+    includeInactive?: boolean;
+  }): Promise<number>;
+  getProductStats(): Promise<{
+    total: number;
+    featuredCount: number;
+    categoryCounts: Record<string, number>;
+  }>;
   getProductById(id: string): Promise<Product | null>;
   createProduct(
     data: Omit<Product, "id" | "createdAt" | "updatedAt">,
@@ -473,38 +526,7 @@ export class PgStorage implements IStorage {
       }
     }
 
-    const conditions = [];
-
-    if (filters?.category) {
-      conditions.push(eq(products.category, filters.category));
-    } else {
-      conditions.push(
-        or(
-          isNull(products.category),
-          ne(products.category, ARCHIVED_PRODUCT_CATEGORY),
-        )!,
-      );
-    }
-
-    if (filters?.search) {
-      const terms = filters.search.trim().split(/\s+/).filter(Boolean);
-      if (terms.length > 0) {
-        const termConditions = terms.map(term => {
-          const baseTerm = term.replace(/s$/i, '');
-          return or(
-            ilike(products.name, `%${baseTerm}%`),
-            ilike(products.category, `%${baseTerm}%`),
-            ilike(products.description, `%${baseTerm}%`)
-          );
-        });
-        conditions.push(and(...termConditions)!);
-      }
-    }
-
-    if (!filters?.includeInactive && "isActive" in products) {
-      // @ts-expect-error isActive may not exist in older schemas
-      conditions.push(eq(products.isActive, true));
-    }
+    const conditions = buildProductConditions(filters);
 
     const whereClause =
       conditions.length > 0 ? and(...conditions) : undefined;
@@ -518,6 +540,78 @@ export class PgStorage implements IStorage {
       .offset(offset);
 
     return rows;
+  }
+
+  async getProductsCount(filters?: {
+    category?: string;
+    search?: string;
+    includeInactive?: boolean;
+  }): Promise<number> {
+    if (filters?.search && meiliClient) {
+      try {
+        const index = meiliClient.index(PRODUCT_INDEX);
+        const searchRes = await index.search(filters.search, {
+          limit: 0,
+          offset: 0,
+          filter: filters.category ? `category = "${filters.category}"` : undefined,
+        });
+        const estimated = (searchRes as { estimatedTotalHits?: number }).estimatedTotalHits;
+        if (typeof estimated === "number") return estimated;
+        return searchRes.hits.length;
+      } catch (err) {
+        console.warn("[MeiliSearch] Count failed, falling back to Database:", err);
+      }
+    }
+
+    const conditions = buildProductConditions(filters);
+    const whereClause =
+      conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [row] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(products)
+      .where(whereClause);
+
+    return Number(row?.count ?? 0);
+  }
+
+  async getProductStats(): Promise<{
+    total: number;
+    featuredCount: number;
+    categoryCounts: Record<string, number>;
+  }> {
+    const conditions = buildProductConditions({ includeInactive: true });
+    const whereClause =
+      conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [totals] = await db
+      .select({
+        total: sql<number>`count(*)`,
+        featured: sql<number>`count(*) FILTER (WHERE ${products.homeFeatured} = true)`,
+      })
+      .from(products)
+      .where(whereClause);
+
+    const categoryRows = await db
+      .select({
+        category: products.category,
+        count: sql<number>`count(*)`,
+      })
+      .from(products)
+      .where(whereClause)
+      .groupBy(products.category);
+
+    const categoryCounts: Record<string, number> = {};
+    categoryRows.forEach((row) => {
+      if (!row.category) return;
+      categoryCounts[row.category.toLowerCase()] = Number(row.count ?? 0);
+    });
+
+    return {
+      total: Number(totals?.total ?? 0),
+      featuredCount: Number(totals?.featured ?? 0),
+      categoryCounts,
+    };
   }
 
   async getProductById(id: string): Promise<Product | null> {
@@ -2741,10 +2835,63 @@ export class MemStorage implements IStorage {
     limit?: number;
     includeInactive?: boolean;
   }): Promise<Product[]> {
+    const page = _filters?.page && _filters.page > 0 ? _filters.page : 1;
+    const limit = _filters?.limit && _filters.limit > 0 ? _filters.limit : 24;
+    const offset = (page - 1) * limit;
+
+    let results = this._products.slice();
+
     if (_filters?.category) {
-      return this._products.filter((p) => p.category === _filters.category);
+      results = results.filter((p) => p.category === _filters.category);
+    } else {
+      results = results.filter((p) => p.category !== ARCHIVED_PRODUCT_CATEGORY);
     }
-    return this._products.filter((p) => p.category !== ARCHIVED_PRODUCT_CATEGORY);
+
+    if (_filters?.search) {
+      const terms = _filters.search.trim().split(/\s+/).filter(Boolean);
+      if (terms.length > 0) {
+        results = results.filter((p) =>
+          terms.every((term) => {
+            const baseTerm = term.replace(/s$/i, "").toLowerCase();
+            const haystack = `${p.name ?? ""} ${p.category ?? ""} ${p.description ?? ""}`.toLowerCase();
+            return haystack.includes(baseTerm);
+          }),
+        );
+      }
+    }
+
+    return results.slice(offset, offset + limit);
+  }
+
+  async getProductsCount(filters?: {
+    category?: string;
+    search?: string;
+    includeInactive?: boolean;
+  }): Promise<number> {
+    const results = await this.getProducts({ ...filters, page: 1, limit: Number.MAX_SAFE_INTEGER });
+    return results.length;
+  }
+
+  async getProductStats(): Promise<{
+    total: number;
+    featuredCount: number;
+    categoryCounts: Record<string, number>;
+  }> {
+    const products = await this.getProducts({ page: 1, limit: Number.MAX_SAFE_INTEGER, includeInactive: true });
+    const categoryCounts: Record<string, number> = {};
+    let featuredCount = 0;
+    products.forEach((p) => {
+      if (p.homeFeatured) featuredCount += 1;
+      if (p.category) {
+        const slug = p.category.toLowerCase();
+        categoryCounts[slug] = (categoryCounts[slug] || 0) + 1;
+      }
+    });
+    return {
+      total: products.length,
+      featuredCount,
+      categoryCounts,
+    };
   }
 
   async getProductById(id: string): Promise<Product | null> {

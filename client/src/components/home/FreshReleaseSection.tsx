@@ -64,11 +64,13 @@ export default function FreshReleaseSection({ config }: FreshReleaseSectionProps
     ? Math.min(Math.max(productIds.length * 2, 24), 200)
     : 24;
 
-  const { data: products = [] } = useQuery<ProductApi[]>({
+  const { data: productsData = { products: [], total: 0 } } = useQuery<{ products: ProductApi[]; total: number }>({
     queryKey: ["products", "fresh-release", { limit: productFetchLimit, productIds }],
-    queryFn: () => fetchProducts({ limit: productFetchLimit }).then(r => r.products),
+    queryFn: () => fetchProducts({ limit: productFetchLimit }),
     staleTime: 60 * 1000,
   });
+
+  const products = productsData.products;
 
   const resolvedConfig = config ?? {};
   const title = resolvedConfig.title ?? "Fresh Release";

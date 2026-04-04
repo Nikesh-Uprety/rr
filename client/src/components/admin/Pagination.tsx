@@ -12,6 +12,9 @@ interface PaginationProps {
 }
 
 const StyledTablePagination = styled(MuiTablePagination)(({ theme }) => ({
+  color: theme.palette.text.primary,
+  backgroundColor: theme.palette.background.paper,
+  borderTop: `1px solid ${theme.palette.divider}`,
   "& .MuiTablePagination-toolbar": {
     minHeight: 48,
     paddingLeft: 8,
@@ -27,11 +30,13 @@ const StyledTablePagination = styled(MuiTablePagination)(({ theme }) => ({
   "& .MuiTablePagination-selectLabel": {
     fontSize: 12,
     fontWeight: 500,
+    color: theme.palette.text.secondary,
     opacity: 0.7,
   },
   "& .MuiTablePagination-displayedRows": {
     fontSize: 12,
     fontWeight: 500,
+    color: theme.palette.text.secondary,
   },
   "& .MuiTablePagination-actions": {
     marginLeft: 4,
@@ -39,10 +44,15 @@ const StyledTablePagination = styled(MuiTablePagination)(({ theme }) => ({
   "& .MuiIconButton-root": {
     padding: 4,
     borderRadius: 6,
+    color: theme.palette.text.primary,
+  },
+  "& .MuiIconButton-root.Mui-disabled": {
+    color: theme.palette.text.disabled,
   },
   "& .MuiSelect-select": {
     display: "flex",
     alignItems: "center",
+    color: theme.palette.text.primary,
   },
 }));
 

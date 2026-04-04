@@ -5,13 +5,20 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tansta
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, Eye, Download, XCircle } from "lucide-react";
+import { Search, Eye, Download, XCircle, Clock } from "lucide-react";
 import { fetchBills, voidBill } from "@/lib/adminApi";
 import type { AdminBill } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Pagination } from "@/components/admin/Pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const BillViewer = lazy(() =>
   import("@/components/admin/BillViewer").then((module) => ({ default: module.BillViewer })),
@@ -24,6 +31,7 @@ export default function AdminBills() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [billPage, setBillPage] = useState(1);
   const [billPageSize, setBillPageSize] = useState(20);
+  const [timeRange, setTimeRange] = useState<"all" | "1d" | "3d" | "7d" | "30d">("all");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -47,7 +55,23 @@ export default function AdminBills() {
 
   const filtered = useMemo(() => {
     if (!bills) return [];
+    const now = Date.now();
+    const cutoffMs =
+      timeRange === "1d"
+        ? now - 1 * 24 * 60 * 60 * 1000
+        : timeRange === "3d"
+          ? now - 3 * 24 * 60 * 60 * 1000
+          : timeRange === "7d"
+            ? now - 7 * 24 * 60 * 60 * 1000
+            : timeRange === "30d"
+              ? now - 30 * 24 * 60 * 60 * 1000
+              : null;
+
     return bills.filter((b) => {
+      if (cutoffMs !== null) {
+        const created = new Date(b.createdAt).getTime();
+        if (!Number.isFinite(created) || created < cutoffMs) return false;
+      }
       // Type filter
       if (typeFilter === "void" && b.status !== "void") return false;
       if (typeFilter === "sale" && b.billType !== "sale") return false;
@@ -64,11 +88,11 @@ export default function AdminBills() {
       }
       return true;
     });
-  }, [bills, typeFilter, search]);
+  }, [bills, typeFilter, search, timeRange]);
 
   useEffect(() => {
     setBillPage(1);
-  }, [typeFilter, search, billPageSize]);
+  }, [typeFilter, search, billPageSize, timeRange]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / billPageSize));
   const paginated = filtered.slice(
@@ -124,14 +148,34 @@ export default function AdminBills() {
       </div>
 
       {/* Search */}
-      <div className="relative w-full max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search by bill number or customer..."
-          className="pl-9 bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-11"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex w-full max-w-md items-center gap-3">
+        <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
+          <Clock className="h-3 w-3 text-muted-foreground" />
+          <Select
+            value={timeRange}
+            onValueChange={(v) => setTimeRange(v as "all" | "1d" | "3d" | "7d" | "30d")}
+          >
+            <SelectTrigger className="h-7 border-0 bg-transparent px-0 shadow-none focus:ring-0 text-xs font-medium">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All time</SelectItem>
+              <SelectItem value="1d">Last 1 day</SelectItem>
+              <SelectItem value="3d">Last 3 days</SelectItem>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="30d">Last 30 days</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by bill number or customer..."
+            className="pl-9 bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-11"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* View Rendering */}

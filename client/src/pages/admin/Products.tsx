@@ -212,7 +212,7 @@ export default function AdminProducts() {
   const [moveExistingSlug, setMoveExistingSlug] = useState<string>("");
   const [moveNewCategoryName, setMoveNewCategoryName] = useState<string>("");
   const [productPage, setProductPage] = useState(1);
-  const [productPageSize, setProductPageSize] = useState(15);
+  const [productPageSize, setProductPageSize] = useState(12);
 
   const { data: attributes } = useQuery<ProductAttribute[]>({
     queryKey: ["admin", "attributes"],

@@ -196,11 +196,13 @@ export default function Home() {
   }, []);
   const isCanvasPreview = previewTemplateId !== null;
 
-  const { data: featuredProducts = [], isSuccess: isFeaturedSuccess } = useQuery({
+  const { data: featuredProductsData = { products: [], total: 0 }, isSuccess: isFeaturedSuccess } = useQuery({
     queryKey: ["products", "featured", { limit: 2 }],
-    queryFn: () => fetchProducts({ limit: 2 }).then(r => r.products),
+    queryFn: () => fetchProducts({ limit: 2 }),
     enabled: !isCanvasPreview,
   });
+
+  const featuredProducts = featuredProductsData.products;
 
   const { data: newArrivals = [], isSuccess: isNewArrivalsSuccess } = useQuery({
     queryKey: ["products", "home-featured"],

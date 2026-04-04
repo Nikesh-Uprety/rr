@@ -178,11 +178,13 @@ export default function NewCollection() {
   const { theme } = useThemeStore();
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const isDark = theme === "dark";
-  const { data: products, isLoading } = useQuery<ProductApi[]>({
+  const { data: productsData, isLoading } = useQuery<{ products: ProductApi[]; total: number }>({
     queryKey: ["products", "all-collection"],
-    queryFn: () => fetchProducts().then(r => r.products),
+    queryFn: () => fetchProducts(),
     staleTime: 1000 * 60 * 5, // 5 minutes stale time for better performance
   });
+
+  const products = productsData?.products ?? [];
 
   const { data: bannerAssets = [] } = useQuery<SiteAsset[]>({
     queryKey: ["site-assets", "collection_page"],

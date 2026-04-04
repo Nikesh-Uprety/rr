@@ -3249,16 +3249,21 @@ export async function registerRoutes(
           req.body.status,
         );
 
-        // Auto-generate bill when order is marked completed
+        // Auto-generate bill only when order is completed AND payment is verified
         if (req.body.status === "completed") {
           try {
-            const user = req.user as any;
-            await generateBillFromOrder(
-              id,
-              user?.id ?? "system",
-              user?.name ?? user?.email ?? "Admin"
-            );
-            console.log(`✅ Bill auto-generated for order ${id}`);
+            const orderDetails = await storage.getOrderById(id);
+            if (orderDetails.paymentVerified === "verified") {
+              const user = req.user as any;
+              await generateBillFromOrder(
+                id,
+                user?.id ?? "system",
+                user?.name ?? user?.email ?? "Admin"
+              );
+              console.log(`✅ Bill auto-generated for order ${id} (completed + paid)`);
+            } else {
+              console.log(`⏳ Bill deferred for order ${id} — payment not yet verified`);
+            }
           } catch (billErr) {
             console.error("Bill generation failed (non-critical):", billErr);
           }
@@ -3307,6 +3312,25 @@ export async function registerRoutes(
           id,
           req.body.paymentVerified,
         );
+
+        // Auto-generate bill when payment is verified AND order is already completed
+        if (req.body.paymentVerified === "verified") {
+          try {
+            const orderDetails = await storage.getOrderById(id);
+            if (orderDetails.status === "completed") {
+              const user = req.user as any;
+              await generateBillFromOrder(
+                id,
+                user?.id ?? "system",
+                user?.name ?? user?.email ?? "Admin"
+              );
+              console.log(`✅ Bill auto-generated for order ${id} (paid + completed)`);
+            }
+          } catch (billErr) {
+            console.error("Bill generation failed on payment verify (non-critical):", billErr);
+          }
+        }
+
         return res.json({ success: true, data: updated });
       } catch (err) {
         console.error("Error in PUT /api/admin/orders/:id/verify-payment", err);

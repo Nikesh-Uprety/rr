@@ -46,6 +46,8 @@ function BillButton({ orderId }: { orderId: string }) {
   const { data, isLoading } = useQuery<AdminBill | null>({
     queryKey: ["bill", "order", orderId],
     queryFn: () => fetchBillByOrder(orderId),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   if (isLoading) return <div className="text-muted-foreground text-xs">Loading bill...</div>;
@@ -122,8 +124,10 @@ export default function AdminOrders() {
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       updateOrderStatus(id, status),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["bill"] });
+      queryClient.invalidateQueries({ queryKey: ["bill", "order", variables.id] });
       toast({ title: "Order status updated" });
     },
     onError: () => {
@@ -139,8 +143,10 @@ export default function AdminOrders() {
       id: string;
       paymentVerified: "verified" | "rejected";
     }) => verifyOrderPayment(id, paymentVerified),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["bill"] });
+      queryClient.invalidateQueries({ queryKey: ["bill", "order", variables.id] });
       toast({ title: "Payment verification updated" });
     },
     onError: () => {

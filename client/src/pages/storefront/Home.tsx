@@ -471,7 +471,6 @@ export default function Home() {
     { id: -4, sectionType: "campaign", isVisible: true, config: {}, orderIndex: 4 },
     { id: -5, sectionType: "arrivals", isVisible: true, config: {}, orderIndex: 5 },
     { id: -6, sectionType: "services", isVisible: true, config: {}, orderIndex: 6 },
-    { id: -7, sectionType: "contact", isVisible: true, config: {}, orderIndex: 7 },
   ];
 
   const activeSections = (
@@ -486,6 +485,7 @@ export default function Home() {
   const isMaisonNocturne = pageConfig?.template?.slug === "maison-nocturne";
   const isNikeshDesign = pageConfig?.template?.slug === "nikeshdesign";
   const isLuxuryEditorialTemplate = pageConfigLoading || isMaisonNocturne || isNikeshDesign;
+  const shouldRenderFallbackContact = !pageConfigLoading && !activeSections.some((s: any) => s.sectionType === "contact");
 
   useEffect(() => {
     if (!isLuxuryEditorialTemplate || isCanvasPreview) return;
@@ -631,7 +631,7 @@ export default function Home() {
       <main className={isLuxuryEditorialTemplate ? "bg-[var(--bg)] text-[var(--fg)]" : undefined}>
         {activeSections.map(renderSection)}
         {/* Always render ContactSection at the bottom when not already present */}
-        {!activeSections.some((s: any) => s.sectionType === "contact") && (
+        {shouldRenderFallbackContact && (
           <DeferredSection minHeightClassName="min-h-[26rem]">
             <ContactSection />
           </DeferredSection>

@@ -830,14 +830,22 @@ export default function AdminProducts() {
     },
   });
 
+  const [togglingProductId, setTogglingProductId] = useState<string | null>(null);
+
   const toggleMutation = useMutation({
-    mutationFn: (id: string) => toggleProductActive(id),
+    mutationFn: (id: string) => {
+      setTogglingProductId(id);
+      return toggleProductActive(id);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       toast({ title: "Product status updated" });
     },
     onError: () => {
       toast({ title: "Failed to update product", variant: "destructive" });
+    },
+    onSettled: () => {
+      setTogglingProductId(null);
     },
   });
 
@@ -1335,7 +1343,20 @@ export default function AdminProducts() {
                     : "border-[#E5E5E0] dark:border-border",
                   product.isActive === false && "opacity-50 grayscale",
                 )}
-              >
+                >
+                {/* Loading Overlay */}
+                {togglingProductId === product.id && (
+                  <div className="absolute inset-0 z-50 bg-black/20 dark:bg-black/40 backdrop-blur-[2px] flex items-center justify-center">
+                    <div className="bg-white dark:bg-card rounded-xl p-4 shadow-2xl flex flex-col items-center gap-2 border border-border/50">
+                      <div className="relative">
+                        <div className="w-8 h-8 border-2 border-muted-foreground/20 rounded-full" />
+                        <div className="absolute inset-0 w-8 h-8 border-2 border-transparent border-t-amber-500 rounded-full animate-spin" />
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Updating</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Selection Checkbox */}
                 <div className="absolute top-3 left-3 z-30">
                   <Checkbox 
@@ -1449,27 +1470,43 @@ export default function AdminProducts() {
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        className="flex-none w-9 h-9 border-amber-300 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700"
+                        className={cn(
+                          "flex-none w-9 h-9 border-amber-300 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 transition-all duration-300",
+                          togglingProductId === product.id && "animate-pulse border-amber-500 bg-amber-50 dark:bg-amber-950/30",
+                        )}
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleMutation.mutate(product.id);
                         }}
                         title="Mark as inactive"
+                        disabled={togglingProductId === product.id}
                       >
-                        <PowerOff className="w-3.5 h-3.5" />
+                        {togglingProductId === product.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <PowerOff className="w-3.5 h-3.5" />
+                        )}
                       </Button>
                     ) : (
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        className="flex-none w-9 h-9 border-green-300 text-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-700"
+                        className={cn(
+                          "flex-none w-9 h-9 border-green-300 text-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-700 transition-all duration-300",
+                          togglingProductId === product.id && "animate-pulse border-green-500 bg-green-50 dark:bg-green-950/30",
+                        )}
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleMutation.mutate(product.id);
                         }}
                         title="Mark as active"
+                        disabled={togglingProductId === product.id}
                       >
-                        <Power className="w-3.5 h-3.5" />
+                        {togglingProductId === product.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Power className="w-3.5 h-3.5" />
+                        )}
                       </Button>
                     )}
                     <Button 
@@ -1529,9 +1566,10 @@ export default function AdminProducts() {
                         setSelectedProductIds(next);
                       }}
                       className={cn(
-                        "border-b border-border hover:bg-muted/10 transition-colors group cursor-pointer",
+                        "border-b border-border hover:bg-muted/10 transition-colors group cursor-pointer relative",
                         selectedProductIds.has(product.id) && "bg-primary/5",
                         product.isActive === false && "opacity-50",
+                        togglingProductId === product.id && "before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-amber-500 before:animate-pulse",
                       )}
                     >
                       <td className="p-4 text-center">
@@ -1620,27 +1658,43 @@ export default function AdminProducts() {
                             <Button 
                               variant="outline" 
                               size="icon" 
-                              className="h-8 w-8 border-amber-300 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700"
+                              className={cn(
+                                "h-8 w-8 border-amber-300 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 transition-all duration-300",
+                                togglingProductId === product.id && "animate-pulse border-amber-500 bg-amber-50 dark:bg-amber-950/30",
+                              )}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleMutation.mutate(product.id);
                               }}
                               title="Mark as inactive"
+                              disabled={togglingProductId === product.id}
                             >
-                              <PowerOff className="w-3.5 h-3.5" />
+                              {togglingProductId === product.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <PowerOff className="w-3.5 h-3.5" />
+                              )}
                             </Button>
                           ) : (
                             <Button 
                               variant="outline" 
                               size="icon" 
-                              className="h-8 w-8 border-green-300 text-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-700"
+                              className={cn(
+                                "h-8 w-8 border-green-300 text-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-700 transition-all duration-300",
+                                togglingProductId === product.id && "animate-pulse border-green-500 bg-green-50 dark:bg-green-950/30",
+                              )}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleMutation.mutate(product.id);
                               }}
                               title="Mark as active"
+                              disabled={togglingProductId === product.id}
                             >
-                              <Power className="w-3.5 h-3.5" />
+                              {togglingProductId === product.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Power className="w-3.5 h-3.5" />
+                              )}
                             </Button>
                           )}
                           <Button 
@@ -1934,7 +1988,7 @@ export default function AdminProducts() {
             <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
               {/* LEFT COLUMN: Data Form */}
               <div className="flex-1 lg:max-w-[500px]">
-                <h2 className="text-2xl font-serif font-medium mb-8">Edit — {editProduct.name}</h2>
+                <h2 className="text-2xl font-serif font-medium mb-8">Edit: {editProduct.name}</h2>
                 <Form {...editForm}>
                   <form
                     id="edit-product-form"

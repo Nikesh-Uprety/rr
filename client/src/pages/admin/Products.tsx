@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ViewToggle } from "@/components/admin/ViewToggle";
+import { Pagination } from "@/components/admin/Pagination";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -205,6 +206,8 @@ export default function AdminProducts() {
   const [moveMode, setMoveMode] = useState<"existing" | "new">("existing");
   const [moveExistingSlug, setMoveExistingSlug] = useState<string>("");
   const [moveNewCategoryName, setMoveNewCategoryName] = useState<string>("");
+  const [productPage, setProductPage] = useState(1);
+  const PRODUCT_PAGE_SIZE = 15;
 
   const { data: attributes } = useQuery<ProductAttribute[]>({
     queryKey: ["admin", "attributes"],
@@ -796,6 +799,11 @@ export default function AdminProducts() {
       return matchesCategory;
     });
   }, [products, categoryFilter]);
+  const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCT_PAGE_SIZE));
+  const paginatedProducts = filteredProducts.slice(
+    (productPage - 1) * PRODUCT_PAGE_SIZE,
+    productPage * PRODUCT_PAGE_SIZE,
+  );
   const featuredCount = useMemo(
     () => allAdminProducts.filter((p) => p.homeFeatured).length,
     [allAdminProducts],
@@ -988,8 +996,8 @@ export default function AdminProducts() {
         }}
       />
 
-      {/* Sticky Filter & Category Section with Search Bar */}
-      <div className="sticky top-16 z-30 -mx-1 px-1 pb-2 backdrop-blur-[6px]">
+      {/* Filter & Category Section with Search Bar */}
+      <div className="-mx-1 px-1 pb-2">
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-[#F8FCF8]/95 to-white/95 dark:from-[#151E17]/95 dark:to-[#111915]/95 p-4 rounded-2xl border border-[#DCE8DB] dark:border-[#2E3B32] shadow-[0_8px_20px_rgba(34,63,41,0.08)] dark:shadow-[0_10px_22px_rgba(0,0,0,0.35)] overflow-visible">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1 w-full">
@@ -1235,7 +1243,7 @@ export default function AdminProducts() {
                 </div>
               </div>
             ))
-          : filteredProducts.map((product) => (
+          : paginatedProducts.map((product) => (
               <div
                 key={product.id}
                 onClick={() => {
@@ -1557,6 +1565,20 @@ export default function AdminProducts() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Pagination */}
+      <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm mt-4">
+        <Pagination
+          currentPage={productPage}
+          totalPages={productTotalPages}
+          onPageChange={(page) => {
+            setProductPage(page);
+            setSelectedProductIds(new Set());
+          }}
+          totalItems={filteredProducts.length}
+          pageSize={PRODUCT_PAGE_SIZE}
+        />
+      </div>
 
       {/* Move to Category Dialog */}
       <Dialog open={moveCategoryOpen} onOpenChange={setMoveCategoryOpen}>

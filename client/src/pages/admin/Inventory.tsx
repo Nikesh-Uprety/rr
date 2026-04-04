@@ -4,6 +4,7 @@ import { AlertTriangle, Download, Loader2, Package, Search, Plus, X, ChevronDown
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/admin/Pagination";
 import {
   Dialog,
   DialogContent,
@@ -210,6 +211,8 @@ export default function Inventory() {
   const [expandedColors, setExpandedColors] = useState<Set<string>>(new Set());
   const [newColorHex, setNewColorHex] = useState("");
   const [newSize, setNewSize] = useState("");
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const INVENTORY_PAGE_SIZE = 15;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSearch(searchInput), 300);
@@ -244,6 +247,12 @@ export default function Inventory() {
       return a.name.localeCompare(b.name);
     });
   }, [products]);
+
+  const inventoryTotalPages = Math.max(1, Math.ceil(sortedProducts.length / INVENTORY_PAGE_SIZE));
+  const paginatedInventory = sortedProducts.slice(
+    (inventoryPage - 1) * INVENTORY_PAGE_SIZE,
+    inventoryPage * INVENTORY_PAGE_SIZE,
+  );
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedProductId) ?? null,
@@ -641,7 +650,7 @@ export default function Inventory() {
                       </td>
                     </tr>
                   ))
-                : sortedProducts.length === 0
+                : paginatedInventory.length === 0
                   ? (
                     <tr>
                       <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
@@ -649,12 +658,23 @@ export default function Inventory() {
                       </td>
                     </tr>
                     )
-                  : sortedProducts.map((product) => (
+                  : paginatedInventory.map((product) => (
                       <InventoryRow key={product.id} product={product} onEdit={openEditor} />
                     ))}
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Pagination */}
+      <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm mt-4">
+        <Pagination
+          currentPage={inventoryPage}
+          totalPages={inventoryTotalPages}
+          onPageChange={setInventoryPage}
+          totalItems={sortedProducts.length}
+          pageSize={INVENTORY_PAGE_SIZE}
+        />
       </div>
 
       {/* Redesigned Restock Dialog */}

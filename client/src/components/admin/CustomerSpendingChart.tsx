@@ -149,26 +149,24 @@ function OrdersRangeBarChart({ data, height }: { data: any[]; height: number }) 
   const dataset = data.map((item, index) => {
     const rank = data.length - index;
     const tier = rank <= 5 ? "top" : rank <= 10 ? "mid" : "rest";
-    const displayName = item.phoneNumber
-      ? `${item.name} (${item.phoneNumber})`
-      : item.name;
 
     return {
       id: item.id,
       name: item.name,
-      label: displayName,
+      label: item.name,
       ordersTop: tier === "top" ? item.orders : 0,
       ordersMid: tier === "mid" ? item.orders : 0,
       ordersRest: tier === "rest" ? item.orders : 0,
       orders: item.orders,
       revenue: item.revenue,
+      phoneNumber: item.phoneNumber,
     };
   });
 
   const series = [
-    { dataKey: "ordersTop", label: "Top 5 customers", stack: "orders", color: tierColors.top },
-    { dataKey: "ordersMid", label: "6-10 customers", stack: "orders", color: tierColors.mid },
-    { dataKey: "ordersRest", label: "11-15 customers", stack: "orders", color: tierColors.rest },
+    { dataKey: "ordersTop", label: "Top 5", stack: "orders", color: tierColors.top },
+    { dataKey: "ordersMid", label: "6-10", stack: "orders", color: tierColors.mid },
+    { dataKey: "ordersRest", label: "11-15", stack: "orders", color: tierColors.rest },
   ];
 
   return (
@@ -177,7 +175,7 @@ function OrdersRangeBarChart({ data, height }: { data: any[]; height: number }) 
         dataset={dataset}
         layout="horizontal"
         height={height}
-        margin={{ left: 240, right: 36, top: 10, bottom: 18 }}
+        margin={{ left: 280, right: 36, top: 10, bottom: 18 }}
         xAxis={[
           {
             label: "Orders",
@@ -189,6 +187,7 @@ function OrdersRangeBarChart({ data, height }: { data: any[]; height: number }) 
           {
             scaleType: "band",
             dataKey: "label",
+            width: 280,
           },
         ]}
         series={series}
@@ -196,8 +195,9 @@ function OrdersRangeBarChart({ data, height }: { data: any[]; height: number }) 
         sx={{
           backgroundColor: "transparent",
           "& .MuiChartsAxis-tickLabel": {
-            fill: isDark ? "rgba(255,255,255,0.78)" : "rgba(24,24,24,0.7)",
-            fontSize: 11,
+            fill: isDark ? "rgba(255,255,255,0.85)" : "rgba(24,24,24,0.7)",
+            fontSize: 12,
+            fontWeight: 500,
           },
           "& .MuiChartsAxis-line": {
             stroke: isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)",
@@ -207,6 +207,10 @@ function OrdersRangeBarChart({ data, height }: { data: any[]; height: number }) 
           },
           "& .MuiChartsGrid-line": {
             stroke: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+          },
+          "& .MuiChartsBarSeries path": {
+            rx: 4,
+            ry: 4,
           },
         }}
         slotProps={{

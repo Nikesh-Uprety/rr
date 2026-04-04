@@ -214,24 +214,79 @@ export async function deleteAdminStorefrontImage(relPath: string): Promise<void>
   if (!json.success) throw new Error(json.error || "Delete failed");
 }
 
+type UploadProgressHandler = (value: number) => void;
+
+function uploadWithProgress<T>(options: {
+  url: string;
+  body: BodyInit | Document | null;
+  method?: string;
+  headers?: Record<string, string>;
+  onProgress?: UploadProgressHandler;
+}) {
+  const { url, body, method = "POST", headers, onProgress } = options;
+
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url, true);
+    xhr.withCredentials = true;
+    if (headers) {
+      Object.entries(headers).forEach(([key, value]) => {
+        xhr.setRequestHeader(key, value);
+      });
+    }
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const percent = Math.round((event.loaded / event.total) * 100);
+        onProgress(percent);
+      };
+    }
+
+    xhr.onerror = () => {
+      reject(new Error("Upload failed"));
+    };
+
+    xhr.onload = () => {
+      const ok = xhr.status >= 200 && xhr.status < 300;
+      let json: any = null;
+      try {
+        json = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!ok) {
+        reject(new Error(json?.error || json?.message || "Upload failed"));
+        return;
+      }
+      resolve(json as T);
+    };
+
+    xhr.send(body);
+  });
+}
+
 export async function uploadAdminImage(input: {
   file: File;
   category: string;
   provider: "local" | "cloudinary";
+  onProgress?: UploadProgressHandler;
 }): Promise<AdminImageAsset> {
   const form = new FormData();
   form.append("images", input.file);
   form.append("category", input.category);
   form.append("provider", input.provider);
-  const res = await fetch("/api/admin/images/upload", {
-    method: "POST",
-    credentials: "include",
+
+  const json = await uploadWithProgress<
+    { success?: boolean; data?: AdminImageAsset | AdminImageAsset[]; error?: string; message?: string }
+  >({
+    url: "/api/admin/images/upload",
     body: form,
+    onProgress: input.onProgress,
   });
-  const json = (await res.json().catch(() => null)) as
-    | { success?: boolean; data?: AdminImageAsset | AdminImageAsset[]; error?: string; message?: string }
-    | null;
-  if (!res.ok || !json?.success || !json.data) {
+
+  if (!json?.success || !json.data) {
     throw new Error(json?.error || json?.message || "Upload failed");
   }
   return Array.isArray(json.data) ? json.data[0] : json.data;
@@ -372,11 +427,15 @@ export async function bulkCategorizeProducts(input: {
 
 export async function uploadProductImage(
   imageBase64: string,
+  onProgress?: UploadProgressHandler,
 ): Promise<string> {
-  const res = await apiRequest("POST", "/api/admin/upload-product-image", {
-    imageBase64,
+  const payload = JSON.stringify({ imageBase64 });
+  const json = await uploadWithProgress<{ success: boolean; url?: string; error?: string }>({
+    url: "/api/admin/upload-product-image",
+    body: payload,
+    headers: { "Content-Type": "application/json" },
+    onProgress,
   });
-  const json = (await res.json()) as { success: boolean; url?: string; error?: string };
   if (!json.success || !json.url) {
     throw new Error(json.error ?? "Upload failed");
   }

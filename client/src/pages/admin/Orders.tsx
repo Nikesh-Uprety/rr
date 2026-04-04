@@ -470,7 +470,13 @@ export default function AdminOrders() {
                       <tr
                         key={order.id}
                         data-testid={`admin-order-row-${order.id}`}
-                        className="hover:bg-muted/50 transition-colors cursor-pointer"
+                        className={cn(
+                          "transition-all duration-200 cursor-pointer relative",
+                          "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-r-full before:transition-all before:duration-200",
+                          selectedOrder?.id === order.id
+                            ? "bg-[#2C5234]/[0.06] dark:bg-[#2C5234]/[0.12] before:bg-[#2C5234] dark:before:bg-[#4ADE80]"
+                            : "before:bg-transparent hover:bg-muted/40",
+                        )}
                         onClick={() => {
                           setSelectedOrder(order);
                           setSelectedOrderSn(orderSnById.get(order.id) ?? idx + 1);

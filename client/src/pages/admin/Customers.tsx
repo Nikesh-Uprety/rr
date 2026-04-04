@@ -61,6 +61,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
+import { Pagination } from "@/components/admin/Pagination";
 import CustomerSpendingChart from "@/components/admin/CustomerSpendingChart";
 
 export default function AdminCustomers() {
@@ -72,6 +73,8 @@ export default function AdminCustomers() {
   const [deletingCustomer, setDeletingCustomer] = useState<AdminCustomer | null>(null);
   const [isExportingCustomers, setIsExportingCustomers] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [customerPage, setCustomerPage] = useState(1);
+  const CUSTOMER_PAGE_SIZE = 15;
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -141,9 +144,14 @@ export default function AdminCustomers() {
         const orderDiff = (b.orderCount ?? 0) - (a.orderCount ?? 0);
         if (orderDiff !== 0) return orderDiff;
         return Number(b.totalSpent ?? 0) - Number(a.totalSpent ?? 0);
-      })
-      .slice(0, 20);
+      });
   }, [list]);
+
+  const customerTotalPages = Math.max(1, Math.ceil(displayCustomers.length / CUSTOMER_PAGE_SIZE));
+  const paginatedCustomers = displayCustomers.slice(
+    (customerPage - 1) * CUSTOMER_PAGE_SIZE,
+    customerPage * CUSTOMER_PAGE_SIZE,
+  );
 
   const handleToggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
@@ -291,7 +299,7 @@ export default function AdminCustomers() {
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto justify-end">
           <div className="text-sm text-muted-foreground hidden sm:block">
-            Showing {displayCustomers.length} customers
+            Showing {paginatedCustomers.length} of {displayCustomers.length} customers
           </div>
           <ViewToggle view={viewMode} onViewChange={setViewMode} />
         </div>
@@ -333,19 +341,22 @@ export default function AdminCustomers() {
                       <TableCell className="text-right"><div className="h-8 w-8 bg-muted animate-pulse float-right rounded" /></TableCell>
                     </TableRow>
                   ))
-                ) : displayCustomers.length === 0 ? (
+                ) : paginatedCustomers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                       No customers found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  displayCustomers.map((customer, i) => (
+                  paginatedCustomers.map((customer, i) => (
                     <React.Fragment key={customer.id}>
                       <TableRow 
                         className={cn(
-                          "cursor-pointer hover:bg-muted/30 transition-colors border-b border-[#E5E5E0] dark:border-border",
-                          expandedId === customer.id && "bg-muted/10 border-b-0"
+                          "cursor-pointer transition-all duration-200 border-b border-[#E5E5E0] dark:border-border relative",
+                          "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-r-full before:transition-all before:duration-200",
+                          expandedId === customer.id 
+                            ? "bg-[#2C5234]/[0.06] dark:bg-[#2C5234]/[0.12] before:bg-[#2C5234] dark:before:bg-[#4ADE80] border-b-0"
+                            : "before:bg-transparent hover:bg-muted/30",
                         )}
                         onClick={() => handleToggleExpand(customer.id)}
                       >
@@ -684,13 +695,13 @@ export default function AdminCustomers() {
                   </CardContent>
                 </Card>
               ))
-            ) : displayCustomers.length === 0 ? (
+            ) : paginatedCustomers.length === 0 ? (
               <Card className="border-border shadow-sm sm:col-span-2 lg:col-span-3 xl:col-span-4">
                 <CardContent className="p-10 text-center text-muted-foreground">
                   No customers found
                 </CardContent>
               </Card>
-            ) : displayCustomers.map((customer, i) => (
+            ) : paginatedCustomers.map((customer, i) => (
               <Card 
                 key={customer.id} 
                 className={cn(
@@ -754,6 +765,20 @@ export default function AdminCustomers() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Pagination */}
+      <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+        <Pagination
+          currentPage={customerPage}
+          totalPages={customerTotalPages}
+          onPageChange={(page) => {
+            setCustomerPage(page);
+            setExpandedId(null);
+          }}
+          totalItems={displayCustomers.length}
+          pageSize={CUSTOMER_PAGE_SIZE}
+        />
+      </div>
 
       {/* No side sheet needed anymore as we use expandable rows */}
 

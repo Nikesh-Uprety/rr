@@ -5,9 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
+import { Pagination } from "@/components/admin/Pagination";
+import { useMemo, useState } from "react";
 
 export default function NotificationsPage() {
   const { notifications, unreadCount, markAllRead, markRead, isLoading } = useNotifications();
+  const [notifPage, setNotifPage] = useState(1);
+  const NOTIF_PAGE_SIZE = 15;
+
+  const notifTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(notifications.length / NOTIF_PAGE_SIZE)),
+    [notifications],
+  );
+  const paginatedNotifications = useMemo(
+    () => notifications.slice(
+      (notifPage - 1) * NOTIF_PAGE_SIZE,
+      notifPage * NOTIF_PAGE_SIZE,
+    ),
+    [notifications, notifPage],
+  );
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -63,7 +79,7 @@ export default function NotificationsPage() {
           </div>
         ) : (
           <div className="divide-y divide-[#E5E5E0] dark:divide-border">
-            {notifications.map((notif) => (
+            {paginatedNotifications.map((notif) => (
               <div
                 key={notif.id}
                 className={cn(
@@ -120,6 +136,17 @@ export default function NotificationsPage() {
           </div>
         )}
       </Card>
+
+      {/* Pagination */}
+      <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+        <Pagination
+          currentPage={notifPage}
+          totalPages={notifTotalPages}
+          onPageChange={setNotifPage}
+          totalItems={notifications.length}
+          pageSize={NOTIF_PAGE_SIZE}
+        />
+      </div>
       
       <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground pt-4">
         <p>Notifications are automatically deleted after 30 days.</p>

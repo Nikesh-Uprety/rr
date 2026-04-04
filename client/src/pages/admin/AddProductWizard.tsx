@@ -38,6 +38,7 @@ import { compressImage } from "@/lib/imageUtils";
 import { uploadProductImage, uploadAdminImage, fetchAdminAttributes, type ProductAttribute } from "@/lib/adminApi";
 import { QuantityInput } from "@/components/ui/quantity-input";
 import { PriceInput } from "@/components/ui/price-input";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import type { CategoryApi } from "@/lib/api";
 import { apiRequest, getErrorMessage } from "@/lib/queryClient";
 import { syncStockBySizeToSizes } from "./productStock";
@@ -117,7 +118,10 @@ export default function AddProductWizard({
   // Image upload state
   const [uploadMode, setUploadMode] = useState<"cloud" | "local">("cloud");
   const [imageCategory, setImageCategory] = useState("product");
-  const [uploadingCloud, setUploadingCloud] = useState(false);
+  const [mainUploading, setMainUploading] = useState(false);
+  const [galleryUploading, setGalleryUploading] = useState(false);
+  const [mainUploadProgress, setMainUploadProgress] = useState(0);
+  const [galleryUploadProgress, setGalleryUploadProgress] = useState(0);
   const [galleryUploadMode, setGalleryUploadMode] = useState<"cloud" | "local">("cloud");
   const [galleryImageCategory, setGalleryImageCategory] = useState("product");
 
@@ -280,12 +284,25 @@ export default function AddProductWizard({
 
   // Cloud upload handler
   const handleCloudUpload = async (file: File, target: "main" | "gallery") => {
-    setUploadingCloud(true);
+    if (target === "main") {
+      setMainUploading(true);
+      setMainUploadProgress(0);
+    } else {
+      setGalleryUploading(true);
+      setGalleryUploadProgress(0);
+    }
     try {
       const result = await uploadAdminImage({
         file,
         category: target === "main" ? imageCategory : galleryImageCategory,
         provider: "cloudinary",
+        onProgress: (value) => {
+          if (target === "main") {
+            setMainUploadProgress(value);
+          } else {
+            setGalleryUploadProgress(value);
+          }
+        },
       });
       if (target === "main") {
         addForm.setValue("imageUrl", result.url, { shouldValidate: true, shouldDirty: true });
@@ -298,16 +315,37 @@ export default function AddProductWizard({
     } catch {
       toast({ title: "Cloud upload failed", variant: "destructive" });
     } finally {
-      setUploadingCloud(false);
+      if (target === "main") {
+        setMainUploadProgress(100);
+        setTimeout(() => setMainUploadProgress(0), 600);
+        setMainUploading(false);
+      } else {
+        setGalleryUploadProgress(100);
+        setTimeout(() => setGalleryUploadProgress(0), 600);
+        setGalleryUploading(false);
+      }
     }
   };
 
   // Local upload handler
   const handleLocalUpload = async (file: File, target: "main" | "gallery") => {
     setUploadingImage(true);
+    if (target === "main") {
+      setMainUploading(true);
+      setMainUploadProgress(0);
+    } else {
+      setGalleryUploading(true);
+      setGalleryUploadProgress(0);
+    }
     try {
       const dataUrl = await compressImage(file);
-      const url = await uploadProductImage(dataUrl);
+      const url = await uploadProductImage(dataUrl, (value) => {
+        if (target === "main") {
+          setMainUploadProgress(value);
+        } else {
+          setGalleryUploadProgress(value);
+        }
+      });
       if (target === "main") {
         addForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
       } else {
@@ -320,6 +358,15 @@ export default function AddProductWizard({
       toast({ title: "Upload failed", variant: "destructive" });
     } finally {
       setUploadingImage(false);
+      if (target === "main") {
+        setMainUploadProgress(100);
+        setTimeout(() => setMainUploadProgress(0), 600);
+        setMainUploading(false);
+      } else {
+        setGalleryUploadProgress(100);
+        setTimeout(() => setGalleryUploadProgress(0), 600);
+        setGalleryUploading(false);
+      }
     }
   };
 
@@ -1130,11 +1177,16 @@ export default function AddProductWizard({
                         variant="outline"
                         size="sm"
                         onClick={() => imageInputRef.current?.click()}
-                        loading={uploadingCloud}
+                        loading={mainUploading}
                       >
                         <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload {uploadMode === "cloud" ? "to Cloud" : "Local"}
                       </Button>
                     </div>
+                    {mainUploading && (
+                      <div className="mt-4 flex justify-center">
+                        <UploadProgress value={mainUploadProgress} label="Upload progress" />
+                      </div>
+                    )}
                     <input
                       ref={imageInputRef}
                       type="file"
@@ -1219,11 +1271,16 @@ export default function AddProductWizard({
                         size="sm"
                         className="flex-1 border-dashed"
                         onClick={() => galleryInputRef.current?.click()}
-                        loading={uploadingCloud}
+                        loading={galleryUploading}
                       >
                         <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload {galleryUploadMode === "cloud" ? "to Cloud" : "Local"}
                       </Button>
                     </div>
+                    {galleryUploading && (
+                      <div className="mt-4 flex justify-center">
+                        <UploadProgress value={galleryUploadProgress} label="Upload progress" />
+                      </div>
+                    )}
                     <input
                       ref={galleryInputRef}
                       type="file"

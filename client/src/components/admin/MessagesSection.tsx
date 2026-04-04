@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Eye, Reply, Send } from "lucide-react";
+import { Pagination } from "@/components/admin/Pagination";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,8 @@ export default function MessagesSection() {
   const [isReplyOpen, setIsReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [messagePage, setMessagePage] = useState(1);
+  const MESSAGE_PAGE_SIZE = 15;
 
   const messagesQuery = useQuery<{ success: boolean; data: ContactMessage[] }>({
     queryKey: ["admin", "messages"],
@@ -66,6 +69,12 @@ export default function MessagesSection() {
       return Number.isFinite(createdAtTime) && createdAtTime >= threshold;
     });
   }, [messages, dateFilter]);
+
+  const messageTotalPages = Math.max(1, Math.ceil(filteredMessages.length / MESSAGE_PAGE_SIZE));
+  const paginatedMessages = filteredMessages.slice(
+    (messagePage - 1) * MESSAGE_PAGE_SIZE,
+    messagePage * MESSAGE_PAGE_SIZE,
+  );
 
   const unreadCount = filteredMessages.filter((msg) => msg.status === "unread").length;
   const repliedCount = filteredMessages.filter((msg) => msg.status === "replied").length;
@@ -203,7 +212,7 @@ export default function MessagesSection() {
                   </td>
                 </tr>
               )}
-              {!messagesQuery.isLoading && filteredMessages.map((msg, index) => (
+              {!messagesQuery.isLoading && paginatedMessages.map((msg, index) => (
                 <tr
                   key={msg.id}
                   className={cn(
@@ -264,6 +273,17 @@ export default function MessagesSection() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Pagination */}
+      <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm mt-4">
+        <Pagination
+          currentPage={messagePage}
+          totalPages={messageTotalPages}
+          onPageChange={setMessagePage}
+          totalItems={filteredMessages.length}
+          pageSize={MESSAGE_PAGE_SIZE}
+        />
       </div>
 
       {/* View Message Dialog */}

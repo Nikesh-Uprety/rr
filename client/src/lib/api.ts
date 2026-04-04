@@ -43,6 +43,7 @@ export interface ProductApi {
   saleActive?: boolean | null;
   homeFeatured?: boolean;
   homeFeaturedImageIndex?: number;
+  isActive?: boolean;
   stockBySize?: Record<string, number>;
   variants?: Array<{
     id: number;

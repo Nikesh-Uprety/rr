@@ -54,7 +54,7 @@ export function Pagination({
   pageSize = 15,
   onPageSizeChange,
 }: PaginationProps) {
-  if (totalPages <= 1 && totalItems <= pageSize) return null;
+  if (totalItems === 0) return null;
 
   const [rowsPerPage, setRowsPerPage] = React.useState(pageSize);
 

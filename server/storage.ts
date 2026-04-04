@@ -83,7 +83,6 @@ const buildProductConditions = (filters?: ProductFilterInput) => {
   }
 
   if (!filters?.includeInactive && "isActive" in products) {
-    // @ts-expect-error isActive may not exist in older schemas
     conditions.push(eq(products.isActive, true));
   }
 
@@ -653,6 +652,7 @@ export class PgStorage implements IStorage {
         saleActive: products.saleActive,
         homeFeatured: products.homeFeatured,
         homeFeaturedImageIndex: products.homeFeaturedImageIndex,
+        isActive: products.isActive,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       })
@@ -708,6 +708,7 @@ export class PgStorage implements IStorage {
         saleActive: products.saleActive,
         homeFeatured: products.homeFeatured,
         homeFeaturedImageIndex: products.homeFeaturedImageIndex,
+        isActive: products.isActive,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       });
@@ -3071,6 +3072,7 @@ export class MemStorage implements IStorage {
       saleActive: data.saleActive ?? false,
       homeFeatured: data.homeFeatured ?? false,
       homeFeaturedImageIndex: data.homeFeaturedImageIndex ?? 2,
+      isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

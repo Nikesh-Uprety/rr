@@ -89,6 +89,7 @@ export const products = pgTable("products", {
   saleActive: boolean("sale_active").default(false),
   homeFeatured: boolean("home_featured").notNull().default(false),
   homeFeaturedImageIndex: integer("home_featured_image_index").notNull().default(2),
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

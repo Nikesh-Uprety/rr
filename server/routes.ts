@@ -2769,6 +2769,7 @@ export async function registerRoutes(
           originalPrice: req.body.originalPrice ? req.body.originalPrice.toString() : null,
           homeFeatured: req.body.homeFeatured || false,
           homeFeaturedImageIndex: req.body.homeFeaturedImageIndex ?? 2,
+          isActive: true,
         };
         const product = await storage.createProduct(data);
         const sizeOptions = parseSizeOptions(req.body.sizeOptions);
@@ -2893,6 +2894,32 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: "Failed to delete product" });
+      }
+    },
+  );
+
+  // Toggle product active/inactive
+  app.put(
+    "/api/admin/products/:id/toggle-active",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { id } = req.params;
+        if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
+
+        const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
+        if (!product) return res.status(404).json({ success: false, error: "Product not found" });
+
+        const [updated] = await db
+          .update(products)
+          .set({ isActive: !product.isActive, updatedAt: new Date() })
+          .where(eq(products.id, id))
+          .returning();
+
+        return res.json({ success: true, data: updated });
+      } catch (err) {
+        console.error("Error in PUT /api/admin/products/:id/toggle-active", err);
+        return res.status(500).json({ success: false, error: "Failed to toggle product status" });
       }
     },
   );
@@ -3312,6 +3339,110 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: "Failed to load orders" });
+      }
+    },
+  );
+
+  // Admin order trends (aggregated)
+  app.get(
+    "/api/admin/orders/trends",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const status = getQueryParam(req.query.status);
+        const search = getQueryParam(req.query.search);
+        const timeRange = getQueryParam(req.query.timeRange);
+        const conditions = [];
+
+        if (status) {
+          conditions.push(eq(orders.status, status as any));
+        }
+
+        if (search) {
+          const q = `%${search}%`;
+          conditions.push(
+            or(
+              ilike(orders.fullName, q),
+              ilike(orders.email, q),
+              ilike(orders.id, q),
+            ),
+          );
+        }
+
+        const dayMs = 24 * 60 * 60 * 1000;
+        const now = new Date();
+        const startOfDay = (value: Date) => {
+          const d = new Date(value);
+          d.setHours(0, 0, 0, 0);
+          return d;
+        };
+
+        let rangeStart: Date | null = null;
+        let rangeEnd: Date | null = startOfDay(now);
+
+        if (timeRange && timeRange !== "all") {
+          const days =
+            timeRange === "1d"
+              ? 1
+              : timeRange === "3d"
+                ? 3
+                : timeRange === "7d"
+                  ? 7
+                  : timeRange === "30d"
+                    ? 30
+                    : 7;
+          rangeStart = startOfDay(new Date(now.getTime() - (days - 1) * dayMs));
+          conditions.push(gte(orders.createdAt, rangeStart));
+        }
+
+        const whereClause =
+          conditions.length > 0 ? and(...conditions) : undefined;
+
+        const rows = await db
+          .select({
+            day: sql<Date>`date_trunc('day', ${orders.createdAt})`,
+            revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
+            total: sql<number>`count(*)`,
+            completed: sql<number>`sum(case when ${orders.status} = 'completed' then 1 else 0 end)`,
+            pending: sql<number>`sum(case when ${orders.status} = 'pending' then 1 else 0 end)`,
+          })
+          .from(orders)
+          .where(whereClause)
+          .groupBy(sql`date_trunc('day', ${orders.createdAt})`)
+          .orderBy(sql`date_trunc('day', ${orders.createdAt})`);
+
+        if (!rangeStart && rows.length > 0) {
+          rangeStart = startOfDay(rows[0].day);
+        }
+
+        if (!rangeStart || !rangeEnd) {
+          return res.json({
+            success: true,
+            data: { rangeStart: null, rangeEnd: null, series: [] },
+          });
+        }
+
+        const series = rows.map((row) => ({
+          day: row.day.toISOString().split("T")[0],
+          revenue: Number(row.revenue ?? 0),
+          total: Number(row.total ?? 0),
+          completed: Number(row.completed ?? 0),
+          pending: Number(row.pending ?? 0),
+        }));
+
+        return res.json({
+          success: true,
+          data: {
+            rangeStart: rangeStart.toISOString(),
+            rangeEnd: rangeEnd.toISOString(),
+            series,
+          },
+        });
+      } catch (err) {
+        console.error("Error in GET /api/admin/orders/trends", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load order trends" });
       }
     },
   );
@@ -5739,13 +5870,27 @@ export async function registerRoutes(
     try {
       const category = getQueryParam(req.query.category);
       const provider = getQueryParam(req.query.provider);
+      const search = getQueryParam(req.query.search);
       const limit = Math.min(200, Math.max(1, Number(getQueryParam(req.query.limit) ?? "60") || 60));
       const offset = Math.max(0, Number(getQueryParam(req.query.offset) ?? "0") || 0);
 
-      const where = and(
+      const conditions = [
         category ? eq(mediaAssets.category, category) : sql`true`,
         provider ? eq(mediaAssets.provider, provider) : sql`true`,
-      );
+      ];
+
+      if (search) {
+        const q = `%${search}%`;
+        conditions.push(
+          or(
+            ilike(mediaAssets.filename, q),
+            ilike(mediaAssets.url, q),
+            ilike(mediaAssets.publicId, q),
+          ),
+        );
+      }
+
+      const where = and(...conditions);
 
       const [countRow] = await db
         .select({ count: sql<number>`count(*)` })

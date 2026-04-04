@@ -46,6 +46,7 @@ export default function AdminImagesPage() {
   const [provider, setProvider] = useState<"local" | "cloudinary">("local");
   const [category, setCategory] = useState<ImageCategory>("product");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [imagePage, setImagePage] = useState(1);
   const [imagePageSize, setImagePageSize] = useState(60);
   const bulkInputRef = useRef<HTMLInputElement | null>(null);
@@ -73,11 +74,12 @@ export default function AdminImagesPage() {
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const imagesQuery = useQuery<{ data: AdminImageAsset[]; total: number }>({
-    queryKey: ["admin", "images", { provider, category, page: imagePage, limit: imagePageSize }],
+    queryKey: ["admin", "images", { provider, category, search: debouncedSearch, page: imagePage, limit: imagePageSize }],
     queryFn: () =>
       fetchAdminImagesPage({
         provider,
         category,
+        search: debouncedSearch || undefined,
         limit: imagePageSize,
         offset: (imagePage - 1) * imagePageSize,
       }),
@@ -88,7 +90,12 @@ export default function AdminImagesPage() {
 
   useEffect(() => {
     setImagePage(1);
-  }, [provider, category, imagePageSize]);
+  }, [provider, category, debouncedSearch, imagePageSize]);
+
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [search]);
 
   const normalizeName = (value: string) =>
     (value.split("/").pop() || value)
@@ -151,13 +158,13 @@ export default function AdminImagesPage() {
   };
 
   const filtered = useMemo(() => {
-    const q = normalizeName(search.trim());
+    const q = normalizeName(debouncedSearch.trim());
     const data = images ?? [];
     if (!q) return data;
     return data.filter((img) =>
       normalizeName(img.filename || img.url).includes(q),
     );
-  }, [images, search]);
+  }, [images, debouncedSearch]);
 
   const previewAsset = previewIndex !== null ? filtered[previewIndex] ?? null : null;
   const imageTotalPages = Math.max(1, Math.ceil(totalImages / imagePageSize));
@@ -184,7 +191,7 @@ export default function AdminImagesPage() {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [provider, category, search, imagePage]);
+  }, [provider, category, debouncedSearch, imagePage]);
 
   useEffect(() => {
     if (previewIndex === null) return;

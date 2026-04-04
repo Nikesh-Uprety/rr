@@ -65,6 +65,7 @@ import { Pagination } from "@/components/admin/Pagination";
 import CustomerSpendingChart from "@/components/admin/CustomerSpendingChart";
 
 export default function AdminCustomers() {
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
@@ -78,6 +79,11 @@ export default function AdminCustomers() {
   const [chartTimeRange, setChartTimeRange] = useState<"1w" | "1m" | "all">("1w");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const handle = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [searchInput]);
 
   const {
     data: customerPageData,
@@ -280,9 +286,21 @@ export default function AdminCustomers() {
           <Input
             placeholder="Search by name or email..."
             className="pl-9 bg-background border-border rounded-lg"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput("");
+                setSearch("");
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Clear
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto justify-end">
           <div className="text-sm text-muted-foreground hidden sm:block">

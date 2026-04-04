@@ -8,7 +8,7 @@ import {
 import {
   ChartsLabelCustomMarkProps,
 } from "@mui/x-charts/ChartsLabel";
-import type { AdminOrder } from "@/lib/adminApi";
+import type { AdminOrder, AdminOrderTrend } from "@/lib/adminApi";
 import { format, subDays, eachDayOfInterval, startOfDay } from "date-fns";
 import { useThemeStore } from "@/store/theme";
 
@@ -29,15 +29,40 @@ function Line({ className, color }: ChartsLabelCustomMarkProps) {
 }
 
 interface OrdersTrendChartProps {
-  orders: AdminOrder[];
+  orders?: AdminOrder[];
   timeRange?: "1d" | "3d" | "7d" | "30d" | "all";
+  trendData?: AdminOrderTrend | null;
 }
 
-export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTrendChartProps) {
+export default function OrdersTrendChart({ orders = [], trendData, timeRange = "7d" }: OrdersTrendChartProps) {
   const theme = useThemeStore((state) => state.theme);
   const isDark = theme === "dark";
   const chartData = useMemo(() => {
     const now = new Date();
+
+    if (trendData) {
+      const rangeStart = trendData.rangeStart ? startOfDay(new Date(trendData.rangeStart)) : null;
+      const rangeEnd = trendData.rangeEnd ? startOfDay(new Date(trendData.rangeEnd)) : null;
+      if (!rangeStart || !rangeEnd) return null;
+
+      const map = new Map(
+        (trendData.series ?? []).map((entry) => [entry.day, entry]),
+      );
+
+      const dateRange = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+      return dateRange.map((day) => {
+        const key = format(day, "yyyy-MM-dd");
+        const entry = map.get(key);
+        return {
+          day: format(day, "MMM dd"),
+          revenue: entry?.revenue ?? 0,
+          completed: entry?.completed ?? 0,
+          pending: entry?.pending ?? 0,
+          total: entry?.total ?? 0,
+        };
+      });
+    }
+
     let days: number;
     if (timeRange === "all") {
       if (orders.length === 0) return null;
@@ -54,7 +79,7 @@ export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTre
     const endDate = startOfDay(now);
     const dateRange = eachDayOfInterval({ start: startDate, end: endDate });
 
-    const dailyData = dateRange.map((day) => {
+    return dateRange.map((day) => {
       const dayStr = format(day, "MMM dd");
       const dayOrders = orders.filter((o) => {
         const d = startOfDay(new Date(o.createdAt));
@@ -65,9 +90,7 @@ export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTre
       const pending = dayOrders.filter((o) => o.status === "pending").length;
       return { day: dayStr, revenue, completed, pending, total: dayOrders.length };
     });
-
-    return dailyData;
-  }, [orders, timeRange]);
+  }, [orders, timeRange, trendData]);
 
   if (!chartData || chartData.length === 0) {
     return (

@@ -186,12 +186,14 @@ export interface AdminStorefrontImageEntry {
 export async function fetchAdminImages(params?: {
   category?: string;
   provider?: string;
+  search?: string;
   limit?: number;
   offset?: number;
 }): Promise<AdminImageAsset[]> {
   const qs = new URLSearchParams();
   if (params?.category) qs.set("category", params.category);
   if (params?.provider) qs.set("provider", params.provider);
+  if (params?.search) qs.set("search", params.search);
   if (params?.limit) qs.set("limit", String(params.limit));
   if (params?.offset) qs.set("offset", String(params.offset));
   const res = await apiRequest("GET", `/api/admin/images?${qs.toString()}`);
@@ -202,12 +204,14 @@ export async function fetchAdminImages(params?: {
 export async function fetchAdminImagesPage(params?: {
   category?: string;
   provider?: string;
+  search?: string;
   limit?: number;
   offset?: number;
 }): Promise<{ data: AdminImageAsset[]; total: number }> {
   const qs = new URLSearchParams();
   if (params?.category) qs.set("category", params.category);
   if (params?.provider) qs.set("provider", params.provider);
+  if (params?.search) qs.set("search", params.search);
   if (params?.limit) qs.set("limit", String(params.limit));
   if (params?.offset) qs.set("offset", String(params.offset));
   const res = await apiRequest("GET", `/api/admin/images?${qs.toString()}`);
@@ -217,6 +221,37 @@ export async function fetchAdminImagesPage(params?: {
     total?: number;
   };
   return { data: json.data ?? [], total: json.total ?? 0 };
+}
+
+export interface AdminOrderTrendPoint {
+  day: string;
+  revenue: number;
+  total: number;
+  completed: number;
+  pending: number;
+}
+
+export interface AdminOrderTrend {
+  rangeStart: string | null;
+  rangeEnd: string | null;
+  series: AdminOrderTrendPoint[];
+}
+
+export async function fetchAdminOrdersTrend(filters?: {
+  status?: string;
+  search?: string;
+  timeRange?: string;
+}): Promise<AdminOrderTrend> {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.search) params.set("search", filters.search);
+  if (filters?.timeRange) params.set("timeRange", filters.timeRange);
+
+  const url =
+    "/api/admin/orders/trends" + (params.toString() ? `?${params.toString()}` : "");
+  const res = await apiRequest("GET", url);
+  const json = (await res.json()) as { success: boolean; data: AdminOrderTrend };
+  return json.data ?? { rangeStart: null, rangeEnd: null, series: [] };
 }
 
 export async function fetchAdminStorefrontImageLibrary(): Promise<AdminStorefrontImageEntry[]> {
@@ -401,6 +436,12 @@ export async function updateAdminProduct(
 
 export async function deleteAdminProduct(id: string): Promise<void> {
   await apiRequest("DELETE", `/api/admin/products/${id}`);
+}
+
+export async function toggleProductActive(id: string): Promise<ProductApi> {
+  const res = await apiRequest("PUT", `/api/admin/products/${id}/toggle-active`);
+  const json = (await res.json()) as { success: boolean; data: ProductApi };
+  return json.data;
 }
 
 export async function updateAdminProductHomeFeatured(

@@ -25,6 +25,7 @@ import {
 import {
   exportOrdersCSV,
   fetchAdminOrdersPage,
+  fetchAdminOrdersTrend,
   updateOrderStatus,
   verifyOrderPayment,
   fetchBillByOrder,
@@ -83,6 +84,7 @@ function BillButton({ orderId }: { orderId: string }) {
 }
 
 export default function AdminOrders() {
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
@@ -106,6 +108,11 @@ export default function AdminOrders() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  useEffect(() => {
+    const handle = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(handle);
+  }, [searchInput]);
+
   const listFilters = useMemo(
     () => ({
       status: statusFilter === "all" ? undefined : statusFilter,
@@ -128,20 +135,18 @@ export default function AdminOrders() {
     placeholderData: keepPreviousData,
   });
 
-  const chartFilters = useMemo(
+  const trendFilters = useMemo(
     () => ({
       status: statusFilter === "all" ? undefined : statusFilter,
       search: search || undefined,
       timeRange: timeRange === "all" ? undefined : timeRange,
-      page: 1,
-      limit: 500,
     }),
     [search, statusFilter, timeRange],
   );
 
-  const { data: chartOrdersPage } = useQuery<{ data: AdminOrder[]; total: number }>({
-    queryKey: ["admin", "orders", "chart", chartFilters],
-    queryFn: () => fetchAdminOrdersPage(chartFilters),
+  const { data: trendData } = useQuery({
+    queryKey: ["admin", "orders", "trend", trendFilters],
+    queryFn: () => fetchAdminOrdersTrend(trendFilters),
     staleTime: 60_000,
     placeholderData: keepPreviousData,
   });
@@ -181,8 +186,6 @@ export default function AdminOrders() {
 
   const orders = ordersPage?.data ?? [];
   const totalOrders = ordersPage?.total ?? 0;
-  const chartOrders = chartOrdersPage?.data ?? [];
-
   useEffect(() => {
     setOrderPage(1);
   }, [search, statusFilter, timeRange, orderPageSize]);
@@ -310,7 +313,10 @@ export default function AdminOrders() {
         <ExportButton onExport={() => exportOrdersCSV()} />
       </div>
 
-      <OrdersTrendChart orders={chartOrders} timeRange={timeRange as "1d" | "3d" | "7d" | "30d" | "all"} />
+      <OrdersTrendChart
+        trendData={trendData}
+        timeRange={timeRange as "1d" | "3d" | "7d" | "30d" | "all"}
+      />
 
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex items-center gap-3 flex-wrap">
@@ -356,9 +362,21 @@ export default function AdminOrders() {
               placeholder="Search orders, customers..."
               data-testid="admin-orders-search"
               className="pl-9 bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-11"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearch("");
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            )}
           </div>
           <ViewToggle view={viewMode} onViewChange={setViewMode} />
           <ExportButton onExport={() => exportOrdersCSV()} />

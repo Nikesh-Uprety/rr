@@ -14,7 +14,7 @@ import {
   Share2, FileText, Download, Check, X, Pencil, Search, Table as TableIcon,
   ChevronRight, FileSpreadsheet, Eye, EyeOff, LayoutTemplate, Shirt, Footprints, Tag,
   MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar, Percent,
-  FolderInput, Box, CheckCircle2, ChevronDown, Plus, Star
+  FolderInput, Box, CheckCircle2, ChevronDown, Plus, Star, Power, PowerOff
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -39,6 +39,7 @@ import {
   updateCategory,
   deleteCategory,
   bulkCategorizeProducts,
+  toggleProductActive,
 } from "@/lib/adminApi";
 import { fetchCategories, type ProductApi, type CategoryApi } from "@/lib/api";
 import { compressImageFile } from "@/lib/imageUtils";
@@ -829,6 +830,31 @@ export default function AdminProducts() {
     },
   });
 
+  const toggleMutation = useMutation({
+    mutationFn: (id: string) => toggleProductActive(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      toast({ title: "Product status updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update product", variant: "destructive" });
+    },
+  });
+
+  const bulkToggleMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map(id => toggleProductActive(id)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      clearSelection();
+      toast({ title: "Product status updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update products", variant: "destructive" });
+    },
+  });
+
   const homeFeaturedMutation = useMutation({
     mutationFn: (input: { id: string; homeFeatured: boolean; homeFeaturedImageIndex?: number }) =>
       updateAdminProductHomeFeatured(input.id, {
@@ -1302,9 +1328,13 @@ export default function AdminProducts() {
                   else next.add(product.id);
                   setSelectedProductIds(next);
                 }}
-                className={`bg-white dark:bg-card rounded-xl border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative cursor-pointer ${
-                  selectedProductIds.has(product.id) ? "border-primary ring-2 ring-primary dark:bg-primary/10" : "border-[#E5E5E0] dark:border-border"
-                }`}
+                className={cn(
+                  "bg-white dark:bg-card rounded-xl border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative cursor-pointer",
+                  selectedProductIds.has(product.id)
+                    ? "border-primary ring-2 ring-primary dark:bg-primary/10"
+                    : "border-[#E5E5E0] dark:border-border",
+                  !product.isActive && "opacity-50 grayscale",
+                )}
               >
                 {/* Selection Checkbox */}
                 <div className="absolute top-3 left-3 z-30">
@@ -1364,6 +1394,12 @@ export default function AdminProducts() {
                     {product.name}
                   </h3>
                   
+                  {!product.isActive && (
+                    <Badge className="absolute top-3 right-3 z-20 bg-gray-500 text-white text-[9px] uppercase tracking-wider">
+                      Inactive
+                    </Badge>
+                  )}
+
                   <div className="flex items-center justify-between mt-4">
                     <div className="flex flex-col">
                       <span className="text-xl font-bold tracking-tight">
@@ -1409,13 +1445,40 @@ export default function AdminProducts() {
                     >
                       <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
                     </Button>
+                    {product.isActive ? (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-none w-9 h-9 border-amber-300 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMutation.mutate(product.id);
+                        }}
+                        title="Mark as inactive"
+                      >
+                        <PowerOff className="w-3.5 h-3.5" />
+                      </Button>
+                    ) : (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-none w-9 h-9 border-green-300 text-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-700"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMutation.mutate(product.id);
+                        }}
+                        title="Mark as active"
+                      >
+                        <Power className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
                     <Button 
                       variant="outline" 
                       size="sm" 
                       className="flex-none w-9 h-9 border-destructive/30 text-destructive hover:bg-destructive/10"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm("Are you sure?")) deleteMutation.mutate(product.id);
+                        if (confirm("Are you sure? This permanently deletes the product.")) deleteMutation.mutate(product.id);
                       }}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -1467,7 +1530,8 @@ export default function AdminProducts() {
                       }}
                       className={cn(
                         "border-b border-border hover:bg-muted/10 transition-colors group cursor-pointer",
-                        selectedProductIds.has(product.id) && "bg-primary/5"
+                        selectedProductIds.has(product.id) && "bg-primary/5",
+                        !product.isActive && "opacity-50",
                       )}
                     >
                       <td className="p-4 text-center">
@@ -1552,13 +1616,40 @@ export default function AdminProducts() {
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
+                          {product.isActive ? (
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              className="h-8 w-8 border-amber-300 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleMutation.mutate(product.id);
+                              }}
+                              title="Mark as inactive"
+                            >
+                              <PowerOff className="w-3.5 h-3.5" />
+                            </Button>
+                          ) : (
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              className="h-8 w-8 border-green-300 text-green-600 hover:bg-green-50 dark:text-green-400 dark:border-green-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleMutation.mutate(product.id);
+                              }}
+                              title="Mark as active"
+                            >
+                              <Power className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                           <Button 
                             variant="outline" 
                             size="icon" 
                             className="h-8 w-8 border-destructive/30 text-destructive hover:bg-destructive/10 dark:text-red-500 dark:border-red-500/30 dark:hover:bg-red-500/10"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (confirm("Are you sure?")) deleteMutation.mutate(product.id);
+                              if (confirm("Are you sure? This permanently deletes the product.")) deleteMutation.mutate(product.id);
                             }}
                             loading={deleteMutation.isPending}
                           >
@@ -1594,14 +1685,41 @@ export default function AdminProducts() {
                 />
                 <span>{selectedProductIds.size} products selected</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   variant="outline"
                   size="sm"
                   className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em]"
                   onClick={clearSelection}
                 >
-                  Clear Selection
+                  Clear
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700"
+                  onClick={() => {
+                    if (confirm(`Mark ${selectedProductIds.size} products as inactive? They will be hidden from the storefront.`)) {
+                      bulkToggleMutation.mutate(Array.from(selectedProductIds));
+                    }
+                  }}
+                  disabled={bulkToggleMutation.isPending}
+                >
+                  <PowerOff className="w-3.5 h-3.5 mr-1" />
+                  Deactivate
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={() => {
+                    if (confirm(`Permanently delete ${selectedProductIds.size} products? This cannot be undone.`)) {
+                      selectedProductIds.forEach(id => deleteMutation.mutate(id));
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  Delete
                 </Button>
                 <Button
                   size="sm"

@@ -38,6 +38,9 @@ function getBreadcrumbs(pathname: string): BreadcrumbItem[] {
     const segment = segments[i];
     accumulatedPath += `/${segment}`;
 
+    // Skip /admin since we already have "Dashboard" as the first breadcrumb
+    if (accumulatedPath === "/admin") continue;
+
     const navItem = ADMIN_NAV_ITEMS.find((item) => item.href === accumulatedPath);
     const isLast = i === segments.length - 1;
 

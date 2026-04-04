@@ -390,19 +390,21 @@ export default function AddProductWizard({
         });
       });
     }
-    if (selectedSizes.length > 0 && totalStock > 0) {
-      selectedSizes.forEach((size: string) => {
-        const stock = stockBySizeValues[size] ?? 0;
-        if (stock > 0) {
-          data.push({ name: `Size ${size}`, value: stock, fill: "#81a074" });
-        }
-      });
-    }
     if (data.length === 0) {
-      data.push({ name: "No data yet", value: 1, fill: "#d1d5db" });
+      data.push({ name: "No colors", value: 1, fill: "#d1d5db" });
     }
     return data;
-  }, [selectedColors, selectedSizes, stockBySizeValues, totalStock]);
+  }, [selectedColors]);
+
+  const sizeStockData = useMemo(() => {
+    if (selectedSizes.length === 0 || totalStock === 0) return [];
+    const maxStock = Math.max(...selectedSizes.map((s: string) => stockBySizeValues[s] ?? 0), 1);
+    return selectedSizes.map((size: string) => ({
+      size,
+      stock: stockBySizeValues[size] ?? 0,
+      pct: Math.round(((stockBySizeValues[size] ?? 0) / maxStock) * 100),
+    }));
+  }, [selectedSizes, stockBySizeValues, totalStock]);
 
   const CustomTooltipContent = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -530,6 +532,37 @@ export default function AddProductWizard({
             </div>
           </div>
         </div>
+
+        {/* Size Stock Visualization */}
+        {sizeStockData.length > 0 && (
+          <div className="mt-3 rounded-2xl border border-black/5 bg-[#fbfaf7] p-4 dark:border-white/10 dark:bg-white/[0.02]">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Stock by Size</p>
+              <Badge className="rounded-full bg-[#81a074]/10 text-[#223227] hover:bg-[#81a074]/10 dark:bg-[#81a074]/20 dark:text-white text-[10px]">{totalStock} total</Badge>
+            </div>
+            <div className="space-y-2">
+              {sizeStockData.map((item: { size: string; stock: number; pct: number }) => (
+                <div key={item.size} className="flex items-center gap-3">
+                  <span className="text-[11px] font-bold text-[#223227] dark:text-white w-6 text-center">{item.size}</span>
+                  <div className="flex-1 h-5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500 ease-out"
+                      style={{
+                        width: `${item.pct}%`,
+                        background: item.pct > 60
+                          ? "linear-gradient(90deg, #81a074, #4a5d4e)"
+                          : item.pct > 30
+                            ? "linear-gradient(90deg, #d4c5a9, #a89f8f)"
+                            : "linear-gradient(90deg, #b33a2f, #8a2e25)",
+                      }}
+                    />
+                  </div>
+                  <span className="text-[11px] font-bold text-[#425246] dark:text-white/70 w-8 text-right">{item.stock}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

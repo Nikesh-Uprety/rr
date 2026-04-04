@@ -510,7 +510,7 @@ export default function ProductDetail() {
             ? "down"
             : "up");
     const inferredDistance = Math.max(1, options?.distance ?? Math.abs(next - currentIndex));
-    const motionDuration = Math.max(260, 420 - Math.min(inferredDistance - 1, 5) * 30);
+    const motionDuration = Math.max(190, 340 - Math.min(inferredDistance - 1, 5) * 28);
     if (imageTransitionTimeoutRef.current) {
       window.clearTimeout(imageTransitionTimeoutRef.current);
     }
@@ -600,20 +600,20 @@ export default function ProductDetail() {
     <div className="mt-10 w-full px-3 py-24 sm:px-6 lg:px-8 xl:px-10">
       <style>{`
         @keyframes product-image-enter-down {
-          0% { transform: translateY(-48px); opacity: 0; }
-          100% { transform: translateY(0); opacity: 1; }
+          0% { transform: translateY(-72px) scale(0.992); opacity: 0; filter: blur(5px); }
+          100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
         }
         @keyframes product-image-enter-up {
-          0% { transform: translateY(48px); opacity: 0; }
-          100% { transform: translateY(0); opacity: 1; }
+          0% { transform: translateY(72px) scale(0.992); opacity: 0; filter: blur(5px); }
+          100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
         }
         @keyframes product-image-exit-down {
-          0% { transform: translateY(0); opacity: 1; }
-          100% { transform: translateY(48px); opacity: 0; }
+          0% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
+          100% { transform: translateY(72px) scale(1.006); opacity: 0; filter: blur(4px); }
         }
         @keyframes product-image-exit-up {
-          0% { transform: translateY(0); opacity: 1; }
-          100% { transform: translateY(-48px); opacity: 0; }
+          0% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
+          100% { transform: translateY(-72px) scale(1.006); opacity: 0; filter: blur(4px); }
         }
         @keyframes accordion-fade-down {
           0% { opacity: 0; transform: translateY(-6px); }
@@ -1203,7 +1203,7 @@ export default function ProductDetail() {
               {String(selectedImageIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
             </div>
 
-            <div className="flex h-full w-full items-stretch gap-2 px-2 pt-12 pb-2 sm:px-4 lg:gap-3 lg:px-6">
+            <div className="flex h-full w-full items-stretch gap-4 px-2 pt-0 pb-4 sm:px-4 lg:gap-6 lg:px-6">
               {allImages.length > 1 ? (
                 <div
                   className="hidden w-[92px] shrink-0 overflow-y-auto rounded-2xl border p-2 backdrop-blur lg:block"
@@ -1259,7 +1259,7 @@ export default function ProductDetail() {
                         gallerySectionRefs.current[index] = element;
                       }}
                       data-index={index}
-                      className="relative min-h-screen px-0 py-2 sm:py-3 lg:py-4"
+                      className="relative min-h-screen px-0 pb-5 sm:pb-6 lg:pb-8"
                     >
                       <div className="absolute right-3 top-3 z-10 flex justify-end px-3 sm:px-4 lg:px-6">
                         <button
@@ -1275,13 +1275,13 @@ export default function ProductDetail() {
                           Close Viewer
                         </button>
                       </div>
-                      <div className="flex min-h-[calc(100vh-3.5rem)] items-start justify-center px-0">
+                      <div className="flex min-h-[calc(100vh-5.5rem)] items-start justify-center px-0">
                         <img
                           src={url || ""}
                           alt={`${product.name} fullscreen view ${index + 1}`}
                           loading={index === selectedImageIndex ? "eager" : "lazy"}
                           decoding="async"
-                          className="h-[calc(100vh-3.5rem)] w-full max-w-none object-contain"
+                          className="h-auto w-full max-w-none object-contain"
                           style={{
                             imageRendering: "auto",
                             animation:

@@ -240,7 +240,9 @@ export default function Home() {
   const { data: pageConfig, isLoading: pageConfigLoading } = useQuery({
     queryKey: ["page-config", previewTemplateId],
     queryFn: () => fetchPageConfig(previewTemplateId),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   // Device detection

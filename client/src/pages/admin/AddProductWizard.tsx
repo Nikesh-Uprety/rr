@@ -224,11 +224,15 @@ export default function AddProductWizard({
 
   const canProceedStep1 = addForm.watch("name")?.length >= 2 && addForm.watch("price") >= 1;
   const canProceedStep2 = true;
+  const stockBySizeValues = addForm.watch("stockBySize") || {};
+  const totalStock = selectedSizes.reduce((total: number, size: string) => {
+    return total + (stockBySizeValues[size] ?? 0);
+  }, 0);
 
   const steps = [
     { num: 1, label: "Details", icon: FileText },
-    { num: 2, label: "Colors", icon: Palette },
-    { num: 3, label: "Photos", icon: ImageIcon },
+    { num: 2, label: "Attributes", icon: Tag },
+    { num: 3, label: "Media", icon: ImageIcon },
   ];
 
   // Cloud upload handler
@@ -277,24 +281,29 @@ export default function AddProductWizard({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-background overflow-auto">
-      <div className="min-h-screen max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 pb-24">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <Button
-            type="button"
-            variant="ghost"
-            className="-ml-2 rounded-2xl hover:bg-muted"
-            onClick={onClose}
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to products
-          </Button>
-          <h2 className="text-2xl font-serif font-medium">Add New Product</h2>
-          <div className="w-28" />
-        </div>
+    <div className="fixed inset-0 z-50 bg-[#f4f7f1] dark:bg-[#0f1411]">
+      <div className="absolute inset-0 overflow-y-auto">
+        <div className="min-h-full bg-[radial-gradient(circle_at_top,rgba(129,160,116,0.12),transparent_28%),linear-gradient(180deg,#f7faf4_0%,#eff4eb_100%)] dark:bg-[radial-gradient(circle_at_top,rgba(81,111,73,0.18),transparent_26%),linear-gradient(180deg,#0f1411_0%,#111914_100%)]">
+          <div className="mx-auto flex min-h-full max-w-7xl flex-col px-4 pb-10 pt-4 sm:px-6 lg:px-8">
+            <div className="sticky top-0 z-20 -mx-4 mb-6 border-b border-black/5 bg-[#f7faf4]/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-[#f7faf4]/80 dark:border-white/10 dark:bg-[#101611]/95 dark:supports-[backdrop-filter]:bg-[#101611]/80 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+              <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="-ml-2 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5"
+                  onClick={onClose}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back to products
+                </Button>
+                <div className="text-center">
+                  <h2 className="text-2xl font-serif font-medium text-[#223227] dark:text-white">Add New Product</h2>
+                  <p className="text-sm text-muted-foreground">Create a cleaner product page with organized attributes, pricing, and media.</p>
+                </div>
+                <div className="w-28" />
+              </div>
+            </div>
 
-        {/* Step indicator */}
-        <div className="flex items-center justify-center gap-0 mb-10">
+            <div className="mb-8 flex items-center justify-center gap-0">
           {steps.map((s, i) => (
             <div key={s.num} className="flex items-center">
               <button
@@ -324,25 +333,32 @@ export default function AddProductWizard({
               )}
             </div>
           ))}
-        </div>
+            </div>
 
-        <Form {...addForm}>
-          <form
-            id="add-product-form"
-            onSubmit={addForm.handleSubmit((values: ProductFormValues) => addMutation.mutate(values))}
-          >
-            <AnimatePresence mode="wait">
-              {/* STEP 1: Product Details + Stock */}
-              {step === 1 && (
-                <motion.div
-                  key="step1"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
-                >
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Basic Information</h3>
+            <Form {...addForm}>
+              <form
+                id="add-product-form"
+                onSubmit={addForm.handleSubmit((values: ProductFormValues) => addMutation.mutate(values))}
+                className="flex flex-1 flex-col"
+              >
+                <AnimatePresence mode="wait">
+                  {step === 1 && (
+                    <motion.div
+                      key="step1"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]"
+                    >
+                      <div className="space-y-6">
+                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                          <div className="mb-5 flex items-center justify-between gap-3">
+                            <div>
+                              <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">Basic Information</h3>
+                              <p className="mt-1 text-sm text-muted-foreground">Set the product name, category, messaging, and core price.</p>
+                            </div>
+                            <Badge variant="outline" className="rounded-full">Step 1</Badge>
+                          </div>
                     <FormField
                       control={addForm.control}
                       name="name"
@@ -453,10 +469,13 @@ export default function AddProductWizard({
                         </FormItem>
                       )}
                     />
-                  </div>
+                        </div>
 
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Pricing</h3>
+                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                          <div className="mb-5">
+                            <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">Pricing</h3>
+                            <p className="mt-1 text-sm text-muted-foreground">Keep the essentials here. Discounting moves to the next attributes step.</p>
+                          </div>
                     <FormField
                       control={addForm.control}
                       name="price"
@@ -475,206 +494,69 @@ export default function AddProductWizard({
                         </FormItem>
                       )}
                     />
-
-                    <div className="p-4 rounded-2xl bg-muted/50 border border-border space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label className="text-sm font-bold flex items-center gap-2">
-                            <Percent className="w-4 h-4" /> Sale Discount
-                          </Label>
-                          <p className="text-[10px] text-muted-foreground">Apply a discount</p>
                         </div>
-                        <FormField
-                          control={addForm.control}
-                          name="saleActive"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Switch checked={field.value} onCheckedChange={field.onChange} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
                       </div>
-                      <AnimatePresence>
-                        {addForm.watch("saleActive") && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="pt-2 border-t border-border"
-                          >
-                            <FormField
-                              control={addForm.control}
-                              name="salePercentage"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <div className="flex items-center justify-between mb-2">
-                                    <FormLabel className="text-[11px] font-bold uppercase">Discount</FormLabel>
-                                    <span className="text-lg font-bold text-primary">{field.value}% OFF</span>
-                                  </div>
-                                  <FormControl>
-                                    <Input type="range" min="0" max="90" step="5" {...field} />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </div>
 
-                  {/* Stock Section with per-size inputs */}
-                  <div className="space-y-4">
-                    <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Stock</h3>
-                    <FormField
-                      control={addForm.control}
-                      name="stockStatus"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <RadioGroup value={field.value} onValueChange={field.onChange} className="flex gap-4">
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="in_stock" id="add-in-stock" />
-                                <Label htmlFor="add-in-stock">In Stock</Label>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <RadioGroupItem value="out_of_stock" id="add-out-of-stock" />
-                                <Label htmlFor="add-out-of-stock">Out of Stock</Label>
-                              </div>
-                            </RadioGroup>
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-
-                    {addForm.watch("stockStatus") === "in_stock" && (
-                      <div className="space-y-3">
-                        {/* Size selection for stock */}
-                        <div>
-                          <Label className="text-xs font-bold uppercase tracking-wider">Select Sizes</Label>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {availableSizes.map((size) => {
-                              const isSelected = selectedSizes.includes(size);
-                              return (
-                                <button
-                                  key={size}
-                                  type="button"
-                                  onClick={() => toggleSize(size)}
-                                  className={cn(
-                                    "px-3 py-1.5 rounded-full text-xs font-bold uppercase border transition-all",
-                                    isSelected
-                                      ? "bg-primary text-primary-foreground border-primary"
-                                      : "bg-background text-muted-foreground border-border hover:border-foreground"
-                                  )}
-                                >
-                                  {size}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <Input
-                              value={newSizeInput}
-                              onChange={(e) => setNewSizeInput(e.target.value)}
-                              placeholder="New size (e.g. XXL)"
-                              className="w-32 text-xs h-8"
-                              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomSize())}
-                            />
-                            <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addCustomSize} disabled={!newSizeInput.trim()}>
-                              <Plus className="w-3 h-3 mr-1" /> Add Size
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Stock per size inputs */}
-                        {selectedSizes.length > 0 && (
-                          <div className="p-5 rounded-2xl bg-gradient-to-br from-muted/40 to-muted/20 border border-border/60">
-                            <Label className="text-xs font-bold uppercase tracking-wider mb-4 block">Stock by Size</Label>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                              {selectedSizes.map((size: string) => {
-                                const stockBySize = addForm.watch("stockBySize") || {};
-                                const currentStock = stockBySize[size] ?? undefined;
-                                return (
-                                  <div key={size} className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                      <Label className="text-sm font-bold">{size}</Label>
-                                      {currentStock !== undefined && currentStock > 0 && (
-                                        <span className="text-[10px] font-bold text-primary">{currentStock}</span>
-                                      )}
-                                    </div>
-                                    <QuantityInput
-                                      min={0}
-                                      step={1}
-                                      value={currentStock}
-                                      onChange={(newValue) => {
-                                        const current = addForm.getValues("stockBySize") || {};
-                                        addForm.setValue(
-                                          "stockBySize",
-                                          {
-                                            ...syncStockBySizeToSizes(current, selectedSizes),
-                                            [size]: newValue,
-                                          },
-                                          { shouldValidate: false, shouldDirty: true },
-                                        );
-                                      }}
-                                      placeholder="—"
-                                    />
-                                  </div>
-                                );
-                              })}
+                      <div className="space-y-6">
+                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                          <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">Product Snapshot</h3>
+                          <div className="mt-5 grid gap-4 text-sm">
+                            <div className="rounded-2xl bg-[#f3f7f1] p-4 dark:bg-white/[0.03]">
+                              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Name</p>
+                              <p className="mt-2 font-semibold">{addForm.watch("name") || "Untitled product"}</p>
                             </div>
-                            <div className="mt-4 pt-3 border-t border-border/60 flex justify-between items-center">
-                              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Total Stock</span>
-                              <span className="text-xl font-black tabular-nums">
-                                {selectedSizes.reduce((total: number, size: string) => {
-                                  const stockBySize = addForm.watch("stockBySize") || {};
-                                  return total + (stockBySize[size] ?? 0);
-                                }, 0)}
-                              </span>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="rounded-2xl bg-[#f3f7f1] p-4 dark:bg-white/[0.03]">
+                                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Price</p>
+                                <p className="mt-2 font-semibold">{addForm.watch("price") ? formatPrice(addForm.watch("price")) : "—"}</p>
+                              </div>
+                              <div className="rounded-2xl bg-[#f3f7f1] p-4 dark:bg-white/[0.03]">
+                                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Category</p>
+                                <p className="mt-2 font-semibold">{addForm.watch("category") || "Not selected"}</p>
+                              </div>
                             </div>
                           </div>
-                        )}
+                        </div>
                       </div>
-                    )}
-                  </div>
 
                   <input type="hidden" {...addForm.register("imageUrl")} />
                   <input type="hidden" {...addForm.register("galleryUrlsText")} />
 
-                  <div className="flex justify-end gap-3 pt-6 border-t">
-                    <Button type="button" variant="outline" className="rounded-2xl" onClick={onClose}>
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      className="rounded-2xl"
-                      disabled={!canProceedStep1}
-                      onClick={() => setStep(2)}
-                    >
-                      Next: Variants <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </div>
-                </motion.div>
-              )}
+                      <div className="sticky bottom-0 mt-8 border-t border-black/5 bg-[#f7faf4]/95 px-1 py-4 backdrop-blur supports-[backdrop-filter]:bg-[#f7faf4]/85 dark:border-white/10 dark:bg-[#101611]/95 dark:supports-[backdrop-filter]:bg-[#101611]/80">
+                        <div className="flex justify-end gap-3">
+                          <Button type="button" variant="outline" className="rounded-2xl" onClick={onClose}>
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            className="rounded-2xl"
+                            disabled={!canProceedStep1}
+                            onClick={() => setStep(2)}
+                          >
+                            Next: Attributes <ArrowRight className="ml-2 h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
 
-              {/* STEP 2: Colors */}
-              {step === 2 && (
-                <motion.div
-                  key="step2"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
-                >
-                  {/* Colors - including attribute colors */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Palette className="w-4 h-4" />
-                      <h3 className="text-sm font-bold">Colors</h3>
-                      <span className="text-xs text-muted-foreground">({selectedColors.length} selected)</span>
-                    </div>
+                  {step === 2 && (
+                    <motion.div
+                      key="step2"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]"
+                    >
+                      <div className="space-y-6">
+                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                          <div className="mb-5 flex items-center gap-2">
+                            <Palette className="h-4 w-4" />
+                            <div>
+                              <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">Colors</h3>
+                              <p className="mt-1 text-sm text-muted-foreground">{selectedColors.length} selected</p>
+                            </div>
+                          </div>
 
                     {/* Default colors */}
                     <div>
@@ -786,38 +668,238 @@ export default function AddProductWizard({
                         <Plus className="w-3 h-3 mr-1" /> Add Color
                       </Button>
                     </div>
-                  </div>
+                        </div>
 
-                  <div className="flex justify-between gap-3 pt-6 border-t">
-                    <Button type="button" variant="outline" className="rounded-2xl" onClick={() => setStep(1)}>
-                      <ArrowLeft className="w-4 h-4 mr-2" /> Back
-                    </Button>
-                    <Button
-                      type="button"
-                      className="rounded-2xl"
-                      disabled={!canProceedStep2}
-                      onClick={() => setStep(3)}
+                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                          <div className="mb-5 flex items-center gap-2">
+                            <Ruler className="h-4 w-4" />
+                            <div>
+                              <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">Attributes</h3>
+                              <p className="mt-1 text-sm text-muted-foreground">Configure sizes and inventory in one cleaner section.</p>
+                            </div>
+                          </div>
+
+                          <FormField
+                            control={addForm.control}
+                            name="stockStatus"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <RadioGroup value={field.value} onValueChange={field.onChange} className="flex flex-wrap gap-4">
+                                    <div className="flex items-center space-x-2">
+                                      <RadioGroupItem value="in_stock" id="add-in-stock" />
+                                      <Label htmlFor="add-in-stock">In Stock</Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <RadioGroupItem value="out_of_stock" id="add-out-of-stock" />
+                                      <Label htmlFor="add-out-of-stock">Out of Stock</Label>
+                                    </div>
+                                  </RadioGroup>
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+
+                          <div className="mt-5">
+                            <Label className="text-xs font-bold uppercase tracking-wider">Available Sizes</Label>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {availableSizes.map((size) => {
+                                const isSelected = selectedSizes.includes(size);
+                                return (
+                                  <button
+                                    key={size}
+                                    type="button"
+                                    onClick={() => toggleSize(size)}
+                                    className={cn(
+                                      "rounded-full border px-3 py-1.5 text-xs font-bold uppercase transition-all",
+                                      isSelected
+                                        ? "border-primary bg-primary text-primary-foreground"
+                                        : "border-border bg-background text-muted-foreground hover:border-foreground",
+                                    )}
+                                  >
+                                    {size}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div className="mt-3 flex items-center gap-2">
+                              <Input
+                                value={newSizeInput}
+                                onChange={(e) => setNewSizeInput(e.target.value)}
+                                placeholder="New size (e.g. XXL)"
+                                className="h-8 w-32 text-xs"
+                                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomSize())}
+                              />
+                              <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addCustomSize} disabled={!newSizeInput.trim()}>
+                                <Plus className="mr-1 h-3 w-3" /> Add Size
+                              </Button>
+                            </div>
+                          </div>
+
+                          {addForm.watch("stockStatus") === "in_stock" && selectedSizes.length > 0 ? (
+                            <div className="mt-6 rounded-2xl border border-border/60 bg-gradient-to-br from-muted/40 to-muted/20 p-5">
+                              <div className="mb-4 flex items-center justify-between">
+                                <Label className="text-xs font-bold uppercase tracking-wider">Stock By Size</Label>
+                                <Badge className="rounded-full bg-primary/10 text-primary hover:bg-primary/10">{totalStock} total</Badge>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                                {selectedSizes.map((size: string) => {
+                                  const currentStock = stockBySizeValues[size] ?? undefined;
+                                  return (
+                                    <div key={size} className="space-y-2 rounded-2xl border border-border/50 bg-background/70 p-3">
+                                      <div className="flex items-center justify-between">
+                                        <Label className="text-sm font-bold">{size}</Label>
+                                        {currentStock !== undefined && currentStock > 0 ? (
+                                          <span className="text-[10px] font-bold text-primary">{currentStock}</span>
+                                        ) : null}
+                                      </div>
+                                      <QuantityInput
+                                        min={0}
+                                        step={1}
+                                        value={currentStock}
+                                        onChange={(newValue) => {
+                                          const current = addForm.getValues("stockBySize") || {};
+                                          addForm.setValue(
+                                            "stockBySize",
+                                            {
+                                              ...syncStockBySizeToSizes(current, selectedSizes),
+                                              [size]: newValue,
+                                            },
+                                            { shouldValidate: false, shouldDirty: true },
+                                          );
+                                        }}
+                                        placeholder="—"
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                          <div className="mb-5 flex items-center gap-2">
+                            <Percent className="h-4 w-4" />
+                            <div>
+                              <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">Features & Merchandising</h3>
+                              <p className="mt-1 text-sm text-muted-foreground">Configure discount behavior here instead of mixing it into base pricing.</p>
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-border bg-muted/40 p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-0.5">
+                                <Label className="flex items-center gap-2 text-sm font-bold">
+                                  <Percent className="h-4 w-4" /> Sale Discount
+                                </Label>
+                                <p className="text-[10px] text-muted-foreground">Turn on discount pricing for this product.</p>
+                              </div>
+                              <FormField
+                                control={addForm.control}
+                                name="saleActive"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <AnimatePresence>
+                              {addForm.watch("saleActive") ? (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: "auto" }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="mt-4 border-t border-border pt-4">
+                                    <FormField
+                                      control={addForm.control}
+                                      name="salePercentage"
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <div className="mb-2 flex items-center justify-between">
+                                            <FormLabel className="text-[11px] font-bold uppercase">Discount</FormLabel>
+                                            <span className="text-lg font-bold text-primary">{field.value}% OFF</span>
+                                          </div>
+                                          <FormControl>
+                                            <Input type="range" min="0" max="90" step="5" {...field} />
+                                          </FormControl>
+                                        </FormItem>
+                                      )}
+                                    />
+                                  </div>
+                                </motion.div>
+                              ) : null}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-6">
+                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                          <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">Quick Summary</h3>
+                          <div className="mt-5 grid gap-4 text-sm">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="rounded-2xl bg-[#f3f7f1] p-4 dark:bg-white/[0.03]">
+                                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Colors</p>
+                                <p className="mt-2 font-semibold">{selectedColors.length} selected</p>
+                              </div>
+                              <div className="rounded-2xl bg-[#f3f7f1] p-4 dark:bg-white/[0.03]">
+                                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Sizes</p>
+                                <p className="mt-2 font-semibold">{selectedSizes.join(", ") || "None"}</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="rounded-2xl bg-[#f3f7f1] p-4 dark:bg-white/[0.03]">
+                                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Stock Status</p>
+                                <p className="mt-2 font-semibold">{addForm.watch("stockStatus") === "in_stock" ? "In Stock" : "Out of Stock"}</p>
+                              </div>
+                              <div className="rounded-2xl bg-[#f3f7f1] p-4 dark:bg-white/[0.03]">
+                                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Sale</p>
+                                <p className="mt-2 font-semibold">
+                                  {addForm.watch("saleActive") ? `${addForm.watch("salePercentage")}% OFF` : "No discount"}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="sticky bottom-0 mt-8 border-t border-black/5 bg-[#f7faf4]/95 px-1 py-4 backdrop-blur supports-[backdrop-filter]:bg-[#f7faf4]/85 dark:border-white/10 dark:bg-[#101611]/95 dark:supports-[backdrop-filter]:bg-[#101611]/80 xl:col-span-2">
+                        <div className="flex justify-between gap-3">
+                          <Button type="button" variant="outline" className="rounded-2xl" onClick={() => setStep(1)}>
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                          </Button>
+                          <Button
+                            type="button"
+                            className="rounded-2xl"
+                            disabled={!canProceedStep2}
+                            onClick={() => setStep(3)}
+                          >
+                            Next: Media <ArrowRight className="ml-2 h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {step === 3 && (
+                    <motion.div
+                      key="step3"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]"
                     >
-                      Next: Photos <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* STEP 3: Photos with Cloud/Local upload */}
-              {step === 3 && (
-                <motion.div
-                  key="step3"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
-                >
-                  {/* Main Image */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-bold flex items-center gap-2">
-                      <ImageIcon className="w-4 h-4" /> Main Product Image
-                    </h3>
+                      <div className="space-y-6">
+                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                          <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">
+                            <ImageIcon className="h-4 w-4" /> Main Product Image
+                          </h3>
 
                     {/* Upload mode toggle */}
                     <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border">
@@ -919,13 +1001,12 @@ export default function AddProductWizard({
                         e.target.value = "";
                       }}
                     />
-                  </div>
+                        </div>
 
-                  {/* Gallery Images */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-bold flex items-center gap-2">
-                      <FolderInput className="w-4 h-4" /> Gallery Images
-                    </h3>
+                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                          <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">
+                            <FolderInput className="h-4 w-4" /> Gallery Images
+                          </h3>
 
                     {/* Upload mode toggle for gallery */}
                     <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border">
@@ -1045,46 +1126,56 @@ export default function AddProductWizard({
                             <X className="w-3 h-3" />
                           </button>
                         </div>
-                      ))}
+                        ))}
                     </div>
-                  </div>
+                        </div>
+                      </div>
 
-                  {/* Summary */}
-                  <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider">Summary</h4>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <span className="text-muted-foreground">Name:</span>
-                      <span className="font-medium">{addForm.watch("name") || "—"}</span>
-                      <span className="text-muted-foreground">Price:</span>
-                      <span className="font-medium">{addForm.watch("price") ? formatPrice(addForm.watch("price")) : "—"}</span>
-                      <span className="text-muted-foreground">Category:</span>
-                      <span className="font-medium">{addForm.watch("category") || "—"}</span>
-                      <span className="text-muted-foreground">Sizes:</span>
-                      <span className="font-medium">{selectedSizes.join(", ") || "—"}</span>
-                      <span className="text-muted-foreground">Colors:</span>
-                      <span className="font-medium">{selectedColors.length} selected</span>
-                    </div>
-                  </div>
+                      <div className="space-y-6">
+                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Summary</h4>
+                          <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                            <span className="text-muted-foreground">Name:</span>
+                            <span className="font-medium">{addForm.watch("name") || "—"}</span>
+                            <span className="text-muted-foreground">Price:</span>
+                            <span className="font-medium">{addForm.watch("price") ? formatPrice(addForm.watch("price")) : "—"}</span>
+                            <span className="text-muted-foreground">Category:</span>
+                            <span className="font-medium">{addForm.watch("category") || "—"}</span>
+                            <span className="text-muted-foreground">Sizes:</span>
+                            <span className="font-medium">{selectedSizes.join(", ") || "—"}</span>
+                            <span className="text-muted-foreground">Colors:</span>
+                            <span className="font-medium">{selectedColors.length} selected</span>
+                            <span className="text-muted-foreground">Discount:</span>
+                            <span className="font-medium">
+                              {addForm.watch("saleActive") ? `${addForm.watch("salePercentage")}% OFF` : "None"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
 
-                  <div className="flex justify-between gap-3 pt-6 border-t">
-                    <Button type="button" variant="outline" className="rounded-2xl" onClick={() => setStep(2)}>
-                      <ArrowLeft className="w-4 h-4 mr-2" /> Back
-                    </Button>
-                    <Button
-                      type="submit"
-                      form="add-product-form"
-                      loading={addMutation.isPending}
-                      loadingText="Saving..."
-                      className="rounded-2xl"
-                    >
-                      <Check className="w-4 h-4 mr-2" /> Save Product
-                    </Button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </form>
-        </Form>
+                      <div className="sticky bottom-0 mt-8 border-t border-black/5 bg-[#f7faf4]/95 px-1 py-4 backdrop-blur supports-[backdrop-filter]:bg-[#f7faf4]/85 dark:border-white/10 dark:bg-[#101611]/95 dark:supports-[backdrop-filter]:bg-[#101611]/80 xl:col-span-2">
+                        <div className="flex justify-between gap-3">
+                          <Button type="button" variant="outline" className="rounded-2xl" onClick={() => setStep(2)}>
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                          </Button>
+                          <Button
+                            type="submit"
+                            form="add-product-form"
+                            loading={addMutation.isPending}
+                            loadingText="Saving..."
+                            className="rounded-2xl"
+                          >
+                            <Check className="mr-2 h-4 w-4" /> Save Product
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </form>
+            </Form>
+          </div>
+        </div>
       </div>
     </div>
   );

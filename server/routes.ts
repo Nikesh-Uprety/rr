@@ -552,13 +552,10 @@ export async function registerRoutes(
           ? parseInt(previewTemplateIdRaw, 10)
           : null;
       const applyPageConfigCacheHeaders = () => {
+        res.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
         if (previewTemplateId !== null) {
-          res.set("Cache-Control", "private, no-store, max-age=0");
           res.set("Vary", "Cookie");
-          return;
         }
-
-        res.set("Cache-Control", "public, max-age=30");
       };
 
       if (

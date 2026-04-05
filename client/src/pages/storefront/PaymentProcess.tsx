@@ -13,7 +13,7 @@ import {
   simulateStripePaymentSuccess,
 } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
-import { Upload, CheckCircle2, Loader2, CreditCard, ExternalLink, AlertCircle, X, ZoomIn } from "lucide-react";
+import { Upload, CheckCircle2, Loader2, CreditCard, ExternalLink, AlertCircle, X, ZoomIn, ArrowLeft } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 function useSearchQuery() {
@@ -177,6 +177,10 @@ export default function PaymentProcess() {
     }
   };
 
+  const handleBackToCheckout = () => {
+    setLocation("/checkout");
+  };
+
   if (!orderId) {
     return (
       <div className="container mx-auto px-4 py-32 text-center">
@@ -210,6 +214,13 @@ export default function PaymentProcess() {
   if (method === "stripe") {
     return (
       <div className="container mx-auto px-4 py-32 max-w-xl mt-10">
+        <button
+          onClick={handleBackToCheckout}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Change Payment Method
+        </button>
         <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">
           Pay by Card
         </h1>
@@ -428,10 +439,14 @@ export default function PaymentProcess() {
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-4 border border-green-200 bg-green-50 text-green-800 rounded-none">
               <CheckCircle2 className="w-5 h-5 shrink-0" />
-              <span className="text-sm font-medium">Screenshot uploaded. We will verify your payment shortly.</span>
+              <span className="text-sm font-medium">Screenshot uploaded. Click below to confirm and complete your order.</span>
             </div>
-            <Button asChild className="w-full h-14 bg-black text-white rounded-none uppercase tracking-widest text-xs font-bold">
-              <Link href={`/order-confirmation/${orderId}`}>View Order Summary</Link>
+            <Button
+              onClick={() => setLocation(`/order-confirmation/${orderId}`)}
+              className="w-full h-14 bg-black text-white rounded-none uppercase tracking-widest text-xs font-bold"
+            >
+              <CheckCircle2 className="w-5 h-5 mr-2" />
+              Confirm & Complete Order
             </Button>
           </div>
         ) : (
@@ -455,7 +470,11 @@ export default function PaymentProcess() {
         )}
       </div>
 
-      <div className="mt-12 pt-8 border-t border-gray-100">
+      <div className="mt-12 pt-8 border-t border-gray-100 flex gap-3">
+        <Button variant="outline" className="rounded-none flex-1" onClick={handleBackToCheckout}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Change Payment Method
+        </Button>
         <Button asChild variant="outline" className="rounded-none">
           <Link href="/">Back to Home</Link>
         </Button>

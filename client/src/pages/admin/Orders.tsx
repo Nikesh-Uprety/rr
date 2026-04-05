@@ -314,6 +314,7 @@ export default function AdminOrders() {
       </div>
 
       <OrdersTrendChart
+        orders={orders}
         trendData={trendData}
         timeRange={timeRange as "1d" | "3d" | "7d" | "30d" | "all"}
       />

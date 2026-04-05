@@ -67,6 +67,9 @@ import {
   verify2FASchema 
 } from "./authHandlers";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
+import { getUsdToNprRate, convertNprToUsdCents } from "./lib/exchangeRate";
+import { stripe, createCheckoutSession, constructWebhookEvent } from "./lib/stripe";
+import type Stripe from "stripe";
 import { cartService } from "./services/cartService";
 import {
   uploadToCloudinary,
@@ -2018,9 +2021,6 @@ export async function registerRoutes(
         return res.status(400).json({ success: false, error: "Order is not a Stripe payment" });
       }
 
-      const { getUsdToNprRate, convertNprToUsdCents } = await import("./lib/exchangeRate");
-      const { createCheckoutSession } = await import("./lib/stripe");
-
       const rate = await getUsdToNprRate();
       const totalNpr = Number(order.total);
       const amountCents = convertNprToUsdCents(totalNpr, rate);
@@ -2057,10 +2057,9 @@ export async function registerRoutes(
   app.post("/api/payments/webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
     const sig = req.headers["stripe-signature"] as string;
 
-    let event: import("stripe").Stripe.Event;
+    let event: Stripe.Event;
 
     try {
-      const { constructWebhookEvent } = await import("./lib/stripe");
       event = constructWebhookEvent(req.body, sig);
     } catch (err) {
       console.error("Webhook signature verification failed:", err);
@@ -2068,11 +2067,9 @@ export async function registerRoutes(
     }
 
     try {
-      const { convertNprToUsdCents, getUsdToNprRate } = await import("./lib/exchangeRate");
-
       switch (event.type) {
         case "checkout.session.completed": {
-          const session = event.data.object as import("stripe").Stripe.Checkout.Session;
+          const session = event.data.object as Stripe.Checkout.Session;
           const orderId = session.metadata?.orderId;
 
           if (!orderId) {
@@ -2103,7 +2100,7 @@ export async function registerRoutes(
         }
 
         case "checkout.session.expired": {
-          const session = event.data.object as import("stripe").Stripe.Checkout.Session;
+          const session = event.data.object as Stripe.Checkout.Session;
           const orderId = session.metadata?.orderId;
           if (orderId) {
             await storage.updateOrderStripePaymentStatus(orderId, "failed");
@@ -2113,7 +2110,7 @@ export async function registerRoutes(
         }
 
         case "payment_intent.payment_failed": {
-          const paymentIntent = event.data.object as import("stripe").Stripe.PaymentIntent;
+          const paymentIntent = event.data.object as Stripe.PaymentIntent;
           const orderId = paymentIntent.metadata?.orderId;
           if (orderId) {
             await storage.updateOrderStripePaymentStatus(orderId, "failed");

@@ -1482,7 +1482,7 @@ export async function registerRoutes(
           ),
         )
         .orderBy(desc(products.updatedAt))
-        .limit(16);
+        .limit(4);
       res.set("Cache-Control", "public, max-age=300");
       return res.json({ success: true, data: featured });
     } catch (err) {

@@ -237,7 +237,7 @@ export default function Home() {
   const featuredProductsSource = isCanvasPreview ? previewProducts.slice(0, 2) : featuredProducts;
   const newArrivalsSource = isCanvasPreview ? previewProducts : newArrivals;
   const normalizedNewArrivals = useMemo(() => {
-    return newArrivalsSource.slice(0, 16);
+    return newArrivalsSource.slice(0, 4);
   }, [newArrivalsSource]);
 
   const { data: pageConfig, isLoading: pageConfigLoading } = useQuery({

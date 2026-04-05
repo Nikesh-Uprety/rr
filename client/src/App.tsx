@@ -233,9 +233,9 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
   }, [pageConfig?.fontPreset, previewFontPreset]);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col transition-colors duration-200 ease-in-out">
+    <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-      <main className="flex-1 flex flex-col transition-colors duration-200 ease-in-out">
+      <main className="flex-1 flex flex-col">
         {children}
       </main>
       <CartSidebar />

@@ -144,18 +144,6 @@ export default function OrderSuccess() {
         `}
       </style>
 
-      {/* Floating icon — outside and above the hero box */}
-      <div className="relative z-30 -mt-10 mb-4 flex justify-center">
-        <div className="order-confirm-icon-float relative flex h-28 w-28 items-center justify-center rounded-full border-4 border-white dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-[0_0_40px_rgba(0,0,0,0.3),0_8px_32px_rgba(0,0,0,0.15)] md:h-36 md:w-36 overflow-hidden">
-          <span className="order-confirm-icon-glow absolute inset-0 rounded-full bg-black/15 blur-xl" />
-          <img
-            src="/images/order-success-icon.webp"
-            alt="Order confirmed"
-            className="relative z-10 h-full w-full object-cover rounded-full"
-          />
-        </div>
-      </div>
-
       {/* Success hero — screen only */}
       <div className="no-print relative mb-10 overflow-visible rounded-2xl border border-border/60 bg-gradient-to-br from-emerald-500/5 via-background to-blue-500/5 dark:from-emerald-500/5 dark:via-background dark:to-blue-500/5 px-6 pb-8 pt-10 md:px-10 md:pb-10 md:pt-14">
         <div className="relative flex flex-col items-center text-center">
@@ -181,8 +169,7 @@ export default function OrderSuccess() {
 
       {/* What happens next — screen only */}
       <div className="no-print mb-10">
-        <h2 className="text-[10px] font-bold uppercase tracking-[0.35em] text-muted-foreground mb-6 flex items-center gap-2">
-          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+        <h2 className="text-lg md:text-xl font-black uppercase tracking-tight text-black dark:text-white mb-6">
           What happens next
         </h2>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

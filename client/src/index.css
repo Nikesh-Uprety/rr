@@ -40,7 +40,7 @@
 
 /* LIGHT MODE */
 :root {
-  --admin-font-family: 'Iosevka Charon Mono', monospace;
+  --admin-font-family: 'Inter', sans-serif;
   --admin-font-size: 15px;
   --admin-font-letter-spacing: 0.01em;
   --bg: #f3eee6;
@@ -128,7 +128,7 @@
 }
 
 :root[data-admin-font="geist-mono"] {
-  --admin-font-family: 'Geist Mono', monospace;
+  --admin-font-family: 'Inter', sans-serif;
 }
 
 :root[data-admin-font="roboto-slab"] {
@@ -136,7 +136,7 @@
 }
 
 :root[data-admin-font="iosevka"] {
-  --admin-font-family: 'Iosevka Charon Mono', monospace;
+  --admin-font-family: 'Inter', sans-serif;
 }
 
 :root[data-admin-font="inter"] {
@@ -155,12 +155,20 @@
   --admin-font-family: 'Avenir Next', 'Avenir', 'Montserrat', sans-serif;
 }
 
-:root[data-admin-font-scale="comfortable"] {
+:root[data-admin-font-scale="normal"] {
+  --admin-font-size: 13px;
+}
+
+:root[data-admin-font-scale="medium"] {
   --admin-font-size: 14px;
 }
 
 :root[data-admin-font-scale="large"] {
   --admin-font-size: 15.5px;
+}
+
+:root[data-admin-font-scale="very-large"] {
+  --admin-font-size: 17px;
 }
 
 /* DARK MODE */

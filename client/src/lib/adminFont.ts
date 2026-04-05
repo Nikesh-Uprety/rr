@@ -1,12 +1,10 @@
 export type AdminFontMode =
-  | "geist-mono"
-  | "iosevka"
   | "roboto-slab"
   | "inter"
   | "space-grotesk"
   | "ibm-plex-sans"
   | "avenir-like";
-export type AdminFontScale = "comfortable" | "large";
+export type AdminFontScale = "normal" | "medium" | "large" | "very-large";
 
 export const ADMIN_FONT_MODE_KEY = "admin-font-mode";
 export const ADMIN_FONT_SCALE_KEY = "admin-font-scale";
@@ -22,16 +20,6 @@ export const ADMIN_FONT_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
-  {
-    mode: "geist-mono",
-    label: "Geist Mono",
-    description: "Crisp modern monospace with cleaner spacing for admin UI.",
-  },
-  {
-    mode: "iosevka",
-    label: "Iosevka Charon Mono",
-    description: "Technical, dense, high-contrast admin reading.",
-  },
   {
     mode: "roboto-slab",
     label: "Roboto Slab",
@@ -60,7 +48,7 @@ export const ADMIN_FONT_OPTIONS: Array<{
 ];
 
 export const DEFAULT_ADMIN_FONT_SETTINGS: AdminFontSettings = {
-  mode: "iosevka",
+  mode: "inter",
   scale: "large",
 };
 
@@ -76,7 +64,9 @@ export function readAdminFontSettings(): AdminFontSettings {
     mode: ADMIN_FONT_OPTIONS.some((option) => option.mode === storedMode)
       ? (storedMode as AdminFontMode)
       : DEFAULT_ADMIN_FONT_SETTINGS.mode,
-    scale: storedScale === "comfortable" ? "comfortable" : DEFAULT_ADMIN_FONT_SETTINGS.scale,
+    scale: (["normal", "medium", "large", "very-large"] as const).includes(storedScale as any)
+      ? (storedScale as AdminFontScale)
+      : DEFAULT_ADMIN_FONT_SETTINGS.scale,
   };
 }
 

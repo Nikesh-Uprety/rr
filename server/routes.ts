@@ -7,7 +7,7 @@ import path from "path";
 import sharp from "sharp";
 import multer from "multer";
 import { z } from "zod";
-import { canAccessAdminPage, canAccessAdminPanel, requiresTwoFactorChallenge } from "@shared/auth-policy";
+import { canAccessAdminPage, canAccessAdminPanel, getAdminAllowedPages, requiresTwoFactorChallenge } from "@shared/auth-policy";
 import { MAISON_NOCTURNE_DEFAULT_HERO_SLIDES } from "@shared/canvasDefaults";
 import { storage } from "./storage";
 import { logger } from "./logger";
@@ -42,8 +42,11 @@ import {
     productVariants,
     products,
     promoCodes,
+    securityLogs,
     siteAssets,
     siteSettings,
+    users,
+    adminProfileSettings,
 } from "../shared/schema";
 import { db } from "./db";
 import {
@@ -199,6 +202,60 @@ async function getSiteSettingsCompat(): Promise<SiteSettingsCompatRow[]> {
     })
     .from(siteSettings)
     .limit(1);
+}
+
+let adminProfileSettingsReady = false;
+
+const DEFAULT_NOTIFICATION_PREFS = {
+  newOrders: true,
+  lowStock: true,
+  customerReviews: true,
+  dailySummary: true,
+  paymentFailures: true,
+  marketingReports: false,
+} as const;
+
+async function ensureAdminProfileSettingsTable() {
+  if (adminProfileSettingsReady) return;
+  await db.execute(sql`
+    create table if not exists admin_profile_settings (
+      user_id varchar primary key references users(id) on delete cascade,
+      first_name text,
+      last_name text,
+      language text not null default 'en',
+      timezone text not null default 'Asia/Kathmandu',
+      department text,
+      compact_sidebar boolean not null default false,
+      show_npr_currency boolean not null default true,
+      order_alert_sound boolean not null default true,
+      login_alerts boolean not null default true,
+      notification_prefs jsonb not null default '{}'::jsonb,
+      updated_at timestamptz not null default now()
+    )
+  `);
+  adminProfileSettingsReady = true;
+}
+
+function parseName(displayName: string | null | undefined, email: string) {
+  const fallback = (email.split("@")[0] || "").trim();
+  const source = (displayName || fallback || "").trim();
+  if (!source) return { firstName: "", lastName: "" };
+  const parts = source.split(/\s+/).filter(Boolean);
+  const firstName = parts[0] || "";
+  const lastName = parts.length > 1 ? parts.slice(1).join(" ") : "";
+  return { firstName, lastName };
+}
+
+function buildDisplayName(firstName: string, lastName: string, existing?: string | null) {
+  const merged = `${firstName} ${lastName}`.trim();
+  return merged || existing || "";
+}
+
+function mergeNotificationPrefs(raw: Record<string, unknown> | null | undefined) {
+  return {
+    ...DEFAULT_NOTIFICATION_PREFS,
+    ...(raw || {}),
+  };
 }
 
 function normalizeCanvasTemplate<T extends { slug?: string | null; name?: string | null; description?: string | null }>(
@@ -551,6 +608,8 @@ export async function registerRoutes(
   app.use("/api/admin/customers", requireAdminPageAccess("customers"));
   app.use("/api/admin/users", requireAdminPageAccess("store-users"));
   app.use("/api/admin/store-users", requireAdminPageAccess("store-users"));
+  app.use("/api/admin/profile", requireAdminPageAccess("profile"));
+  app.use("/api/admin/change-password", requireAdminPageAccess("profile"));
   app.use("/api/admin/notifications", requireAdminPageAccess("notifications"));
   app.use("/api/admin/messages", requireAdminPageAccess("messages"));
   app.use("/api/admin/marketing", requireAdminPageAccess("marketing"));
@@ -4453,11 +4512,478 @@ export async function registerRoutes(
     },
   );
 
+  const adminProfilePatchSchema = z
+    .object({
+      firstName: z.string().trim().min(1).max(60).optional(),
+      lastName: z.string().trim().max(60).optional(),
+      email: z.string().trim().email().optional(),
+      phone: z.string().trim().max(40).optional(),
+      language: z.string().trim().min(2).max(60).optional(),
+      timezone: z.string().trim().min(2).max(80).optional(),
+      department: z.string().trim().max(120).optional(),
+      preferences: z
+        .object({
+          compactSidebar: z.boolean().optional(),
+          showNPRCurrency: z.boolean().optional(),
+          orderAlertSound: z.boolean().optional(),
+          loginAlerts: z.boolean().optional(),
+        })
+        .optional(),
+      notifications: z
+        .object({
+          newOrders: z.boolean().optional(),
+          lowStock: z.boolean().optional(),
+          customerReviews: z.boolean().optional(),
+          dailySummary: z.boolean().optional(),
+          paymentFailures: z.boolean().optional(),
+          marketingReports: z.boolean().optional(),
+        })
+        .optional(),
+    })
+    .refine(
+      (v) =>
+        v.firstName !== undefined ||
+        v.lastName !== undefined ||
+        v.email !== undefined ||
+        v.phone !== undefined ||
+        v.language !== undefined ||
+        v.timezone !== undefined ||
+        v.department !== undefined ||
+        v.preferences !== undefined ||
+        v.notifications !== undefined,
+      { message: "No update fields provided" },
+    );
+
+  app.get("/api/admin/profile/overview", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const actor = req.user as Express.User | undefined;
+      if (!actor || !canAccessAdminPanel(actor.role)) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+
+      await ensureAdminProfileSettingsTable();
+
+      const currentUser = await storage.getUserById(actor.id);
+      if (!currentUser) {
+        return res.status(404).json({ success: false, error: "User not found" });
+      }
+
+      await db
+        .insert(adminProfileSettings)
+        .values({ userId: actor.id })
+        .onConflictDoNothing({ target: adminProfileSettings.userId });
+
+      const [settings] = await db
+        .select()
+        .from(adminProfileSettings)
+        .where(eq(adminProfileSettings.userId, actor.id))
+        .limit(1);
+
+      const { firstName: fallbackFirst, lastName: fallbackLast } = parseName(
+        currentUser.displayName,
+        currentUser.username,
+      );
+      const firstName = settings?.firstName?.trim() || fallbackFirst;
+      const lastName = settings?.lastName?.trim() || fallbackLast;
+      const notificationPrefs = mergeNotificationPrefs(
+        (settings?.notificationPrefs as Record<string, unknown> | null | undefined) ?? undefined,
+      );
+
+      const [ordersStats] = await db
+        .select({
+          ordersManaged: sql<number>`count(*)::int`,
+          revenueProcessed: sql<string>`coalesce(sum(${orders.total}), '0')`,
+        })
+        .from(orders);
+
+      const [productsStats] = await db
+        .select({
+          productsListed: sql<number>`count(*)::int`,
+        })
+        .from(products)
+        .where(eq(products.isActive, true));
+
+      const [actionsStats] = await db
+        .select({
+          adminActions30d: sql<number>`count(*)::int`,
+        })
+        .from(securityLogs)
+        .where(
+          and(
+            eq(securityLogs.userId, actor.id),
+            gte(securityLogs.createdAt, sql`now() - interval '30 days'`),
+          ),
+        );
+
+      const recentActivity = await db
+        .select({
+          id: securityLogs.id,
+          method: securityLogs.method,
+          url: securityLogs.url,
+          status: securityLogs.status,
+          createdAt: securityLogs.createdAt,
+        })
+        .from(securityLogs)
+        .where(eq(securityLogs.userId, actor.id))
+        .orderBy(desc(securityLogs.createdAt))
+        .limit(10);
+
+      const sessionsResult = await db.execute(sql`
+        select
+          sid,
+          expire,
+          coalesce(sess->>'ip', '') as ip,
+          coalesce(sess->>'userAgent', '') as user_agent,
+          coalesce(sess->>'createdAt', '') as created_at,
+          coalesce(sess->>'lastAccessedAt', '') as last_accessed_at
+        from session
+        where (sess->'passport'->>'user') = ${actor.id}
+        order by expire desc
+      `);
+
+      const sessionData = sessionsResult.rows.map((row: any) => ({
+        sid: String(row.sid),
+        isCurrent: String(row.sid) === req.sessionID,
+        expiresAt: row.expire ? new Date(row.expire as string).toISOString() : null,
+        createdAt: row.created_at ? String(row.created_at) : null,
+        lastAccessedAt: row.last_accessed_at ? String(row.last_accessed_at) : null,
+        ip: row.ip ? String(row.ip) : null,
+        userAgent: row.user_agent ? String(row.user_agent) : null,
+      }));
+
+      return res.json({
+        success: true,
+        data: {
+          profile: {
+            firstName,
+            lastName,
+            email: currentUser.username,
+            phone: currentUser.phoneNumber || "",
+            language: settings?.language || "en",
+            timezone: settings?.timezone || "Asia/Kathmandu",
+            department: settings?.department || "",
+            role: currentUser.role,
+            adminSince: currentUser.createdAt,
+            twoFactorEnabled: !!currentUser.twoFactorEnabled,
+            loginAlerts: settings?.loginAlerts ?? true,
+            avatarUrl: currentUser.profileImageUrl || null,
+          },
+          preferences: {
+            compactSidebar: settings?.compactSidebar ?? false,
+            showNPRCurrency: settings?.showNprCurrency ?? true,
+            orderAlertSound: settings?.orderAlertSound ?? true,
+          },
+          notifications: notificationPrefs,
+          stats: {
+            ordersManaged: Number(ordersStats?.ordersManaged ?? 0),
+            revenueProcessed: String(ordersStats?.revenueProcessed ?? "0"),
+            productsListed: Number(productsStats?.productsListed ?? 0),
+            adminActions30d: Number(actionsStats?.adminActions30d ?? 0),
+          },
+          accessScope: getAdminAllowedPages(currentUser.role),
+          permissions: getAdminAllowedPages(currentUser.role),
+          recentActivity: recentActivity.map((entry) => ({
+            id: entry.id,
+            action: `${entry.method} ${entry.url}`,
+            target: entry.url,
+            status: entry.status,
+            timestamp: entry.createdAt,
+          })),
+          sessions: sessionData,
+        },
+      });
+    } catch (err) {
+      console.error("Error in GET /api/admin/profile/overview", err);
+      return res.status(500).json({ success: false, error: "Failed to load profile overview" });
+    }
+  });
+
+  app.patch(
+    "/api/admin/profile",
+    requireAuth,
+    validateRequest(adminProfilePatchSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const actor = req.user as Express.User | undefined;
+        if (!actor || !canAccessAdminPanel(actor.role)) {
+          return res.status(403).json({ success: false, error: "Forbidden" });
+        }
+
+        await ensureAdminProfileSettingsTable();
+
+        const currentUser = await storage.getUserById(actor.id);
+        if (!currentUser) {
+          return res.status(404).json({ success: false, error: "User not found" });
+        }
+
+        await db
+          .insert(adminProfileSettings)
+          .values({ userId: actor.id })
+          .onConflictDoNothing({ target: adminProfileSettings.userId });
+
+        const [existingSettings] = await db
+          .select()
+          .from(adminProfileSettings)
+          .where(eq(adminProfileSettings.userId, actor.id))
+          .limit(1);
+
+        const payload = req.body as z.infer<typeof adminProfilePatchSchema>;
+        const currentName = parseName(currentUser.displayName, currentUser.username);
+        const nextFirstName = payload.firstName ?? existingSettings?.firstName ?? currentName.firstName;
+        const nextLastName = payload.lastName ?? existingSettings?.lastName ?? currentName.lastName;
+
+        if (payload.email && payload.email !== currentUser.username) {
+          const existingEmailUser = await storage.getUserByEmail(payload.email);
+          if (existingEmailUser && existingEmailUser.id !== actor.id) {
+            return res.status(400).json({ success: false, error: "Email already in use" });
+          }
+        }
+
+        const userUpdateData: Record<string, unknown> = {};
+        if (payload.phone !== undefined) userUpdateData.phoneNumber = payload.phone;
+        if (payload.email !== undefined) userUpdateData.username = payload.email;
+        if (payload.firstName !== undefined || payload.lastName !== undefined) {
+          userUpdateData.displayName = buildDisplayName(nextFirstName, nextLastName, currentUser.displayName);
+        }
+
+        if (Object.keys(userUpdateData).length > 0) {
+          await db.update(users).set(userUpdateData).where(eq(users.id, actor.id));
+        }
+
+        const notificationPrefs = mergeNotificationPrefs({
+          ...(existingSettings?.notificationPrefs as Record<string, unknown> | undefined),
+          ...(payload.notifications || {}),
+        });
+
+        const nextSettings = {
+          firstName: nextFirstName,
+          lastName: nextLastName,
+          language: payload.language ?? existingSettings?.language ?? "en",
+          timezone: payload.timezone ?? existingSettings?.timezone ?? "Asia/Kathmandu",
+          department: payload.department ?? existingSettings?.department ?? null,
+          compactSidebar:
+            payload.preferences?.compactSidebar ?? existingSettings?.compactSidebar ?? false,
+          showNprCurrency:
+            payload.preferences?.showNPRCurrency ?? existingSettings?.showNprCurrency ?? true,
+          orderAlertSound:
+            payload.preferences?.orderAlertSound ?? existingSettings?.orderAlertSound ?? true,
+          loginAlerts: payload.preferences?.loginAlerts ?? existingSettings?.loginAlerts ?? true,
+          notificationPrefs,
+          updatedAt: sql`now()`,
+        };
+
+        await db
+          .update(adminProfileSettings)
+          .set(nextSettings)
+          .where(eq(adminProfileSettings.userId, actor.id));
+
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/profile", err);
+        return res.status(500).json({ success: false, error: "Failed to update profile" });
+      }
+    },
+  );
+
+  const profileSecuritySchema = z.object({
+    twoFactorEnabled: z.boolean().optional(),
+    loginAlerts: z.boolean().optional(),
+  });
+
+  app.put(
+    "/api/admin/profile/security",
+    requireAuth,
+    validateRequest(profileSecuritySchema),
+    async (req: Request, res: Response) => {
+      try {
+        const actor = req.user as Express.User | undefined;
+        if (!actor || !canAccessAdminPanel(actor.role)) {
+          return res.status(403).json({ success: false, error: "Forbidden" });
+        }
+        await ensureAdminProfileSettingsTable();
+
+        if (typeof req.body.twoFactorEnabled === "boolean") {
+          await storage.updateUserTwoFactor(actor.id, req.body.twoFactorEnabled);
+        }
+        if (typeof req.body.loginAlerts === "boolean") {
+          await db
+            .insert(adminProfileSettings)
+            .values({
+              userId: actor.id,
+              loginAlerts: req.body.loginAlerts,
+            })
+            .onConflictDoUpdate({
+              target: adminProfileSettings.userId,
+              set: { loginAlerts: req.body.loginAlerts, updatedAt: sql`now()` },
+            });
+        }
+
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PUT /api/admin/profile/security", err);
+        return res.status(500).json({ success: false, error: "Failed to update security settings" });
+      }
+    },
+  );
+
+  app.get("/api/admin/sessions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const actor = req.user as Express.User | undefined;
+      if (!actor || !canAccessAdminPanel(actor.role)) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+
+      const sessionsResult = await db.execute(sql`
+        select
+          sid,
+          expire,
+          coalesce(sess->>'ip', '') as ip,
+          coalesce(sess->>'userAgent', '') as user_agent,
+          coalesce(sess->>'createdAt', '') as created_at,
+          coalesce(sess->>'lastAccessedAt', '') as last_accessed_at
+        from session
+        where (sess->'passport'->>'user') = ${actor.id}
+        order by expire desc
+      `);
+
+      const data = sessionsResult.rows.map((row: any) => ({
+        sid: String(row.sid),
+        isCurrent: String(row.sid) === req.sessionID,
+        expiresAt: row.expire ? new Date(row.expire as string).toISOString() : null,
+        createdAt: row.created_at ? String(row.created_at) : null,
+        lastAccessedAt: row.last_accessed_at ? String(row.last_accessed_at) : null,
+        ip: row.ip ? String(row.ip) : null,
+        userAgent: row.user_agent ? String(row.user_agent) : null,
+      }));
+
+      return res.json({ success: true, data });
+    } catch (err) {
+      console.error("Error in GET /api/admin/sessions", err);
+      return res.status(500).json({ success: false, error: "Failed to load active sessions" });
+    }
+  });
+
+  app.delete("/api/admin/sessions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const actor = req.user as Express.User | undefined;
+      if (!actor || !canAccessAdminPanel(actor.role)) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+      await db.execute(sql`
+        delete from session
+        where (sess->'passport'->>'user') = ${actor.id}
+          and sid <> ${req.sessionID}
+      `);
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in DELETE /api/admin/sessions", err);
+      return res.status(500).json({ success: false, error: "Failed to revoke sessions" });
+    }
+  });
+
+  app.post("/api/admin/profile/reset-2fa", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const actor = req.user as Express.User | undefined;
+      if (!actor || !canAccessAdminPanel(actor.role)) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+      await storage.updateUserTwoFactor(actor.id, false);
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in POST /api/admin/profile/reset-2fa", err);
+      return res.status(500).json({ success: false, error: "Failed to reset 2FA" });
+    }
+  });
+
+  app.post("/api/admin/profile/signout-all", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const actor = req.user as Express.User | undefined;
+      if (!actor || !canAccessAdminPanel(actor.role)) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+      await db.execute(sql`
+        delete from session
+        where (sess->'passport'->>'user') = ${actor.id}
+      `);
+      req.logout((err) => {
+        if (err) return res.status(500).json({ success: false, error: "Failed to sign out" });
+        req.session.destroy(() => {
+          return res.json({ success: true });
+        });
+      });
+    } catch (err) {
+      console.error("Error in POST /api/admin/profile/signout-all", err);
+      return res.status(500).json({ success: false, error: "Failed to sign out all sessions" });
+    }
+  });
+
+  app.post("/api/admin/profile/deactivate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const actor = req.user as Express.User | undefined;
+      if (!actor || !canAccessAdminPanel(actor.role)) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+      await db.update(users).set({ status: "inactive" }).where(eq(users.id, actor.id));
+      await db.execute(sql`
+        delete from session
+        where (sess->'passport'->>'user') = ${actor.id}
+      `);
+      req.logout((err) => {
+        if (err) return res.status(500).json({ success: false, error: "Failed to sign out" });
+        req.session.destroy(() => {
+          return res.json({ success: true });
+        });
+      });
+    } catch (err) {
+      console.error("Error in POST /api/admin/profile/deactivate", err);
+      return res.status(500).json({ success: false, error: "Failed to deactivate account" });
+    }
+  });
+
   const updatePasswordSchema = z.object({
     current: z.string().min(1),
     newPassword: z.string().min(8),
     confirm: z.string().min(8),
   });
+
+  const changePasswordHandler = async (req: Request, res: Response) => {
+    const actor = req.user as Express.User | undefined;
+    if (!actor || !canAccessAdminPanel(actor.role)) {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+
+    const { current, newPassword, confirm } = req.body;
+    if (newPassword !== confirm) {
+      return res.status(400).json({
+        success: false,
+        error: "New passwords do not match",
+      });
+    }
+
+    const fullUser = await storage.getUserById(actor.id);
+    if (!fullUser) {
+      return res
+        .status(404)
+        .json({ success: false, error: "User not found" });
+    }
+
+    const bcrypt = await import("bcryptjs");
+    const matches = await bcrypt.default.compare(
+      current,
+      fullUser.password,
+    );
+    if (!matches) {
+      return res.status(400).json({
+        success: false,
+        error: "Current password is incorrect",
+      });
+    }
+
+    const hashed = await bcrypt.default.hash(newPassword, 10);
+    await storage.updateUserPassword(fullUser.id, hashed);
+
+    return res.json({ success: true });
+  };
 
   app.put(
     "/api/admin/profile/password",
@@ -4472,36 +4998,16 @@ export async function registerRoutes(
         });
       }
 
-      const user = req.user as Express.User | undefined;
-      if (!user) {
-        return res
-          .status(401)
-          .json({ success: false, error: "Not authenticated" });
-      }
+      return changePasswordHandler(req, res);
+    },
+  );
 
-      const fullUser = await storage.getUserById(user.id);
-      if (!fullUser) {
-        return res
-          .status(404)
-          .json({ success: false, error: "User not found" });
-      }
-
-      const bcrypt = await import("bcryptjs");
-      const matches = await bcrypt.default.compare(
-        current,
-        fullUser.password,
-      );
-      if (!matches) {
-        return res.status(400).json({
-          success: false,
-          error: "Current password is incorrect",
-        });
-      }
-
-      const hashed = await bcrypt.default.hash(newPassword, 10);
-      await storage.updateUserPassword(fullUser.id, hashed);
-
-      return res.json({ success: true });
+  app.post(
+    "/api/admin/change-password",
+    requireAuth,
+    validateRequest(updatePasswordSchema),
+    async (req: Request, res: Response) => {
+      return changePasswordHandler(req, res);
     },
   );
 

@@ -33,6 +33,35 @@ export const users = pgTable("users", {
   status: text("status").notNull().default("active"),
 });
 
+export const adminProfileSettings = pgTable("admin_profile_settings", {
+  userId: varchar("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  language: text("language").notNull().default("en"),
+  timezone: text("timezone").notNull().default("Asia/Kathmandu"),
+  department: text("department"),
+  compactSidebar: boolean("compact_sidebar").notNull().default(false),
+  showNprCurrency: boolean("show_npr_currency").notNull().default(true),
+  orderAlertSound: boolean("order_alert_sound").notNull().default(true),
+  loginAlerts: boolean("login_alerts").notNull().default(true),
+  notificationPrefs: jsonb("notification_prefs")
+    .$type<{
+      newOrders?: boolean;
+      lowStock?: boolean;
+      customerReviews?: boolean;
+      dailySummary?: boolean;
+      paymentFailures?: boolean;
+      marketingReports?: boolean;
+    }>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const sessions = pgTable("session", {
   sid: varchar("sid").primaryKey(),
   sess: jsonb("sess").notNull(),

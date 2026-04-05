@@ -50,6 +50,7 @@ const loadAdminMarketingPage = () => import("@/pages/admin/Marketing");
 const loadAdminLogsPage = () => import("@/pages/admin/Logs");
 const loadAdminProfilePage = () => import("@/pages/admin/Profile");
 const loadAdminNotificationsPage = () => import("@/pages/admin/Notifications");
+const loadAdminDevFontPage = () => import("@/pages/admin/DevFont");
 const loadAdminLandingPageManagerPage = () => import("@/pages/admin/LandingPageManager");
 const loadAdminImagesPage = () => import("@/pages/admin/Images");
 const loadAdminStorefrontImagesPage = () => import("@/pages/admin/StorefrontImagePicker");
@@ -82,6 +83,7 @@ const AdminMarketing = lazy(loadAdminMarketingPage);
 const AdminLogs = lazy(loadAdminLogsPage);
 const AdminProfilePage = lazy(loadAdminProfilePage);
 const AdminNotifications = lazy(loadAdminNotificationsPage);
+const AdminDevFontPage = lazy(loadAdminDevFontPage);
 const AdminLandingPageManager = lazy(loadAdminLandingPageManagerPage);
 const AdminImages = lazy(loadAdminImagesPage);
 const AdminStorefrontImages = lazy(loadAdminStorefrontImagesPage);
@@ -146,6 +148,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/admin/images") return loadAdminImagesPage();
   if (cleanPath === "/admin/storefront-images") return loadAdminStorefrontImagesPage();
   if (cleanPath === "/admin/notifications") return loadAdminNotificationsPage();
+  if (cleanPath === "/admin/dev-font") return loadAdminDevFontPage();
   if (cleanPath === "/admin/landing-page") return loadAdminLandingPageManagerPage();
   if (cleanPath === "/admin/login") return loadLoginPage();
   if (cleanPath.startsWith("/bill/")) return loadViewBillPage();
@@ -398,6 +401,13 @@ function AppRoutes() {
         <ProtectedRoute requiredAdminPage="notifications">
           <AdminLayout>
             <AdminNotifications />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/dev-font">
+        <ProtectedRoute requiredAdminPage="profile">
+          <AdminLayout>
+            <AdminDevFontPage />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

@@ -44,7 +44,7 @@ export default defineConfig({
     },
     {
       name: "admin",
-      testMatch: /admin\.spec\.ts/,
+      testMatch: /admin(\-profile)?\.spec\.ts/,
       dependencies: ["setup"],
       use: {
         storageState: authFile,

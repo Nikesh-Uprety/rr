@@ -1,16 +1,24 @@
 import { Link, useLocation } from "wouter";
 import {
+  Bell,
   LogOut,
+  Moon,
+  Settings,
+  Sun,
+  Type,
+  User,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useAdminWebSocket } from "@/hooks/useAdminWebSocket";
-import { ThemeToggle } from "@/components/admin/ThemeToggle";
+import { useThemeStore } from "@/store/theme";
 import { NotificationBadge } from "@/components/admin/NotificationBadge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ADMIN_FONT_EVENT,
@@ -42,6 +50,7 @@ const ADMIN_SIDEBAR_DEFAULT_WIDTH = 288;
 const ADMIN_SIDEBAR_COLLAPSED_MIN_WIDTH = 56;
 const ADMIN_SIDEBAR_COLLAPSED_DEFAULT_WIDTH = 72;
 const ADMIN_SIDEBAR_VISUAL_EXPAND_THRESHOLD = 170;
+const AdminDateCalendar = lazy(() => import("@/components/admin/AdminDateCalendar"));
 
 export default function AdminLayout({
   children,
@@ -56,6 +65,7 @@ export default function AdminLayout({
   const [location] = useLocation();
   const pathname = location.split("?")[0];
   const { user } = useCurrentUser();
+  const { theme, setTheme } = useThemeStore();
   const { toast } = useToast();
   const { getUnreadCountByType, markTypeRead } = useNotifications();
   useAdminWebSocket();
@@ -64,6 +74,9 @@ export default function AdminLayout({
     return localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_KEY) === "true";
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+  const [calendarDate, setCalendarDate] = useState<Date>(new Date());
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     if (typeof window === "undefined") return ADMIN_SIDEBAR_DEFAULT_WIDTH;
     const saved = Number(localStorage.getItem(ADMIN_SIDEBAR_EXPANDED_WIDTH_KEY));
@@ -81,6 +94,10 @@ export default function AdminLayout({
     startWidth: number;
     collapsed: boolean;
   } | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const closeMenuTimeoutRef = useRef<number | null>(null);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [profileMenuPinned, setProfileMenuPinned] = useState(false);
 
   useEffect(() => {
     setMobileMenuOpen(false); // Close mobile menu on route change
@@ -165,6 +182,53 @@ export default function AdminLayout({
     return () => window.removeEventListener("resize", syncWidthsToViewport);
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000 * 15);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!profileMenuRef.current) return;
+      if (!profileMenuRef.current.contains(event.target as Node)) {
+        setProfileMenuPinned(false);
+        setProfileMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setProfileMenuPinned(false);
+      setProfileMenuOpen(false);
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, []);
+
+  const clearProfileMenuCloseTimer = () => {
+    if (closeMenuTimeoutRef.current !== null) {
+      window.clearTimeout(closeMenuTimeoutRef.current);
+      closeMenuTimeoutRef.current = null;
+    }
+  };
+
+  const openProfileMenu = () => {
+    clearProfileMenuCloseTimer();
+    setProfileMenuOpen(true);
+  };
+
+  const scheduleProfileMenuClose = () => {
+    if (profileMenuPinned) return;
+    clearProfileMenuCloseTimer();
+    closeMenuTimeoutRef.current = window.setTimeout(() => {
+      setProfileMenuOpen(false);
+    }, 140);
+  };
+
   const handleLogout = async () => {
     try {
       const res = await apiRequest("POST", "/api/auth/logout");
@@ -194,10 +258,15 @@ export default function AdminLayout({
     ? "[&_[data-slot=sidebar-inner]]:bg-[#101A22] [&_[data-slot=sidebar-inner]]:text-white [&_[data-slot=sidebar-container]]:border-[#2D3A45] dark:[&_[data-slot=sidebar-inner]]:bg-[#F8FAFC] dark:[&_[data-slot=sidebar-inner]]:text-[#111827] dark:[&_[data-slot=sidebar-container]]:border-[#D7DEE7]"
     : "";
   const adminNav = getAdminNavigation(user?.role);
-  const accountNavItem = adminNav.find((item) => item.page === "profile");
   const sidebarNavItems = adminNav.filter((item) => item.page !== "profile");
+  const storeUsersNavItem = adminNav.find((item) => item.page === "store-users");
+  const notificationsNavItem = adminNav.find((item) => item.page === "notifications");
+  const devFontHref = "/admin/dev-font";
   const canvasHref = "/admin/canvas";
   const isCanvasRoute = pathname === canvasHref;
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  };
 
   return (
     <SidebarProvider
@@ -267,7 +336,7 @@ export default function AdminLayout({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-bold tracking-[0.08em] transition-colors",
+                    "flex items-center gap-3 px-4 py-2.5 rounded-xl text-[12px] font-black tracking-[0.06em] transition-colors",
                     isActive 
                       ? "bg-primary text-primary-foreground" 
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -329,7 +398,7 @@ export default function AdminLayout({
                       isActive={isActive}
                       tooltip={isVisuallyExpanded ? undefined : item.label}
                       className={cn(
-                        "h-10 rounded-lg text-[10px] font-semibold tracking-[0.08em] transition-all duration-300 ease-out",
+                        "h-10 rounded-lg text-[11px] font-black tracking-[0.06em] transition-all duration-300 ease-out",
                         isVisuallyExpanded ? "px-3" : "justify-center px-2",
                         !isVisuallyExpanded &&
                           "text-white hover:bg-white/12 hover:text-white dark:text-[#111827] dark:hover:bg-[#E6EBF2] dark:hover:text-[#111827]",
@@ -410,11 +479,15 @@ export default function AdminLayout({
       </Sidebar>
 
       <SidebarInset className="admin-panel-shell flex min-w-0 h-screen overflow-hidden bg-muted dark:bg-neutral-900">
-        <header className="sticky top-0 z-20 h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5">
+        <header className="relative sticky top-0 z-20 h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <SidebarTrigger className="text-foreground hover:bg-background/50 hidden lg:flex shrink-0" />
             {!isVisuallyExpanded ? (
-              <Link href="/" className="hidden lg:flex items-center shrink-0" title="Open Home Page">
+              <Link
+                href="/"
+                className="hidden lg:flex items-center shrink-0 absolute left-1/2 -translate-x-1/2"
+                title="Open Home Page"
+              >
                 <img
                   src="/images/logo.webp"
                   alt="RARE.NP"
@@ -435,57 +508,201 @@ export default function AdminLayout({
             <div className="hidden sm:flex items-center min-w-0">
               <AdminBreadcrumbs />
             </div>
+          </div>
+          <div className="flex items-center gap-2.5">
             <Link
               href={canvasHref}
               className={cn(
-                "hidden lg:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] transition-colors",
+                "hidden lg:inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] transition-all duration-150",
+                "shadow-[0_3px_0_0_rgba(127,29,29,0.45),0_12px_24px_-14px_rgba(127,29,29,0.75)] hover:-translate-y-[1px] hover:shadow-[0_4px_0_0_rgba(127,29,29,0.5),0_16px_30px_-16px_rgba(127,29,29,0.8)] active:translate-y-[1px] active:shadow-[0_1px_0_0_rgba(127,29,29,0.5)]",
                 isCanvasRoute
-                  ? "border-red-300/90 bg-red-50 text-red-800 dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-200"
-                  : "border-border bg-card/50 text-muted-foreground hover:border-red-300/70 hover:text-foreground dark:hover:border-red-400/40",
+                  ? "border-red-400/70 bg-gradient-to-b from-red-500 to-red-700 text-white dark:border-red-500/70 dark:from-red-500 dark:to-red-700"
+                  : "border-red-700/60 bg-gradient-to-b from-red-500 to-red-700 text-white hover:border-red-500/80 dark:border-red-600/70 dark:from-red-500 dark:to-red-700",
               )}
             >
-              <span>Canvas</span>
-              <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:bg-red-500">
+              <span className="text-[11px] font-extrabold tracking-[0.16em] [text-shadow:0_1px_0_rgb(127,29,29),0_2px_0_rgb(127,29,29),0_3px_10px_rgba(0,0,0,0.45)]">
+                Canvas
+              </span>
+              <span className="rounded-full border border-white/35 bg-black/20 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white shadow-inner">
                 BETA
               </span>
             </Link>
-          </div>
-          <div className="flex items-center gap-2.5">
-            {accountNavItem ? (
-              <Link
-                href={accountNavItem.href}
-                className={cn(
-                  "hidden md:flex items-center gap-2 rounded-xl border border-border/70 bg-card/40 px-3 py-1.5 text-[10px] font-semibold tracking-[0.12em] uppercase text-foreground transition-colors hover:bg-muted",
-                  pathname === accountNavItem.href && "bg-muted text-foreground",
-                )}
-              >
-                <accountNavItem.icon className="h-4 w-4" />
-                {accountNavItem.label}
-              </Link>
-            ) : null}
-            <ThemeToggle />
-            <NotificationBadge />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 rounded-xl text-[10px] font-semibold tracking-[0.12em] text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/20"
-              onClick={handleLogout}
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
-            </Button>
-            <Link
-              href="/admin/profile"
-              className="w-8 h-8 rounded-full border border-border/70 bg-card/40 overflow-hidden"
-            >
-              {user?.profileImageUrl ? (
-                <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-background/60 flex items-center justify-center text-foreground text-[10px] font-bold">
-                  {initials}
+            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="hidden xl:flex flex-col items-start leading-tight rounded-lg border border-border/70 bg-card/40 px-3 py-1.5 text-left transition-colors hover:bg-muted"
+                  aria-label="Open calendar"
+                >
+                  <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Local Time</span>
+                  <span className="text-[11px] font-semibold text-foreground">
+                    {now.toLocaleString("en-NP", {
+                      weekday: "short",
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <div className="border-b px-3 py-2 text-xs">
+                  <p className="font-medium">Today</p>
+                  <p className="text-muted-foreground">
+                    {now.toLocaleDateString("en-NP", {
+                      weekday: "long",
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </p>
                 </div>
-              )}
-            </Link>
+                {isCalendarOpen ? (
+                  <Suspense
+                    fallback={
+                      <div className="h-[320px] w-[320px] animate-pulse bg-muted/40" />
+                    }
+                  >
+                    <AdminDateCalendar value={calendarDate} onChange={setCalendarDate} />
+                  </Suspense>
+                ) : null}
+              </PopoverContent>
+            </Popover>
+            <NotificationBadge />
+            <div
+              ref={profileMenuRef}
+              className="relative"
+              onMouseEnter={openProfileMenu}
+              onMouseLeave={scheduleProfileMenuClose}
+            >
+              <button
+                type="button"
+                className="w-8 h-8 rounded-full border border-border/70 bg-card/40 overflow-hidden"
+                onClick={() => {
+                  const nextPinned = !profileMenuPinned;
+                  setProfileMenuPinned(nextPinned);
+                  setProfileMenuOpen(nextPinned);
+                }}
+                aria-label="Open account menu"
+                aria-expanded={profileMenuOpen}
+              >
+                {user?.profileImageUrl ? (
+                  <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-background/60 flex items-center justify-center text-foreground text-[10px] font-bold">
+                    {initials}
+                  </div>
+                )}
+              </button>
+
+              {profileMenuOpen ? (
+                <div
+                  className="absolute right-0 top-[calc(100%+6px)] z-50 w-56 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
+                  onMouseEnter={openProfileMenu}
+                  onMouseLeave={scheduleProfileMenuClose}
+                >
+                  <div className="absolute -top-2 left-0 right-0 h-2" />
+                  <div className="px-2.5 py-2 border-b border-border/70">
+                    <p className="text-xs font-semibold truncate">{displayName}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{user?.email || ""}</p>
+                  </div>
+                  <div className="py-1">
+                    <Link
+                      href="/admin/profile"
+                      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-muted"
+                      onClick={() => {
+                        setProfileMenuPinned(false);
+                        setProfileMenuOpen(false);
+                      }}
+                    >
+                      <User className="h-4 w-4" />
+                      Account
+                    </Link>
+                    {storeUsersNavItem ? (
+                      <Link
+                        href={storeUsersNavItem.href}
+                        className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-muted"
+                        onClick={() => {
+                          setProfileMenuPinned(false);
+                          setProfileMenuOpen(false);
+                        }}
+                      >
+                        <Users className="h-4 w-4" />
+                        User Settings
+                      </Link>
+                    ) : null}
+                    {notificationsNavItem ? (
+                      <Link
+                        href={notificationsNavItem.href}
+                        className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-muted"
+                        onClick={() => {
+                          setProfileMenuPinned(false);
+                          setProfileMenuOpen(false);
+                        }}
+                      >
+                        <Bell className="h-4 w-4" />
+                        Notifications
+                      </Link>
+                    ) : null}
+                    <Link
+                      href="/admin/profile"
+                      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-muted"
+                      onClick={() => {
+                        setProfileMenuPinned(false);
+                        setProfileMenuOpen(false);
+                      }}
+                    >
+                      <Settings className="h-4 w-4" />
+                      System Settings
+                    </Link>
+                    <Link
+                      href={devFontHref}
+                      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-muted"
+                      onClick={() => {
+                        setProfileMenuPinned(false);
+                        setProfileMenuOpen(false);
+                      }}
+                    >
+                      <Type className="h-4 w-4" />
+                      Dev Font
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={toggleTheme}
+                      className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-muted"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Settings className="h-4 w-4" />
+                        Theme
+                      </span>
+                      <div className="rounded-md p-1.5 text-muted-foreground">
+                        {theme === "dark" ? (
+                          <Moon className="h-4 w-4" />
+                        ) : (
+                          <Sun className="h-4 w-4" />
+                        )}
+                      </div>
+                    </button>
+                  </div>
+                  <div className="border-t border-border/70 pt-1">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-red-600 transition-all duration-150 hover:bg-red-50 active:scale-[0.98] dark:hover:bg-red-950/30"
+                      onClick={() => {
+                        setProfileMenuPinned(false);
+                        setProfileMenuOpen(false);
+                        handleLogout();
+                      }}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 

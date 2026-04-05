@@ -1,38 +1,12 @@
-import { useRef, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { UploadProgress } from "@/components/ui/upload-progress";
-import { Switch } from "@/components/ui/switch";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
-import {
-  ADMIN_FONT_OPTIONS,
-  DEFAULT_ADMIN_FONT_SETTINGS,
-  type AdminFontMode,
-  type AdminFontScale,
-  persistAdminFontSettings,
-  readAdminFontSettings,
-} from "@/lib/adminFont";
-import { canAccessAdminPage } from "@shared/auth-policy";
-import {
-  Camera,
-  Trash2,
-  AlertTriangle,
-  ImagePlus,
-  PencilLine,
-  Expand,
-  Clock3,
-  Check,
-  Type,
-  Plus,
-  Pencil,
-} from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -42,23 +16,102 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
+import {
+  Camera,
+  Expand,
+  ImagePlus,
+  Shield,
+  Bell,
+  Activity,
+  Laptop,
+  AlertTriangle,
+  Check,
+  Trash2,
+  Save,
+  RotateCcw,
+  ShieldAlert,
+} from "lucide-react";
 
-interface AdminUser {
-  id: string;
+interface ProfileOverview {
+  profile: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    language: string;
+    timezone: string;
+    department: string;
+    role: string;
+    adminSince: string | null;
+    twoFactorEnabled: boolean;
+    loginAlerts: boolean;
+    avatarUrl: string | null;
+  };
+  preferences: {
+    compactSidebar: boolean;
+    showNPRCurrency: boolean;
+    orderAlertSound: boolean;
+  };
+  notifications: {
+    newOrders: boolean;
+    lowStock: boolean;
+    customerReviews: boolean;
+    dailySummary: boolean;
+    paymentFailures: boolean;
+    marketingReports: boolean;
+  };
+  stats: {
+    ordersManaged: number;
+    revenueProcessed: string;
+    productsListed: number;
+    adminActions30d: number;
+  };
+  accessScope: string[];
+  permissions: string[];
+  recentActivity: Array<{
+    id: string;
+    action: string;
+    target: string;
+    status: number;
+    timestamp: string;
+  }>;
+  sessions: Array<{
+    sid: string;
+    isCurrent: boolean;
+    expiresAt: string | null;
+    createdAt: string | null;
+    lastAccessedAt: string | null;
+    ip: string | null;
+    userAgent: string | null;
+  }>;
+}
+
+interface FormState {
+  firstName: string;
+  lastName: string;
   email: string;
-  name?: string | null;
-  phoneNumber?: string | null;
-  role: string;
-  twoFactorEnabled: boolean;
-  lastLoginAt?: string | null;
-  status: string;
-  profileImageUrl?: string | null;
+  phone: string;
+  language: string;
+  timezone: string;
+  department: string;
+  compactSidebar: boolean;
+  showNPRCurrency: boolean;
+  orderAlertSound: boolean;
+  loginAlerts: boolean;
+  notifications: ProfileOverview["notifications"];
 }
 
 interface AvatarHistoryItem {
@@ -68,1366 +121,1007 @@ interface AvatarHistoryItem {
   size: number;
 }
 
-const ROOT_SUPERADMIN_EMAIL = "superadmin@rare.np";
-const PROFILE_USER_ROLE_OPTIONS = [
-  { value: "superadmin", label: "Super Admin" },
-  { value: "owner", label: "Owner" },
-  { value: "admin", label: "Admin" },
-  { value: "manager", label: "Manager" },
-  { value: "csr", label: "CSR" },
-  { value: "staff", label: "Staff" },
+const notificationLabels: Array<{ key: keyof ProfileOverview["notifications"]; label: string; description: string }> = [
+  { key: "newOrders", label: "New orders", description: "Get notified when a customer places an order." },
+  { key: "lowStock", label: "Low stock", description: "Alerts when products run below stock threshold." },
+  { key: "customerReviews", label: "Customer reviews", description: "Updates when new product reviews are submitted." },
+  { key: "dailySummary", label: "Daily summary", description: "Daily operations digest in one snapshot." },
+  { key: "paymentFailures", label: "Payment failures", description: "Immediate alerts for payment verification issues." },
+  { key: "marketingReports", label: "Marketing reports", description: "Scheduled campaign and marketing performance reports." },
 ];
+
+function formatNpr(value: string) {
+  const amount = Number(value || "0");
+  return new Intl.NumberFormat("en-NP", {
+    style: "currency",
+    currency: "NPR",
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function getInitials(firstName: string, lastName: string, fallbackEmail: string) {
+  const candidate = `${firstName} ${lastName}`.trim();
+  if (candidate) {
+    return candidate
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() || "")
+      .join("");
+  }
+  return fallbackEmail.slice(0, 2).toUpperCase();
+}
+
+function buildFormState(overview: ProfileOverview): FormState {
+  return {
+    firstName: overview.profile.firstName || "",
+    lastName: overview.profile.lastName || "",
+    email: overview.profile.email || "",
+    phone: overview.profile.phone || "",
+    language: overview.profile.language || "en",
+    timezone: overview.profile.timezone || "Asia/Kathmandu",
+    department: overview.profile.department || "",
+    compactSidebar: overview.preferences.compactSidebar,
+    showNPRCurrency: overview.preferences.showNPRCurrency,
+    orderAlertSound: overview.preferences.orderAlertSound,
+    loginAlerts: overview.profile.loginAlerts,
+    notifications: {
+      ...overview.notifications,
+    },
+  };
+}
 
 export default function AdminProfilePage() {
   const { user } = useCurrentUser();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const [activeTab, setActiveTab] = useState("account");
-  const [displayName, setDisplayName] = useState(user?.name ?? "");
-  const [passwordCurrent, setPasswordCurrent] = useState("");
-  const [passwordNew, setPasswordNew] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [adminFontMode, setAdminFontMode] = useState<AdminFontMode>(() => readAdminFontSettings().mode);
-  const [adminFontScale, setAdminFontScale] = useState<AdminFontScale>(() => readAdminFontSettings().scale);
-
-  const [profileImage, setProfileImage] = useState<string | null>(user?.profileImageUrl || null);
-  const [avatarUploadProvider, setAvatarUploadProvider] = useState<"local" | "cloudinary">("cloudinary");
-  const [avatarUploadProgress, setAvatarUploadProgress] = useState(0);
-  const [showAvatarUploadProgress, setShowAvatarUploadProgress] = useState(false);
-  const [editEmail, setEditEmail] = useState(user?.email ?? "");
-  const [isEmailVerifyOpen, setIsEmailVerifyOpen] = useState(false);
-  const [emailTempToken, setEmailTempToken] = useState("");
-  const [emailVerifyCode, setEmailVerifyCode] = useState("");
-  const [emailOtpCode, setEmailOtpCode] = useState<string | null>(null);
-
-  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isUserFormOpen, setIsUserFormOpen] = useState(false);
-  const [editingAdminUser, setEditingAdminUser] = useState<AdminUser | null>(null);
-  const [userForm, setUserForm] = useState({
-    name: "",
-    email: "",
-    phoneNumber: "",
-    profileImageUrl: "",
-    role: "staff",
-    password: "",
-  });
-  const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
-  const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(user?.profileImageUrl || null);
-  const [avatarToDelete, setAvatarToDelete] = useState<AvatarHistoryItem | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [passwordError, setPasswordError] = useState<string>("");
+  const [confirmAction, setConfirmAction] = useState<null | "reset-2fa" | "signout-all" | "deactivate">(null);
+  const [confirmRevokeSessions, setConfirmRevokeSessions] = useState(false);
+  const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
+  const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(null);
+  const [avatarToDelete, setAvatarToDelete] = useState<AvatarHistoryItem | null>(null);
 
-  const canManageAdminUsers = canAccessAdminPage(user?.role, "store-users");
-  const isRootSuperAdmin =
-    user?.role?.toLowerCase() === "superadmin" &&
-    user?.email?.toLowerCase() === ROOT_SUPERADMIN_EMAIL;
-
-  const {
-    data: adminUsers = [],
-    isLoading: usersLoading,
-  } = useQuery<AdminUser[]>({
-    queryKey: ["admin", "users"],
+  const overviewQuery = useQuery<{ success: boolean; data: ProfileOverview }>({
+    queryKey: ["admin", "profile", "overview"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/admin/users");
-      const json = (await res.json()) as {
-        success: boolean;
-        data?: AdminUser[];
-      };
-      return json.data ?? [];
+      const res = await apiRequest("GET", "/api/admin/profile/overview");
+      return (await res.json()) as { success: boolean; data: ProfileOverview };
     },
-    enabled: activeTab === "users" && canManageAdminUsers,
+    enabled: !!user,
   });
 
-  const { data: avatarHistory = [], isLoading: avatarHistoryLoading } = useQuery<AvatarHistoryItem[]>({
+  const overview = overviewQuery.data?.data;
+
+  const avatarHistoryQuery = useQuery<AvatarHistoryItem[]>({
     queryKey: ["admin", "profile", "avatar-history"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/admin/profile/avatar-history");
       const json = (await res.json()) as { success: boolean; data?: AvatarHistoryItem[] };
       return json.data ?? [];
     },
-    enabled: activeTab === "account" && !!user,
+    enabled: !!user,
   });
 
-  const passwordMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("PUT", "/api/admin/profile/password", {
-        current: passwordCurrent,
-        newPassword: passwordNew,
-        confirm: passwordConfirm,
-      });
-      return (await res.json()) as { success: boolean; error?: string };
-    },
-    onSuccess: (result) => {
-      if (!result.success) {
-        toast({
-          title: "Password not updated",
-          description: result.error ?? "Please check your inputs.",
-          variant: "destructive",
-        });
-        return;
-      }
-      toast({
-        title: "Password updated",
-        description: "Your password has been changed.",
-      });
-      setPasswordCurrent("");
-      setPasswordNew("");
-      setPasswordConfirm("");
-    },
-    onError: (err: Error) => {
-      toast({
-        title: "Password not updated",
-        description: err.message,
-        variant: "destructive",
-      });
-    },
-  });
+  const [form, setForm] = useState<FormState | null>(null);
+  const [initialForm, setInitialForm] = useState<FormState | null>(null);
 
-  const twoFAMutation = useMutation({
-    mutationFn: async ({
-      id,
-      enabled,
-    }: {
-      id: string;
-      enabled: boolean;
-    }) => {
-      const res = await apiRequest("PUT", `/api/admin/users/${id}/2fa`, {
-        enabled,
-      });
-      return (await res.json()) as { success: boolean; error?: string };
-    },
-    onSuccess: (result) => {
-      if (!result.success) {
-        toast({
-          title: "Could not update 2FA",
-          description: result.error ?? "Please try again.",
-          variant: "destructive",
-        });
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({
-        title: "Two-factor updated",
-      });
-    },
-    onError: (err: Error) => {
-      toast({
-        title: "Could not update 2FA",
-        description: err.message,
-        variant: "destructive",
-      });
-    },
-  });
+  if (overview && !form) {
+    const next = buildFormState(overview);
+    setForm(next);
+    setInitialForm(next);
+  }
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await apiRequest("DELETE", `/api/admin/users/${id}`);
-      return (await res.json()) as { success: boolean; error?: string };
-    },
-    onSuccess: (result) => {
-      if (!result.success) {
-        toast({
-          title: "Could not delete user",
-          description: result.error ?? "Please try again.",
-          variant: "destructive",
-        });
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-      toast({
-        title: "User deleted",
-        description: "The user has been permanently removed.",
-      });
-      setIsDeleteDialogOpen(false);
-      setDeleteUserId(null);
-    },
-    onError: (err: Error) => {
-      toast({
-        title: "Could not delete user",
-        description: err.message,
-        variant: "destructive",
-      });
-    },
-  });
+  useEffect(() => {
+    if (overview?.profile.avatarUrl && !selectedAvatarUrl) {
+      setSelectedAvatarUrl(overview.profile.avatarUrl);
+    }
+  }, [overview?.profile.avatarUrl, selectedAvatarUrl]);
 
-  const resetUserForm = () => {
-    setUserForm({
-      name: "",
-      email: "",
-      phoneNumber: "",
-      profileImageUrl: "",
-      role: isRootSuperAdmin ? "admin" : "staff",
-      password: "",
-    });
-    setEditingAdminUser(null);
+  const isDirty = useMemo(() => {
+    if (!form || !initialForm) return false;
+    return JSON.stringify(form) !== JSON.stringify(initialForm);
+  }, [form, initialForm]);
+
+  const validateProfile = () => {
+    if (!form) return false;
+    const nextErrors: Record<string, string> = {};
+    if (!form.firstName.trim()) nextErrors.firstName = "First name is required";
+    if (!form.email.trim()) nextErrors.email = "Email is required";
+    if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) nextErrors.email = "Please enter a valid email";
+    setFormErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
-  const createAdminUserMutation = useMutation({
+  const saveMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/store-users", {
-        name: userForm.name.trim(),
-        email: userForm.email.trim(),
-        password: userForm.password,
-        role: userForm.role,
-        phoneNumber: userForm.phoneNumber.trim() || undefined,
-        profileImageUrl: userForm.profileImageUrl.trim() || undefined,
-      });
-      return (await res.json()) as { success: boolean; error?: string };
+      if (!form) throw new Error("No form state");
+      const payload = {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        language: form.language.trim(),
+        timezone: form.timezone.trim(),
+        department: form.department.trim(),
+        preferences: {
+          compactSidebar: form.compactSidebar,
+          showNPRCurrency: form.showNPRCurrency,
+          orderAlertSound: form.orderAlertSound,
+          loginAlerts: form.loginAlerts,
+        },
+        notifications: form.notifications,
+      };
+      const res = await apiRequest("PATCH", "/api/admin/profile", payload);
+      return (await res.json()) as { success: boolean };
     },
-    onSuccess: (result) => {
-      if (!result.success) {
-        toast({ title: "Could not add user", description: result.error ?? "Please try again.", variant: "destructive" });
-        return;
-      }
-      toast({ title: "User added" });
-      setIsUserFormOpen(false);
-      resetUserForm();
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Could not add user", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const updateAdminUserMutation = useMutation({
-    mutationFn: async () => {
-      if (!editingAdminUser) throw new Error("No user selected");
-      const res = await apiRequest("PATCH", `/api/admin/store-users/${editingAdminUser.id}`, {
-        name: userForm.name.trim(),
-        role: userForm.role,
-        phone_number: userForm.phoneNumber.trim() || undefined,
-        profile_image_url: userForm.profileImageUrl.trim() || undefined,
-      });
-      return (await res.json()) as { success: boolean; error?: string };
-    },
-    onSuccess: (result) => {
-      if (!result.success) {
-        toast({ title: "Could not update user", description: result.error ?? "Please try again.", variant: "destructive" });
-        return;
-      }
-      toast({ title: "User updated" });
-      setIsUserFormOpen(false);
-      resetUserForm();
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Could not update user", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const profileMutation = useMutation({
-    mutationFn: async (data: { displayName?: string; profileImageUrl?: string }) => {
-      const res = await apiRequest("PUT", "/api/admin/profile/update", data);
-      return (await res.json()) as { success: boolean; error?: string };
-    },
-    onSuccess: (result) => {
-      if (!result.success) {
-        toast({ title: "Profile not updated", description: result.error, variant: "destructive" });
-        return;
-      }
+    onSuccess: () => {
+      if (!form) return;
+      setInitialForm(form);
+      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "overview"] });
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({ title: "Profile updated", description: "Your changes have been saved." });
+      toast({ title: "Profile saved", description: "Your changes are live now." });
     },
-    onError: (err: Error) => {
-      toast({ title: "Profile not updated", description: err.message, variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/change-password", {
+        current: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+        confirm: passwordForm.confirmPassword,
+      });
+      return (await res.json()) as { success: boolean };
+    },
+    onSuccess: () => {
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setPasswordError("");
+      toast({ title: "Password changed", description: "Your password was updated successfully." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Password update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const securityMutation = useMutation({
+    mutationFn: async (payload: { twoFactorEnabled?: boolean; loginAlerts?: boolean }) => {
+      const res = await apiRequest("PUT", "/api/admin/profile/security", payload);
+      return (await res.json()) as { success: boolean };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "overview"] });
+      toast({ title: "Security updated", description: "Security preference saved." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Security update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const revokeSessionsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/admin/sessions");
+      return (await res.json()) as { success: boolean };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "overview"] });
+      toast({ title: "Other sessions revoked", description: "Only this device session remains active." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to revoke sessions", description: error.message, variant: "destructive" });
     },
   });
 
   const avatarMutation = useMutation({
-    mutationFn: async (payload: {
-      imageBase64: string;
-      provider: "local" | "cloudinary";
-      onProgress?: (value: number) => void;
-    }) => {
-      const json = await new Promise<{
-        success: boolean;
-        url?: string;
-        provider?: "local" | "cloudinary";
-        error?: string;
-      }>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/api/admin/profile/upload-avatar", true);
-        xhr.withCredentials = true;
-        xhr.setRequestHeader("Content-Type", "application/json");
-
-        if (xhr.upload && payload.onProgress) {
-          xhr.upload.onprogress = (event) => {
-            if (!event.lengthComputable) return;
-            const percent = Math.round((event.loaded / event.total) * 100);
-            payload.onProgress?.(percent);
-          };
-        }
-
-        xhr.onerror = () => reject(new Error("Upload failed"));
-        xhr.onload = () => {
-          const ok = xhr.status >= 200 && xhr.status < 300;
-          if (!ok) {
-            reject(new Error(xhr.responseText || "Upload failed"));
-            return;
-          }
-          try {
-            resolve(xhr.responseText ? JSON.parse(xhr.responseText) : { success: false });
-          } catch {
-            resolve({ success: false, error: "Upload failed" });
-          }
-        };
-
-        xhr.send(JSON.stringify({ imageBase64: payload.imageBase64, provider: payload.provider }));
+    mutationFn: async (file: File) => {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Unable to read file"));
+        reader.readAsDataURL(file);
       });
-
-      return json;
+      const res = await apiRequest("POST", "/api/admin/profile/upload-avatar", {
+        imageBase64: base64,
+        provider: "local",
+      });
+      return (await res.json()) as { success: boolean; url?: string };
     },
-    onSuccess: (result) => {
-      if (!result.success || !result.url) {
-        toast({ title: "Upload failed", description: result.error, variant: "destructive" });
-        return;
-      }
-      setProfileImage(result.url);
-      setSelectedAvatarUrl(result.url);
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "overview"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "profile", "avatar-history"] });
-      toast({
-        title: "Profile picture updated",
-        description:
-          result.provider === "cloudinary"
-            ? "Uploaded via Cloudinary."
-            : "Uploaded to local storage.",
-      });
-      setAvatarUploadProgress(100);
-      setTimeout(() => setShowAvatarUploadProgress(false), 700);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Avatar updated", description: "Profile photo uploaded successfully." });
     },
-    onError: (err: Error) => {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-      setShowAvatarUploadProgress(false);
-      setAvatarUploadProgress(0);
+    onError: (error: Error) => {
+      toast({ title: "Avatar upload failed", description: error.message, variant: "destructive" });
     },
   });
-
-  const handleAvatarSelect = (file?: File) => {
-    if (!file) return;
-    const reader = new FileReader();
-    setShowAvatarUploadProgress(true);
-    setAvatarUploadProgress(0);
-    reader.onprogress = (event) => {
-      if (!event.lengthComputable) return;
-      const percent = Math.round((event.loaded / event.total) * 25);
-      setAvatarUploadProgress(percent);
-    };
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      avatarMutation.mutate({
-        imageBase64: base64,
-        provider: avatarUploadProvider,
-        onProgress: (value) => {
-          const scaled = 25 + Math.round(value * 0.75);
-          setAvatarUploadProgress(scaled);
-        },
-      });
-    };
-    reader.onerror = () => {
-      toast({ title: "Upload failed", description: "Unable to read the file.", variant: "destructive" });
-      setShowAvatarUploadProgress(false);
-      setAvatarUploadProgress(0);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const applyDevFontSettings = (next: { mode?: AdminFontMode; scale?: AdminFontScale }) => {
-    const settings = {
-      mode: next.mode ?? adminFontMode,
-      scale: next.scale ?? adminFontScale,
-    };
-    setAdminFontMode(settings.mode);
-    setAdminFontScale(settings.scale);
-    persistAdminFontSettings(settings);
-    const selectedFont = ADMIN_FONT_OPTIONS.find((option) => option.mode === settings.mode);
-    toast({
-      title: "Admin font updated",
-      description: `${selectedFont?.label ?? settings.mode} • ${settings.scale === "large" ? "Large" : "Comfortable"} size`,
-    });
-  };
 
   const applyAvatarMutation = useMutation({
     mutationFn: async (profileImageUrl: string) => {
       const res = await apiRequest("PUT", "/api/admin/profile/update", { profileImageUrl });
-      return (await res.json()) as { success: boolean; error?: string };
+      return (await res.json()) as { success: boolean };
     },
-    onSuccess: (result, profileImageUrl) => {
-      if (!result.success) {
-        toast({ title: "Profile not updated", description: result.error, variant: "destructive" });
-        return;
-      }
-      setProfileImage(profileImageUrl);
-      setSelectedAvatarUrl(profileImageUrl);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "overview"] });
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "avatar-history"] });
-      toast({ title: "Profile picture applied" });
+      toast({ title: "Profile image changed", description: "Selected avatar is now active." });
     },
-    onError: (err: Error) => {
-      toast({ title: "Profile not updated", description: err.message, variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Could not apply avatar", description: error.message, variant: "destructive" });
     },
   });
 
   const deleteAvatarMutation = useMutation({
     mutationFn: async (avatarUrl: string) => {
       const res = await apiRequest("DELETE", "/api/admin/profile/avatar", { url: avatarUrl });
-      return (await res.json()) as { success: boolean; error?: string; removedCurrentImage?: boolean };
+      return (await res.json()) as { success: boolean; removedCurrentImage?: boolean };
     },
     onSuccess: (result, avatarUrl) => {
-      if (!result.success) {
-        toast({ title: "Image not removed", description: result.error, variant: "destructive" });
-        return;
-      }
-
-      if (selectedAvatarUrl === avatarUrl) {
-        setSelectedAvatarUrl(result.removedCurrentImage ? null : profileImage);
-      }
-
-      if (result.removedCurrentImage) {
-        setProfileImage(null);
-        setSelectedAvatarUrl(null);
-        queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      }
-
-      setAvatarToDelete(null);
       queryClient.invalidateQueries({ queryKey: ["admin", "profile", "avatar-history"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      if (selectedAvatarUrl === avatarUrl) {
+        setSelectedAvatarUrl(null);
+      }
+      setAvatarToDelete(null);
       toast({
-        title: "Image removed",
+        title: "Avatar deleted",
         description: result.removedCurrentImage
-          ? "The current profile image was removed."
-          : "The uploaded image was deleted.",
+          ? "Current profile image was removed."
+          : "Uploaded avatar removed from library.",
       });
     },
-    onError: (err: Error) => {
-      toast({ title: "Image not removed", description: err.message, variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Could not delete avatar", description: error.message, variant: "destructive" });
     },
   });
 
-  const emailChangeMutation = useMutation({
-    mutationFn: async (newEmail: string) => {
-      const res = await apiRequest("POST", "/api/admin/profile/update-email", { newEmail });
-      return (await res.json()) as { success: boolean; tempToken?: string; code?: string; error?: string };
+  const dangerMutation = useMutation({
+    mutationFn: async (action: "reset-2fa" | "signout-all" | "deactivate") => {
+      const endpoint =
+        action === "reset-2fa"
+          ? "/api/admin/profile/reset-2fa"
+          : action === "signout-all"
+            ? "/api/admin/profile/signout-all"
+            : "/api/admin/profile/deactivate";
+      const res = await apiRequest("POST", endpoint);
+      return (await res.json()) as { success: boolean };
     },
-    onSuccess: (result) => {
-      if (!result.success) {
-        toast({ title: "Email change failed", description: result.error, variant: "destructive" });
+    onSuccess: (_, action) => {
+      if (action === "deactivate" || action === "signout-all") {
+        window.location.href = "/admin/login";
         return;
       }
-      setEmailTempToken(result.tempToken || "");
-      setEmailOtpCode(result.code || null);
-      setIsEmailVerifyOpen(true);
-      toast({ title: "Verification code sent", description: "Check your new email for the code." });
+      queryClient.invalidateQueries({ queryKey: ["admin", "profile", "overview"] });
+      toast({ title: "2FA reset", description: "Two-factor authentication has been reset." });
     },
-    onError: (err: Error) => {
-      toast({ title: "Email change failed", description: err.message, variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Action failed", description: error.message, variant: "destructive" });
     },
   });
 
-  const emailVerifyMutation = useMutation({
-    mutationFn: async (data: { tempToken: string; code: string; newEmail: string }) => {
-      const res = await apiRequest("POST", "/api/admin/profile/verify-email", data);
-      return (await res.json()) as { success: boolean; error?: string };
-    },
-    onSuccess: (result) => {
-      if (!result.success) {
-        toast({ title: "Verification failed", description: result.error, variant: "destructive" });
-        return;
-      }
-      setIsEmailVerifyOpen(false);
-      setEmailVerifyCode("");
-      setEmailOtpCode(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({ title: "Email updated", description: "Your email has been changed successfully." });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Verification failed", description: err.message, variant: "destructive" });
-    },
-  });
+  if (overviewQuery.isLoading || !overview || !form) {
+    return (
+      <div className="space-y-4 animate-in fade-in duration-300">
+        <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">Profile</h1>
+        <Card>
+          <CardContent className="pt-6 text-sm text-muted-foreground">Loading profile...</CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const fullName = `${form.firstName} ${form.lastName}`.trim() || overview.profile.email;
+  const avatarHistory = avatarHistoryQuery.data ?? [];
+
+  const handleSave = () => {
+    if (!validateProfile()) {
+      toast({ title: "Validation failed", description: "Please resolve highlighted fields.", variant: "destructive" });
+      return;
+    }
+    saveMutation.mutate();
+  };
+
+  const handleDiscard = () => {
+    if (!initialForm) return;
+    setForm(initialForm);
+    setFormErrors({});
+  };
+
+  const handlePasswordSubmit = () => {
+    setPasswordError("");
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters.");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("Password confirmation does not match.");
+      return;
+    }
+    changePasswordMutation.mutate();
+  };
+
+  const sectionCardClass =
+    "border-border/70 bg-card/95 shadow-[0_8px_28px_-18px_rgba(15,23,42,0.3)] dark:shadow-[0_12px_34px_-22px_rgba(0,0,0,0.55)]";
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
-            Profile
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage your account and admin settings.
-          </p>
-        </div>
+    <div className="space-y-6 animate-in fade-in duration-300 pb-28">
+      <div className="space-y-1">
+        <h1 className="text-3xl md:text-[2.15rem] font-serif font-medium tracking-[0.01em] text-foreground">
+          Account Profile
+        </h1>
+        <p className="text-sm text-muted-foreground">Manage your admin account settings and access controls.</p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className={cn("grid w-full", canManageAdminUsers ? "grid-cols-2" : "grid-cols-1")}>
-          <TabsTrigger value="account">Account</TabsTrigger>
-          {canManageAdminUsers && <TabsTrigger value="users">All Admin Users</TabsTrigger>}
-        </TabsList>
-
-        <TabsContent value="account" className="mt-4 space-y-6">
-          {/* Basic Profile */}
-          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 flex flex-col lg:flex-row gap-8 items-stretch">
-            <div className="w-full sm:w-[260px] shrink-0">
-              <div className="rounded-[28px] border border-[#E5E5E0] dark:border-border bg-gradient-to-br from-[#F6F3EC] via-white to-[#EEF5F0] dark:from-[#1B241C] dark:via-[#161C17] dark:to-[#202A22] p-4 shadow-sm">
-                <div
-                  className="group relative aspect-[4/5] overflow-hidden rounded-[22px] border border-black/5 dark:border-white/10 bg-[#D9E4DA] dark:bg-[#263328] cursor-pointer"
-                  onClick={() => {
-                    setSelectedAvatarUrl(profileImage);
-                    setIsAvatarPreviewOpen(true);
-                  }}
-                >
-                {profileImage ? (
-                  <img
-                    src={profileImage}
-                    alt="Profile"
-                    className="w-full h-full object-contain bg-white/80 dark:bg-black/10"
-                  />
-                ) : (
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-[#2D4A35] dark:text-[#DCE7DD]">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#2D4A35] text-2xl font-semibold text-white shadow-lg">
-                      {(user?.name || user?.email || "U")
-                        .slice(0, 2)
-                        .toUpperCase()}
-                    </div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em]">
-                      Add profile photo
-                    </p>
-                  </div>
-                )}
-                <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/70 via-black/20 to-transparent px-4 py-4 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                  <div className="rounded-full bg-white/15 p-2 text-white backdrop-blur">
-                    <Camera className="h-4 w-4" />
-                  </div>
-                  <div className="rounded-full bg-white/15 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur">
-                    Change photo
-                  </div>
-                </div>
-              </div>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <div className="inline-flex items-center gap-1 rounded-full bg-muted p-1">
-                    {(["cloudinary", "local"] as const).map((providerOption) => (
-                      <button
-                        key={providerOption}
-                        type="button"
-                        onClick={() => setAvatarUploadProvider(providerOption)}
-                        className={cn(
-                          "px-3 py-1.5 text-xs font-medium rounded-full transition-colors",
-                          avatarUploadProvider === providerOption
-                            ? "bg-background text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        {providerOption === "cloudinary" ? "Cloudinary" : "Local"}
-                      </button>
-                    ))}
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="gap-2 rounded-full"
-                    loading={avatarMutation.isPending}
-                    loadingText="Uploading..."
-                    onClick={() => avatarInputRef.current?.click()}
-                  >
-                    <ImagePlus className="h-4 w-4" />
-                    {profileImage ? "Replace Image" : "Upload Image"}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="gap-2 rounded-full"
-                    onClick={() => {
-                      setSelectedAvatarUrl(profileImage);
-                      setIsAvatarPreviewOpen(true);
-                    }}
-                  >
-                    <Expand className="h-4 w-4" />
-                    View Photo
-                  </Button>
-                </div>
-                {showAvatarUploadProgress && (
-                  <div className="mt-3">
-                    <UploadProgress value={avatarUploadProgress} label="Upload progress" className="max-w-none" />
-                  </div>
-                )}
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                  Upload target: {avatarUploadProvider === "cloudinary" ? "Cloudinary CDN" : "Local server storage"}.
-                </p>
-                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                  Portrait images now keep their original orientation and display without forced horizontal cropping.
-                </p>
-              </div>
-              <input
-                id="avatar-upload"
-                ref={avatarInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  handleAvatarSelect(e.target.files?.[0]);
-                  e.currentTarget.value = "";
-                }}
-              />
-              <Badge variant="outline" className="text-[11px]">
-                {user?.role?.toUpperCase() || "STAFF"}
-              </Badge>
-            </div>
-            <div className="flex-1 w-full space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  Display name
-                </label>
-                <Input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Your name"
-                  className="h-10"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  Email
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    value={editEmail}
-                    onChange={(e) => setEditEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    className="h-10 flex-1"
-                  />
-                  {editEmail !== (user?.email ?? "") && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-10 text-xs"
-                      loading={emailChangeMutation.isPending}
-                      loadingText="Sending..."
-                      onClick={() => emailChangeMutation.mutate(editEmail)}
-                    >
-                      Verify & Update
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <Button
+      <Card className={cn("overflow-hidden", sectionCardClass)}>
+        <div className="relative h-36 border-b bg-[linear-gradient(135deg,rgba(20,20,24,0.08),rgba(201,168,76,0.16),rgba(85,136,221,0.12),transparent)] dark:bg-[linear-gradient(135deg,rgba(20,20,24,0.95),rgba(201,168,76,0.2),rgba(85,136,221,0.2),rgba(0,0,0,0.85))]">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(201,168,76,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(201,168,76,0.08)_1px,transparent_1px)] bg-[size:36px_36px] opacity-30 dark:opacity-25" />
+        </div>
+        <CardContent className="pt-0">
+          <div className="-mt-16 flex flex-col gap-7">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                <button
                   type="button"
-                  loading={profileMutation.isPending}
-                  loadingText="Saving..."
-                  disabled={displayName === (user?.name ?? "")}
-                  className="h-10"
-                  onClick={() => profileMutation.mutate({ displayName })}
+                  onClick={() => {
+                    setSelectedAvatarUrl(overview.profile.avatarUrl || selectedAvatarUrl || null);
+                    setIsAvatarDialogOpen(true);
+                  }}
+                  data-testid="profile-avatar-trigger"
+                  className="group relative h-32 w-32 overflow-hidden rounded-full border-[4px] border-background bg-muted shadow-[0_10px_26px_-14px_rgba(0,0,0,0.45)] transition-all hover:scale-[1.01]"
                 >
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Security & Password */}
-          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
-            <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-              Account Security
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  Current Password
-                </label>
-                <Input
-                  type="password"
-                  value={passwordCurrent}
-                  onChange={(e) => setPasswordCurrent(e.target.value)}
-                  className="h-9"
+                  {overview.profile.avatarUrl ? (
+                    <img
+                      src={overview.profile.avatarUrl}
+                      alt="Profile"
+                      data-testid="profile-avatar-image"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-2xl font-semibold text-muted-foreground">
+                      {getInitials(form.firstName, form.lastName, form.email)}
+                    </span>
+                  )}
+                  <span className="absolute inset-0 hidden items-center justify-center bg-black/45 text-white group-hover:flex">
+                    <Expand className="h-4 w-4" />
+                  </span>
+                  <span className="absolute bottom-1 right-1 inline-flex h-4 w-4 rounded-full border-2 border-background bg-emerald-500" />
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  data-testid="profile-avatar-input"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) avatarMutation.mutate(file);
+                    event.currentTarget.value = "";
+                  }}
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  New Password
-                </label>
-                <Input
-                  type="password"
-                  value={passwordNew}
-                  onChange={(e) => setPasswordNew(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  Confirm Password
-                </label>
-                <Input
-                  type="password"
-                  value={passwordConfirm}
-                  onChange={(e) => setPasswordConfirm(e.target.value)}
-                  className="h-9"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                className="h-10"
-                loading={passwordMutation.isPending}
-                loadingText="Updating..."
-                disabled={!passwordNew}
-                onClick={() => passwordMutation.mutate()}
-              >
-                Update Password
-              </Button>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <h2 className="flex items-center gap-2 text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  <Type className="h-4 w-4" />
-                  Dev Font Switch
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Dev-only font controls for verifying admin readability across the panel and login page.
-                </p>
-              </div>
-              <Badge variant="outline" className="text-[10px] uppercase tracking-[0.2em]">
-                Dev Only
-              </Badge>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  Font Family
-                </label>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                  {ADMIN_FONT_OPTIONS.map((option) => (
-                    <Button
-                      key={option.mode}
-                      type="button"
-                      variant={adminFontMode === option.mode ? "default" : "outline"}
-                      className="h-auto min-h-11 justify-start px-4 py-3 text-left"
-                      onClick={() => applyDevFontSettings({ mode: option.mode })}
-                    >
-                      <span className="block">
-                        <span className="block text-sm font-semibold">{option.label}</span>
-                        <span className="mt-1 block text-[11px] opacity-80">{option.description}</span>
-                      </span>
-                    </Button>
-                  ))}
+                <div className="space-y-2 pb-1">
+                  <h2 className="text-[1.8rem] font-serif leading-none tracking-[0.02em]">{fullName}</h2>
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <Badge variant="outline" className="uppercase text-[10px] tracking-[0.14em] rounded-full px-2.5">
+                      {overview.profile.role}
+                    </Badge>
+                    <Badge variant="secondary" className="gap-1 text-[10px] uppercase tracking-[0.12em] rounded-full px-2.5">
+                      <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      Active
+                    </Badge>
+                    <span className="font-mono text-[11px] text-muted-foreground">{form.email}</span>
+                  </div>
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  Font Size
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant={adminFontScale === "comfortable" ? "default" : "outline"}
-                    className="h-10"
-                    onClick={() => applyDevFontSettings({ scale: "comfortable" })}
-                  >
-                    Comfortable
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={adminFontScale === "large" ? "default" : "outline"}
-                    className="h-10"
-                    onClick={() => applyDevFontSettings({ scale: "large" })}
-                  >
-                    Large
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-10"
-                    onClick={() => {
-                      setAdminFontMode(DEFAULT_ADMIN_FONT_SETTINGS.mode);
-                      setAdminFontScale(DEFAULT_ADMIN_FONT_SETTINGS.scale);
-                      persistAdminFontSettings(DEFAULT_ADMIN_FONT_SETTINGS);
-                      toast({
-                        title: "Admin font reset",
-                        description: "Default admin font settings restored.",
-                      });
-                    }}
-                  >
-                    Reset
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 2FA Section */}
-          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="space-y-1">
-                <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  Two-Factor Authentication
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Secure your account by requiring an email verification code at login.
-                </p>
-              </div>
-              <Switch
-                checked={!!user?.twoFactorEnabled}
-                onCheckedChange={(enabled) => {
-                  if (!user) return;
-                  twoFAMutation.mutate({ id: user.id, enabled });
-                }}
-              />
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* Admin Management */}
-        {canManageAdminUsers && (
-          <TabsContent value="users" className="mt-4">
-            <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                    All Admin Users
-                  </h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Manage account details, roles, and access from one place.
-                  </p>
-                </div>
-                {isRootSuperAdmin && (
-                  <Button
-                    size="sm"
-                    className="h-9"
-                    onClick={() => {
-                      resetUserForm();
-                      setIsUserFormOpen(true);
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add User
-                  </Button>
-                )}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="border-b border-[#E5E5E0] dark:border-border text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                    <tr>
-                      <th className="py-2 pr-4 text-left font-semibold">User</th>
-                      <th className="py-2 pr-4 text-left font-semibold">Phone</th>
-                      <th className="py-2 pr-4 text-left font-semibold">Role</th>
-                      <th className="py-2 pr-4 text-left font-semibold">2FA</th>
-                      <th className="py-2 pr-4 text-left font-semibold">Last Login</th>
-                      <th className="py-2 pl-2 text-right font-semibold">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usersLoading ? (
-                      Array.from({ length: 3 }).map((_, i) => (
-                        <tr key={i}>
-                          <td colSpan={6} className="py-8 text-center animate-pulse text-muted-foreground">
-                            Loading team data...
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      adminUsers.map((u) => (
-                        <tr key={u.id} className="border-b border-[#F0F0EB] dark:border-border/50">
-                          <td className="py-3 pr-4">
-                            <div className="flex items-center gap-3">
-                              <div className="h-9 w-9 overflow-hidden rounded-full border border-border bg-muted/20">
-                                {u.profileImageUrl ? (
-                                  <img
-                                    src={u.profileImageUrl}
-                                    alt={u.name || u.email}
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-muted-foreground">
-                                    {(u.name || u.email).slice(0, 2).toUpperCase()}
-                                  </div>
-                                )}
-                              </div>
-                              <div>
-                                <div className="font-medium">{u.name || u.email}</div>
-                                <div className="text-[10px] text-muted-foreground">{u.email}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {u.phoneNumber || "—"}
-                          </td>
-                          <td className="py-3 pr-4">
-                            <Badge variant="outline" className="text-[10px]">
-                              {u.role.toUpperCase()}
-                            </Badge>
-                          </td>
-                          <td className="py-3 pr-4">
-                            <Switch
-                              checked={u.twoFactorEnabled}
-                              disabled={!isRootSuperAdmin || u.id === user?.id}
-                              onCheckedChange={(enabled) => {
-                                twoFAMutation.mutate({ id: u.id, enabled });
-                              }}
-                            />
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "—"}
-                          </td>
-                          <td className="py-3 pl-2 text-right">
-                            {isRootSuperAdmin && (
-                              <div className="inline-flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8"
-                                  onClick={() => {
-                                    setEditingAdminUser(u);
-                                    setUserForm({
-                                      name: u.name || "",
-                                      email: u.email,
-                                      phoneNumber: u.phoneNumber || "",
-                                      profileImageUrl: u.profileImageUrl || "",
-                                      role: u.role,
-                                      password: "",
-                                    });
-                                    setIsUserFormOpen(true);
-                                  }}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                {u.id !== user?.id && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                    onClick={() => {
-                                      setDeleteUserId(u.id);
-                                      setIsDeleteDialogOpen(true);
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </TabsContent>
-        )}
-
-      </Tabs>
-
-      <Dialog
-        open={isUserFormOpen}
-        onOpenChange={(open) => {
-          setIsUserFormOpen(open);
-          if (!open) resetUserForm();
-        }}
-      >
-        <DialogContent className="sm:max-w-[560px]">
-          <DialogHeader>
-            <DialogTitle>{editingAdminUser ? "Edit Admin User" : "Add Admin User"}</DialogTitle>
-            <DialogDescription>
-              {editingAdminUser
-                ? "Update full profile and role details."
-                : "Create a user with full name, email, phone, image, and role."}
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!isRootSuperAdmin) {
-                toast({ title: "Only superadmin@rare.np can manage admin users", variant: "destructive" });
-                return;
-              }
-              if (!userForm.name.trim() || !userForm.email.trim()) {
-                toast({ title: "Full name and email are required", variant: "destructive" });
-                return;
-              }
-              if (!editingAdminUser && userForm.password.trim().length < 6) {
-                toast({ title: "Password must be at least 6 characters", variant: "destructive" });
-                return;
-              }
-              if (editingAdminUser) {
-                updateAdminUserMutation.mutate();
-              } else {
-                createAdminUserMutation.mutate();
-              }
-            }}
-          >
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Full Name</Label>
-                <Input
-                  value={userForm.name}
-                  onChange={(e) => setUserForm((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="Full name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={userForm.email}
-                  disabled={!!editingAdminUser}
-                  onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))}
-                  placeholder="user@rare.np"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Phone Number</Label>
-                <Input
-                  value={userForm.phoneNumber}
-                  onChange={(e) => setUserForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
-                  placeholder="+97798xxxxxxxx"
-                />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Profile Image URL</Label>
-                <Input
-                  value={userForm.profileImageUrl}
-                  onChange={(e) => setUserForm((prev) => ({ ...prev, profileImageUrl: e.target.value }))}
-                  placeholder="https://example.com/avatar.jpg"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select value={userForm.role} onValueChange={(value) => setUserForm((prev) => ({ ...prev, role: value }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROFILE_USER_ROLE_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {!editingAdminUser && (
-                <div className="space-y-2">
-                  <Label>Password</Label>
-                  <Input
-                    type="password"
-                    value={userForm.password}
-                    onChange={(e) => setUserForm((prev) => ({ ...prev, password: e.target.value }))}
-                    placeholder="Minimum 6 characters"
-                  />
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsUserFormOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                loading={createAdminUserMutation.isPending || updateAdminUserMutation.isPending}
-                loadingText={editingAdminUser ? "Saving..." : "Creating..."}
-              >
-                {editingAdminUser ? "Save Changes" : "Add User"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialogs */}
-      <Dialog open={isEmailVerifyOpen} onOpenChange={setIsEmailVerifyOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Verify Email Change</DialogTitle>
-            <DialogDescription>
-              Enter the 6-digit code sent to <strong>{editEmail}</strong>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {emailOtpCode && (
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-center">
-                <p className="text-[10px] uppercase tracking-wider text-amber-600 mb-1">Dev Code</p>
-                <p className="text-2xl font-bold tracking-[8px] text-amber-700">{emailOtpCode}</p>
-              </div>
-            )}
-            <Input
-              placeholder="000000"
-              value={emailVerifyCode}
-              onChange={(e) => setEmailVerifyCode(e.target.value)}
-              className="text-center text-lg tracking-[8px] h-12"
-              maxLength={6}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEmailVerifyOpen(false)}>Cancel</Button>
-            <Button
-              loading={emailVerifyMutation.isPending}
-              loadingText="Verifying..."
-              disabled={emailVerifyCode.length < 6}
-              onClick={() => {
-                emailVerifyMutation.mutate({
-                  tempToken: emailTempToken,
-                  code: emailVerifyCode,
-                  newEmail: editEmail,
-                });
-              }}
-            >
-              Verify & Update
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isAvatarPreviewOpen} onOpenChange={setIsAvatarPreviewOpen}>
-        <DialogContent className="max-w-5xl overflow-hidden border-0 bg-transparent p-0 shadow-none">
-          <div className="grid overflow-hidden rounded-[28px] border border-white/10 bg-[#0F140F]/95 backdrop-blur-xl lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="relative flex min-h-[420px] items-center justify-center bg-[radial-gradient(circle_at_top,#24412d,transparent_45%),linear-gradient(180deg,#121a13,#0b0f0c)] p-6 sm:p-8">
-              {selectedAvatarUrl ? (
-                <img
-                  src={selectedAvatarUrl}
-                  alt="Profile preview"
-                  className="max-h-[75vh] w-auto max-w-full rounded-[22px] border border-white/10 bg-black/10 object-contain shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
-                />
-              ) : (
-                <div className="flex h-[320px] w-full max-w-[360px] items-center justify-center rounded-[22px] border border-dashed border-white/15 bg-white/5 text-sm text-white/70">
-                  No profile image selected
-                </div>
-              )}
-            </div>
-            <div className="border-t border-white/10 bg-black/25 p-5 text-white lg:border-l lg:border-t-0">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-base font-semibold text-white">
-                  <Camera className="h-4 w-4" />
-                  Profile Image
-                </DialogTitle>
-                <DialogDescription className="text-sm text-white/65">
-                  Preview the current photo, choose a recent upload, or replace it with a new one.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <div className="inline-flex items-center gap-1 rounded-full bg-white/10 p-1">
-                  {(["cloudinary", "local"] as const).map((providerOption) => (
-                    <button
-                      key={`dialog-${providerOption}`}
-                      type="button"
-                      onClick={() => setAvatarUploadProvider(providerOption)}
-                      className={cn(
-                        "px-3 py-1.5 text-xs font-medium rounded-full transition-colors",
-                        avatarUploadProvider === providerOption
-                          ? "bg-white text-black shadow-sm"
-                          : "text-white/70 hover:text-white",
-                      )}
-                    >
-                      {providerOption === "cloudinary" ? "Cloudinary" : "Local"}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   size="sm"
-                  className="gap-2 rounded-full bg-white text-black hover:bg-white/90"
+                  className="h-9 rounded-full px-4 font-semibold"
                   loading={avatarMutation.isPending}
                   loadingText="Uploading..."
                   onClick={() => avatarInputRef.current?.click()}
                 >
-                  <ImagePlus className="h-4 w-4" />
+                  <ImagePlus className="mr-2 h-3.5 w-3.5" />
+                  Upload Image
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 rounded-full px-4 font-semibold"
+                  onClick={() => {
+                    setSelectedAvatarUrl(overview.profile.avatarUrl || selectedAvatarUrl || null);
+                    setIsAvatarDialogOpen(true);
+                  }}
+                >
+                  <Expand className="mr-2 h-3.5 w-3.5" />
+                  View & Change
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid gap-0 border-t border-border/70 pt-1 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="p-4 sm:p-5 xl:border-r xl:border-border/70" data-testid="profile-stat-orders">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Orders Managed</p>
+                <p className="mt-2 text-3xl font-serif leading-none">{overview.stats.ordersManaged}</p>
+              </div>
+              <div className="p-4 sm:p-5 xl:border-r xl:border-border/70" data-testid="profile-stat-revenue">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Revenue Processed</p>
+                <p className="mt-2 text-3xl font-serif leading-none">{formatNpr(overview.stats.revenueProcessed)}</p>
+              </div>
+              <div className="p-4 sm:p-5 xl:border-r xl:border-border/70" data-testid="profile-stat-products">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Products Listed</p>
+                <p className="mt-2 text-3xl font-serif leading-none">{overview.stats.productsListed}</p>
+              </div>
+              <div className="p-4 sm:p-5" data-testid="profile-stat-actions">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Admin Actions (30d)</p>
+                <p className="mt-2 text-3xl font-serif leading-none">{overview.stats.adminActions30d}</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Card className={cn("xl:col-span-2", sectionCardClass)}>
+          <CardHeader>
+            <CardTitle className="font-serif text-xl tracking-[0.02em]">Personal Information</CardTitle>
+            <CardDescription>Edit your core account details.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="profile-first-name">First name</Label>
+              <Input
+                id="profile-first-name"
+                data-testid="profile-first-name-input"
+                value={form.firstName}
+                onChange={(event) => {
+                  setForm((prev) => (prev ? { ...prev, firstName: event.target.value } : prev));
+                  setFormErrors((prev) => ({ ...prev, firstName: "" }));
+                }}
+              />
+              {formErrors.firstName ? <p className="text-xs text-red-500">{formErrors.firstName}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-last-name">Last name</Label>
+              <Input
+                id="profile-last-name"
+                data-testid="profile-last-name-input"
+                value={form.lastName}
+                onChange={(event) => setForm((prev) => (prev ? { ...prev, lastName: event.target.value } : prev))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-email">Email</Label>
+              <Input
+                id="profile-email"
+                data-testid="profile-email-input"
+                type="email"
+                value={form.email}
+                onChange={(event) => {
+                  setForm((prev) => (prev ? { ...prev, email: event.target.value } : prev));
+                  setFormErrors((prev) => ({ ...prev, email: "" }));
+                }}
+              />
+              {formErrors.email ? <p className="text-xs text-red-500">{formErrors.email}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-phone">Phone</Label>
+              <Input
+                id="profile-phone"
+                value={form.phone}
+                onChange={(event) => setForm((prev) => (prev ? { ...prev, phone: event.target.value } : prev))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-language">Language</Label>
+              <Input
+                id="profile-language"
+                value={form.language}
+                onChange={(event) => setForm((prev) => (prev ? { ...prev, language: event.target.value } : prev))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-timezone">Timezone</Label>
+              <Input
+                id="profile-timezone"
+                value={form.timezone}
+                onChange={(event) => setForm((prev) => (prev ? { ...prev, timezone: event.target.value } : prev))}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={sectionCardClass}>
+          <CardHeader>
+            <CardTitle className="font-serif text-xl tracking-[0.02em]">Role & Access</CardTitle>
+            <CardDescription>Read-only role data and scope mapping.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Role</p>
+              <p className="mt-1 font-medium">{overview.profile.role}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-department">Department</Label>
+              <Input
+                id="profile-department"
+                value={form.department}
+                onChange={(event) => setForm((prev) => (prev ? { ...prev, department: event.target.value } : prev))}
+              />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Admin since</p>
+              <p className="mt-1 text-sm">{overview.profile.adminSince ? new Date(overview.profile.adminSince).toLocaleDateString() : "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Access scope</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {overview.accessScope.map((scope) => (
+                  <Badge key={scope} variant="secondary" className="text-[10px] uppercase">
+                    {scope.replace(/-/g, " ")}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card className={sectionCardClass}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 font-serif text-xl tracking-[0.02em]"><Shield className="h-4 w-4" /> Preferences</CardTitle>
+            <CardDescription>UI and workflow preferences for your admin workspace.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Compact Sidebar</p>
+                <p className="text-xs text-muted-foreground">Tighter navigation spacing in admin sidebar.</p>
+              </div>
+              <Switch
+                checked={form.compactSidebar}
+                onCheckedChange={(checked) => setForm((prev) => (prev ? { ...prev, compactSidebar: checked } : prev))}
+              />
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Show NPR Currency</p>
+                <p className="text-xs text-muted-foreground">Display NPR as the default financial format.</p>
+              </div>
+              <Switch
+                checked={form.showNPRCurrency}
+                onCheckedChange={(checked) => setForm((prev) => (prev ? { ...prev, showNPRCurrency: checked } : prev))}
+              />
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Order Alert Sound</p>
+                <p className="text-xs text-muted-foreground">Play sound cue when new order events arrive.</p>
+              </div>
+              <Switch
+                checked={form.orderAlertSound}
+                onCheckedChange={(checked) => setForm((prev) => (prev ? { ...prev, orderAlertSound: checked } : prev))}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={sectionCardClass}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 font-serif text-xl tracking-[0.02em]"><ShieldAlert className="h-4 w-4" /> Security</CardTitle>
+            <CardDescription>Password and account protection settings.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="profile-current-password">Current Password</Label>
+                <Input
+                  id="profile-current-password"
+                  data-testid="profile-password-current"
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="profile-new-password">New Password</Label>
+                <Input
+                  id="profile-new-password"
+                  data-testid="profile-password-new"
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="profile-confirm-password">Confirm Password</Label>
+                <Input
+                  id="profile-confirm-password"
+                  data-testid="profile-password-confirm"
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(event) => setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+                />
+              </div>
+              {passwordError ? (
+                <p className="text-xs text-red-500" data-testid="profile-password-error">{passwordError}</p>
+              ) : null}
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  data-testid="profile-password-save"
+                  onClick={handlePasswordSubmit}
+                  loading={changePasswordMutation.isPending}
+                  loadingText="Updating..."
+                >
+                  Update Password
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Two-Factor Authentication</p>
+                <p className="text-xs text-muted-foreground">Require OTP challenge for sign-in.</p>
+              </div>
+              <Switch
+                checked={overview.profile.twoFactorEnabled}
+                onCheckedChange={(checked) => securityMutation.mutate({ twoFactorEnabled: checked })}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Login Alerts</p>
+                <p className="text-xs text-muted-foreground">Receive alerts when your account signs in.</p>
+              </div>
+              <Switch
+                checked={form.loginAlerts}
+                onCheckedChange={(checked) => {
+                  setForm((prev) => (prev ? { ...prev, loginAlerts: checked } : prev));
+                  securityMutation.mutate({ loginAlerts: checked });
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className={sectionCardClass}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-serif text-xl tracking-[0.02em]"><Bell className="h-4 w-4" /> Notification Preferences</CardTitle>
+          <CardDescription>Configure operational alert channels.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {notificationLabels.map((item) => (
+            <div key={item.key} className="rounded-lg border border-border/70 bg-muted/20 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.description}</p>
+                </div>
+                <Switch
+                  data-testid={`profile-notification-${item.key}`}
+                  checked={form.notifications[item.key]}
+                  onCheckedChange={(checked) =>
+                    setForm((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            notifications: { ...prev.notifications, [item.key]: checked },
+                          }
+                        : prev,
+                    )
+                  }
+                />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card className={sectionCardClass}>
+          <CardHeader>
+            <CardTitle className="font-serif text-xl tracking-[0.02em]">Module Permissions</CardTitle>
+            <CardDescription>Read-only permissions inherited from your current role.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2" data-testid="profile-permissions-grid">
+              {overview.permissions.map((moduleKey) => (
+                <div key={moduleKey} className="rounded-md border border-border/70 bg-muted/20 p-3">
+                  <p className="text-sm font-medium capitalize" data-testid={`profile-permission-${moduleKey}`}>{moduleKey.replace(/-/g, " ")}</p>
+                  <p className="text-xs text-muted-foreground">Read-only scope mapping</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={sectionCardClass}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 font-serif text-xl tracking-[0.02em]"><Activity className="h-4 w-4" /> Recent Activity</CardTitle>
+            <CardDescription>Last 10 actions recorded for your admin account.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {overview.recentActivity.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No recent activity found yet.</p>
+            ) : (
+              overview.recentActivity.map((entry) => (
+                <div key={entry.id} className="rounded-md border border-border/70 bg-muted/20 p-3">
+                  <p className="text-sm font-medium">{entry.action}</p>
+                  <p className="text-xs text-muted-foreground">Status {entry.status} • {new Date(entry.timestamp).toLocaleString()}</p>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className={sectionCardClass}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-serif text-xl tracking-[0.02em]"><Laptop className="h-4 w-4" /> Active Sessions</CardTitle>
+          <CardDescription>Review active authenticated sessions and revoke others.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {overview.sessions.map((session) => (
+            <div key={session.sid} className={cn("rounded-lg border border-border/70 bg-muted/20 p-3", session.isCurrent ? "border-primary" : "")}> 
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">{session.isCurrent ? "Current Session" : "Active Session"}</p>
+                  <p className="text-xs text-muted-foreground">{session.ip || "Unknown IP"} • expires {session.expiresAt ? new Date(session.expiresAt).toLocaleString() : "-"}</p>
+                </div>
+                {session.isCurrent ? <Badge>Current</Badge> : <Badge variant="outline">Other</Badge>}
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              data-testid="profile-revoke-others"
+              variant="outline"
+              onClick={() => setConfirmRevokeSessions(true)}
+              loading={revokeSessionsMutation.isPending}
+              loadingText="Revoking..."
+            >
+              Revoke All Others
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-red-200/80 bg-red-50/35 shadow-[0_8px_26px_-20px_rgba(220,38,38,0.45)] dark:border-red-900/60 dark:bg-red-950/15">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400"><AlertTriangle className="h-4 w-4" /> Danger Zone</CardTitle>
+          <CardDescription>High-impact account actions. Confirmation is required.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => setConfirmAction("reset-2fa")}>Reset 2FA</Button>
+            <Button type="button" variant="outline" onClick={() => setConfirmAction("signout-all")}>Sign Out All</Button>
+            <Button type="button" data-testid="profile-danger-deactivate" variant="destructive" onClick={() => setConfirmAction("deactivate")}>Deactivate Account</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={isAvatarDialogOpen} onOpenChange={setIsAvatarDialogOpen}>
+        <DialogContent className="max-w-5xl p-0 overflow-hidden">
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-h-[420px] bg-muted/40 p-6 sm:p-8 flex items-center justify-center">
+              {selectedAvatarUrl ? (
+                <img
+                  src={selectedAvatarUrl}
+                  alt="Avatar preview"
+                  className="max-h-[72vh] max-w-full rounded-2xl border object-contain bg-background"
+                />
+              ) : (
+                <div className="flex h-[300px] w-full max-w-[380px] items-center justify-center rounded-2xl border border-dashed text-sm text-muted-foreground">
+                  No image selected
+                </div>
+              )}
+            </div>
+            <div className="border-l p-5">
+              <DialogHeader>
+                <DialogTitle>Profile Image</DialogTitle>
+                <DialogDescription>
+                  Upload new, preview full-size, and choose from your recent uploads.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => avatarInputRef.current?.click()}
+                  loading={avatarMutation.isPending}
+                  loadingText="Uploading..."
+                >
+                  <ImagePlus className="mr-2 h-4 w-4" />
                   Upload New
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="gap-2 rounded-full border-white/15 bg-transparent text-white hover:bg-white/10 hover:text-white"
-                  disabled={!selectedAvatarUrl || selectedAvatarUrl === profileImage || applyAvatarMutation.isPending}
+                  disabled={!selectedAvatarUrl || selectedAvatarUrl === overview.profile.avatarUrl}
                   loading={applyAvatarMutation.isPending}
                   loadingText="Applying..."
-                  onClick={() => {
-                    if (selectedAvatarUrl) applyAvatarMutation.mutate(selectedAvatarUrl);
-                  }}
+                  onClick={() => selectedAvatarUrl && applyAvatarMutation.mutate(selectedAvatarUrl)}
                 >
-                  <PencilLine className="h-4 w-4" />
+                  <Check className="mr-2 h-4 w-4" />
                   Use This Image
                 </Button>
-                {selectedAvatarUrl && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="gap-2 rounded-full border-red-400/20 bg-transparent text-red-200 hover:bg-red-500/10 hover:text-red-100"
-                    onClick={() => {
-                      const selectedItem = avatarHistory.find((item) => item.url === selectedAvatarUrl);
-                      if (selectedItem) setAvatarToDelete(selectedItem);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Image
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 hover:text-red-700"
+                  disabled={!selectedAvatarUrl || !selectedAvatarUrl.startsWith("/uploads/avatars/")}
+                  onClick={() => {
+                    const match = avatarHistory.find((item) => item.url === selectedAvatarUrl);
+                    if (match) setAvatarToDelete(match);
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
               </div>
-              {showAvatarUploadProgress && (
-                <div className="mt-3">
-                  <UploadProgress value={avatarUploadProgress} label="Upload progress" className="max-w-none" />
-                </div>
-              )}
-              <p className="mt-2 text-xs text-white/60">
-                Upload target: {avatarUploadProvider === "cloudinary" ? "Cloudinary CDN" : "Local server storage"}.
-              </p>
 
-              <div className="mt-6">
-                <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/55">
-                  <Clock3 className="h-4 w-4" />
+              <div className="mt-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                   Recent Uploads
-                </div>
-                <div className="grid max-h-[420px] gap-3 overflow-y-auto pr-1">
-                  {avatarHistoryLoading ? (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-white/60">
-                      Loading recent uploads...
+                </p>
+                <div className="mt-2 grid max-h-[380px] gap-2 overflow-y-auto pr-1">
+                  {avatarHistoryQuery.isLoading ? (
+                    <div className="rounded-lg border p-3 text-xs text-muted-foreground">
+                      Loading uploads...
                     </div>
                   ) : avatarHistory.length === 0 ? (
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-white/60">
-                      Your recent profile uploads will appear here.
+                    <div className="rounded-lg border p-3 text-xs text-muted-foreground">
+                      No uploaded images yet.
                     </div>
                   ) : (
-                    avatarHistory.map((item) => {
-                      const isActive = selectedAvatarUrl === item.url;
-                      const isCurrent = profileImage === item.url;
-                      return (
-                        <button
-                          key={item.filename}
-                          type="button"
-                          className={cn(
-                            "flex items-center gap-3 rounded-2xl border p-2 text-left transition-all",
-                            isActive
-                              ? "border-emerald-400/70 bg-emerald-400/10"
-                              : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10",
-                          )}
-                          onClick={() => setSelectedAvatarUrl(item.url)}
-                        >
-                          <div className="relative h-16 w-14 overflow-hidden rounded-xl border border-white/10 bg-white/10">
-                            <img src={item.url} alt="Recent upload" className="h-full w-full object-cover" />
-                            {isCurrent && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                                <Check className="h-4 w-4 text-white" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-white">
-                              {new Date(item.uploadedAt).toLocaleString()}
-                            </p>
-                            <p className="mt-1 text-xs text-white/55">
-                              {(item.size / 1024 / 1024).toFixed(2)} MB
-                              {isCurrent ? " • Current image" : ""}
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="h-9 w-9 shrink-0 rounded-full p-0 text-red-200 hover:bg-red-500/15 hover:text-red-100"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setAvatarToDelete(item);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </button>
-                      );
-                    })
+                    avatarHistory.map((item) => (
+                      <button
+                        type="button"
+                        key={item.filename}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg border p-2 text-left transition-colors",
+                          selectedAvatarUrl === item.url
+                            ? "border-primary bg-primary/5"
+                            : "hover:bg-muted/60",
+                        )}
+                        onClick={() => setSelectedAvatarUrl(item.url)}
+                      >
+                        <img
+                          src={item.url}
+                          alt="Recent avatar"
+                          className="h-12 w-12 rounded-md border object-cover"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium">{item.filename}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {new Date(item.uploadedAt).toLocaleString()}
+                          </p>
+                        </div>
+                      </button>
+                    ))
                   )}
                 </div>
               </div>
+              <DialogFooter className="mt-4">
+                <Button type="button" variant="outline" onClick={() => setIsAvatarDialogOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!avatarToDelete} onOpenChange={(open) => !open && setAvatarToDelete(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <Trash2 className="h-5 w-5" />
-              Delete Image
-            </DialogTitle>
-            <DialogDescription>
-              This removes the uploaded image from your admin avatar history.
-            </DialogDescription>
-          </DialogHeader>
-          {avatarToDelete && (
-            <div className="space-y-4 py-2">
-              <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 p-3">
-                <div className="h-16 w-14 overflow-hidden rounded-xl border border-border bg-background">
-                  <img src={avatarToDelete.url} alt="Avatar to delete" className="h-full w-full object-cover" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {new Date(avatarToDelete.uploadedAt).toLocaleString()}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {(avatarToDelete.size / 1024 / 1024).toFixed(2)} MB
-                    {profileImage === avatarToDelete.url ? " • Current image" : ""}
-                  </p>
-                </div>
-              </div>
-              {profileImage === avatarToDelete.url && (
-                <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
-                  This is your current profile image. Deleting it will clear the profile photo until you choose another image.
-                </div>
-              )}
+      {isDirty ? (
+        <div className="fixed inset-x-4 bottom-4 z-40 mx-auto max-w-5xl rounded-2xl border border-border/80 bg-background/95 p-4 shadow-[0_18px_50px_-24px_rgba(15,23,42,0.45)] backdrop-blur">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">You have unsaved changes</p>
+              <p className="text-xs text-muted-foreground">Save to persist profile, preference, and notification updates.</p>
             </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAvatarToDelete(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              loading={deleteAvatarMutation.isPending}
-              loadingText="Deleting..."
-              onClick={() => {
-                if (avatarToDelete) deleteAvatarMutation.mutate(avatarToDelete.url);
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={handleDiscard}>
+                <RotateCcw className="mr-2 h-4 w-4" /> Discard
+              </Button>
+              <Button type="button" data-testid="profile-save" onClick={handleSave} loading={saveMutation.isPending} loadingText="Saving...">
+                <Save className="mr-2 h-4 w-4" /> Save Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <AlertDialog open={confirmAction !== null} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm action</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction === "reset-2fa" && "This will disable 2FA for your account until you enable it again."}
+              {confirmAction === "signout-all" && "This will sign you out from all devices, including this one."}
+              {confirmAction === "deactivate" && "This will deactivate your account and sign you out immediately."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="profile-danger-cancel" onClick={() => setConfirmAction(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="profile-danger-confirm"
+              onClick={(event) => {
+                event.preventDefault();
+                if (!confirmAction) return;
+                dangerMutation.mutate(confirmAction);
+                setConfirmAction(null);
               }}
             >
-              Delete Image
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" />
-              Delete User
-            </DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. Permanent removal of admin access.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
-            <Button
-              variant="destructive"
-              loading={deleteMutation.isPending}
-              loadingText="Deleting..."
-              onClick={() => deleteUserId && deleteMutation.mutate(deleteUserId)}
+      <AlertDialog open={confirmRevokeSessions} onOpenChange={setConfirmRevokeSessions}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke other sessions?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This signs out all sessions except your current device.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmRevokeSessions(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="profile-revoke-confirm"
+              onClick={(event) => {
+                event.preventDefault();
+                revokeSessionsMutation.mutate();
+                setConfirmRevokeSessions(false);
+              }}
             >
-              Confirm Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              Revoke
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!avatarToDelete} onOpenChange={(open) => !open && setAvatarToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this uploaded image?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the image from your local avatar history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setAvatarToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                if (!avatarToDelete) return;
+                deleteAvatarMutation.mutate(avatarToDelete.url);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

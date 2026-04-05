@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { ChevronRight, Home } from "lucide-react";
 import { ADMIN_NAV_ITEMS } from "@/lib/adminAccess";
 import { cn } from "@/lib/utils";
@@ -80,13 +80,13 @@ export function AdminBreadcrumbs() {
             <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
           )}
           {crumb.href && !crumb.isCurrent ? (
-            <a
+            <Link
               href={crumb.href}
               className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
             >
               {index === 0 && <Home className="h-3 w-3" />}
               <span className="truncate max-w-[120px]">{crumb.label}</span>
-            </a>
+            </Link>
           ) : (
             <span
               className={cn(

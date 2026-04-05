@@ -304,7 +304,7 @@ export default function Navbar() {
                           <Link
                             key={item.href}
                             href={item.href}
-                            className="border-b py-5 text-[14px] font-semibold uppercase tracking-[0.16em] transition-opacity duration-200"
+                            className="border-b py-5 text-[14px] font-black uppercase tracking-[0.14em] transition-opacity duration-200"
                             style={{
                               fontFamily: "var(--font-mono)",
                               borderColor: mobileMenuSurface.mutedBorder,

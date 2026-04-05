@@ -1935,20 +1935,21 @@ export async function registerRoutes(
         return res.status(400).json({ success: false, error: "Order ID is required" });
       }
       const order = await storage.getOrderById(id);
-      const user = req.user as Express.User | undefined;
-      const isAdminOrStaff = canAccessAdminPanel(user?.role);
-      const userEmail = user?.email?.toLowerCase();
-      const orderEmail = order?.email?.toLowerCase();
-      const isOwner =
-        !!user &&
-        (order.userId === user.id || (!!userEmail && !!orderEmail && userEmail === orderEmail));
-
-      if (!user) {
-        return res.status(401).json({ success: false, error: "Authentication required" });
+      if (!order) {
+        return res.status(404).json({ success: false, error: "Order not found" });
       }
 
-      if (!isAdminOrStaff && !isOwner) {
-        return res.status(403).json({ success: false, error: "Forbidden" });
+      const user = req.user as Express.User | undefined;
+      if (user) {
+        const isAdminOrStaff = canAccessAdminPanel(user?.role);
+        const userEmail = user?.email?.toLowerCase();
+        const orderEmail = order?.email?.toLowerCase();
+        const isOwner =
+          order.userId === user.id || (!!userEmail && !!orderEmail && userEmail === orderEmail);
+
+        if (!isAdminOrStaff && !isOwner) {
+          return res.status(403).json({ success: false, error: "Forbidden" });
+        }
       }
 
       return res.json({ success: true, data: order });

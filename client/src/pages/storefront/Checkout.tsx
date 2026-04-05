@@ -14,15 +14,15 @@ const PAYMENT_OPTIONS = [
   {
     id: "esewa",
     label: "eSewa",
-    logoUrl: "/images/esewa-logo.webp",
+    logoUrl: "/images/esewa-logo.png",
     logoWrapClass: "px-0",
-    logoImageClass: "h-11 w-auto",
+    logoImageClass: "h-10 w-auto",
   },
   {
     id: "khalti",
     label: "Khalti",
     logoUrl: "/images/khalti-logo.png",
-    logoWrapClass: "px-0",
+    logoWrapClass: "px-0 justify-start",
     logoImageClass: "h-10 w-auto",
   },
   {

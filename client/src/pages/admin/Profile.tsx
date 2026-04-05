@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { UploadProgress } from "@/components/ui/upload-progress";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,8 @@ import {
   Clock3,
   Check,
   Type,
+  Plus,
+  Pencil,
 } from "lucide-react";
 import {
   Dialog,
@@ -38,11 +41,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface AdminUser {
   id: string;
   email: string;
   name?: string | null;
+  phoneNumber?: string | null;
   role: string;
   twoFactorEnabled: boolean;
   lastLoginAt?: string | null;
@@ -56,6 +67,16 @@ interface AvatarHistoryItem {
   uploadedAt: string;
   size: number;
 }
+
+const ROOT_SUPERADMIN_EMAIL = "superadmin@rare.np";
+const PROFILE_USER_ROLE_OPTIONS = [
+  { value: "superadmin", label: "Super Admin" },
+  { value: "owner", label: "Owner" },
+  { value: "admin", label: "Admin" },
+  { value: "manager", label: "Manager" },
+  { value: "csr", label: "CSR" },
+  { value: "staff", label: "Staff" },
+];
 
 export default function AdminProfilePage() {
   const { user } = useCurrentUser();
@@ -82,12 +103,25 @@ export default function AdminProfilePage() {
 
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isUserFormOpen, setIsUserFormOpen] = useState(false);
+  const [editingAdminUser, setEditingAdminUser] = useState<AdminUser | null>(null);
+  const [userForm, setUserForm] = useState({
+    name: "",
+    email: "",
+    phoneNumber: "",
+    profileImageUrl: "",
+    role: "staff",
+    password: "",
+  });
   const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(user?.profileImageUrl || null);
   const [avatarToDelete, setAvatarToDelete] = useState<AvatarHistoryItem | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const canManageAdminUsers = canAccessAdminPage(user?.role, "store-users");
+  const isRootSuperAdmin =
+    user?.role?.toLowerCase() === "superadmin" &&
+    user?.email?.toLowerCase() === ROOT_SUPERADMIN_EMAIL;
 
   const {
     data: adminUsers = [],
@@ -215,6 +249,71 @@ export default function AdminProfilePage() {
         description: err.message,
         variant: "destructive",
       });
+    },
+  });
+
+  const resetUserForm = () => {
+    setUserForm({
+      name: "",
+      email: "",
+      phoneNumber: "",
+      profileImageUrl: "",
+      role: isRootSuperAdmin ? "admin" : "staff",
+      password: "",
+    });
+    setEditingAdminUser(null);
+  };
+
+  const createAdminUserMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/store-users", {
+        name: userForm.name.trim(),
+        email: userForm.email.trim(),
+        password: userForm.password,
+        role: userForm.role,
+        phoneNumber: userForm.phoneNumber.trim() || undefined,
+        profileImageUrl: userForm.profileImageUrl.trim() || undefined,
+      });
+      return (await res.json()) as { success: boolean; error?: string };
+    },
+    onSuccess: (result) => {
+      if (!result.success) {
+        toast({ title: "Could not add user", description: result.error ?? "Please try again.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "User added" });
+      setIsUserFormOpen(false);
+      resetUserForm();
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not add user", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateAdminUserMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingAdminUser) throw new Error("No user selected");
+      const res = await apiRequest("PATCH", `/api/admin/store-users/${editingAdminUser.id}`, {
+        name: userForm.name.trim(),
+        role: userForm.role,
+        phone_number: userForm.phoneNumber.trim() || undefined,
+        profile_image_url: userForm.profileImageUrl.trim() || undefined,
+      });
+      return (await res.json()) as { success: boolean; error?: string };
+    },
+    onSuccess: (result) => {
+      if (!result.success) {
+        toast({ title: "Could not update user", description: result.error ?? "Please try again.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "User updated" });
+      setIsUserFormOpen(false);
+      resetUserForm();
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not update user", description: err.message, variant: "destructive" });
     },
   });
 
@@ -787,15 +886,36 @@ export default function AdminProfilePage() {
         {/* Admin Management */}
         {canManageAdminUsers && (
           <TabsContent value="users" className="mt-4">
-            <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
-              <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                Admin Team
-              </h2>
+            <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                    All Admin Users
+                  </h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Manage account details, roles, and access from one place.
+                  </p>
+                </div>
+                {isRootSuperAdmin && (
+                  <Button
+                    size="sm"
+                    className="h-9"
+                    onClick={() => {
+                      resetUserForm();
+                      setIsUserFormOpen(true);
+                    }}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add User
+                  </Button>
+                )}
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="border-b border-[#E5E5E0] dark:border-border text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                     <tr>
                       <th className="py-2 pr-4 text-left font-semibold">User</th>
+                      <th className="py-2 pr-4 text-left font-semibold">Phone</th>
                       <th className="py-2 pr-4 text-left font-semibold">Role</th>
                       <th className="py-2 pr-4 text-left font-semibold">2FA</th>
                       <th className="py-2 pr-4 text-left font-semibold">Last Login</th>
@@ -806,7 +926,7 @@ export default function AdminProfilePage() {
                     {usersLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
                         <tr key={i}>
-                          <td colSpan={5} className="py-8 text-center animate-pulse text-muted-foreground">
+                          <td colSpan={6} className="py-8 text-center animate-pulse text-muted-foreground">
                             Loading team data...
                           </td>
                         </tr>
@@ -815,8 +935,28 @@ export default function AdminProfilePage() {
                       adminUsers.map((u) => (
                         <tr key={u.id} className="border-b border-[#F0F0EB] dark:border-border/50">
                           <td className="py-3 pr-4">
-                            <div className="font-medium">{u.name || u.email}</div>
-                            <div className="text-[10px] text-muted-foreground">{u.email}</div>
+                            <div className="flex items-center gap-3">
+                              <div className="h-9 w-9 overflow-hidden rounded-full border border-border bg-muted/20">
+                                {u.profileImageUrl ? (
+                                  <img
+                                    src={u.profileImageUrl}
+                                    alt={u.name || u.email}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-muted-foreground">
+                                    {(u.name || u.email).slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-medium">{u.name || u.email}</div>
+                                <div className="text-[10px] text-muted-foreground">{u.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 pr-4 text-muted-foreground">
+                            {u.phoneNumber || "—"}
                           </td>
                           <td className="py-3 pr-4">
                             <Badge variant="outline" className="text-[10px]">
@@ -824,24 +964,53 @@ export default function AdminProfilePage() {
                             </Badge>
                           </td>
                           <td className="py-3 pr-4">
-                            {u.twoFactorEnabled ? "Enabled" : "Disabled"}
+                            <Switch
+                              checked={u.twoFactorEnabled}
+                              disabled={!isRootSuperAdmin || u.id === user?.id}
+                              onCheckedChange={(enabled) => {
+                                twoFAMutation.mutate({ id: u.id, enabled });
+                              }}
+                            />
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
-                            {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : "—"}
+                            {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "—"}
                           </td>
                           <td className="py-3 pl-2 text-right">
-                            {u.id !== user?.id && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                onClick={() => {
-                                  setDeleteUserId(u.id);
-                                  setIsDeleteDialogOpen(true);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                            {isRootSuperAdmin && (
+                              <div className="inline-flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8"
+                                  onClick={() => {
+                                    setEditingAdminUser(u);
+                                    setUserForm({
+                                      name: u.name || "",
+                                      email: u.email,
+                                      phoneNumber: u.phoneNumber || "",
+                                      profileImageUrl: u.profileImageUrl || "",
+                                      role: u.role,
+                                      password: "",
+                                    });
+                                    setIsUserFormOpen(true);
+                                  }}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                {u.id !== user?.id && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                    onClick={() => {
+                                      setDeleteUserId(u.id);
+                                      setIsDeleteDialogOpen(true);
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -855,6 +1024,123 @@ export default function AdminProfilePage() {
         )}
 
       </Tabs>
+
+      <Dialog
+        open={isUserFormOpen}
+        onOpenChange={(open) => {
+          setIsUserFormOpen(open);
+          if (!open) resetUserForm();
+        }}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>{editingAdminUser ? "Edit Admin User" : "Add Admin User"}</DialogTitle>
+            <DialogDescription>
+              {editingAdminUser
+                ? "Update full profile and role details."
+                : "Create a user with full name, email, phone, image, and role."}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!isRootSuperAdmin) {
+                toast({ title: "Only superadmin@rare.np can manage admin users", variant: "destructive" });
+                return;
+              }
+              if (!userForm.name.trim() || !userForm.email.trim()) {
+                toast({ title: "Full name and email are required", variant: "destructive" });
+                return;
+              }
+              if (!editingAdminUser && userForm.password.trim().length < 6) {
+                toast({ title: "Password must be at least 6 characters", variant: "destructive" });
+                return;
+              }
+              if (editingAdminUser) {
+                updateAdminUserMutation.mutate();
+              } else {
+                createAdminUserMutation.mutate();
+              }
+            }}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Full Name</Label>
+                <Input
+                  value={userForm.name}
+                  onChange={(e) => setUserForm((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Full name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={userForm.email}
+                  disabled={!!editingAdminUser}
+                  onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))}
+                  placeholder="user@rare.np"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone Number</Label>
+                <Input
+                  value={userForm.phoneNumber}
+                  onChange={(e) => setUserForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                  placeholder="+97798xxxxxxxx"
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Profile Image URL</Label>
+                <Input
+                  value={userForm.profileImageUrl}
+                  onChange={(e) => setUserForm((prev) => ({ ...prev, profileImageUrl: e.target.value }))}
+                  placeholder="https://example.com/avatar.jpg"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select value={userForm.role} onValueChange={(value) => setUserForm((prev) => ({ ...prev, role: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROFILE_USER_ROLE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {!editingAdminUser && (
+                <div className="space-y-2">
+                  <Label>Password</Label>
+                  <Input
+                    type="password"
+                    value={userForm.password}
+                    onChange={(e) => setUserForm((prev) => ({ ...prev, password: e.target.value }))}
+                    placeholder="Minimum 6 characters"
+                  />
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsUserFormOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                loading={createAdminUserMutation.isPending || updateAdminUserMutation.isPending}
+                loadingText={editingAdminUser ? "Saving..." : "Creating..."}
+              >
+                {editingAdminUser ? "Save Changes" : "Add User"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialogs */}
       <Dialog open={isEmailVerifyOpen} onOpenChange={setIsEmailVerifyOpen}>

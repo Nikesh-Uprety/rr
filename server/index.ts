@@ -322,7 +322,58 @@ async function ensureE2ETestState() {
   }
 }
 
+async function ensureRootSuperAdminState() {
+  const rootEmail = "superadmin@rare.np";
+  const rootPasswordHash = await bcrypt.hash("superadmin123", 10);
+
+  const existing = await db.query.users.findFirst({
+    where: eq(users.username, rootEmail),
+  });
+
+  if (existing) {
+    await db
+      .update(users)
+      .set({
+        password: rootPasswordHash,
+        role: "superadmin",
+        displayName: "Super Admin",
+        status: "active",
+        requires2FASetup: false,
+        twoFactorEnabled: 0,
+        emailNotifications: true,
+      })
+      .where(eq(users.id, existing.id));
+    return;
+  }
+
+  await db.insert(users).values({
+    username: rootEmail,
+    password: rootPasswordHash,
+    role: "superadmin",
+    displayName: "Super Admin",
+    profileImageUrl: null,
+    requires2FASetup: false,
+    twoFactorEnabled: 0,
+    status: "active",
+    emailNotifications: true,
+  });
+}
+
 (async () => {
+  try {
+    await ensureRootSuperAdminState();
+    log("Root superadmin state ensured", "express");
+  } catch (error) {
+    logger.warn(
+      "Root superadmin bootstrap skipped",
+      {
+        timestamp: new Date().toISOString(),
+        source: "APP",
+      },
+      error,
+    );
+  }
+
   if (process.env.E2E_TEST_MODE === "1") {
     try {
       await ensureE2ETestState();

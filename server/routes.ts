@@ -4262,10 +4262,22 @@ export async function registerRoutes(
   app.get(
     "/api/admin/users",
     requireAdmin,
-    async (_req: Request, res: Response) => {
+    async (req: Request, res: Response) => {
       try {
+        const actor = req.user as Express.User | undefined;
+        const isRootActor =
+          actor?.role?.toLowerCase() === "superadmin" &&
+          actor?.email?.toLowerCase() === "superadmin@rare.np";
         const users = await storage.getAdminUsers();
-        return res.json({ success: true, data: users });
+        const filtered = users
+          .filter((userRow) => isRootActor || userRow.role.toLowerCase() !== "superadmin")
+          .sort((a, b) => {
+            const aIsSuper = a.role.toLowerCase() === "superadmin";
+            const bIsSuper = b.role.toLowerCase() === "superadmin";
+            if (aIsSuper !== bIsSuper) return aIsSuper ? -1 : 1;
+            return (b.lastLoginAt?.getTime?.() ?? 0) - (a.lastLoginAt?.getTime?.() ?? 0);
+          });
+        return res.json({ success: true, data: filtered });
       } catch (err) {
         console.error("Error in GET /api/admin/users", err);
         return res
@@ -4279,10 +4291,22 @@ export async function registerRoutes(
   app.get(
     "/api/admin/store-users",
     requireAdmin,
-    async (_req: Request, res: Response) => {
+    async (req: Request, res: Response) => {
       try {
+        const actor = req.user as Express.User | undefined;
+        const isRootActor =
+          actor?.role?.toLowerCase() === "superadmin" &&
+          actor?.email?.toLowerCase() === "superadmin@rare.np";
         const users = await storage.getStoreUsers();
-        return res.json({ success: true, data: users });
+        const filtered = users
+          .filter((userRow) => isRootActor || userRow.role.toLowerCase() !== "superadmin")
+          .sort((a, b) => {
+            const aIsSuper = a.role.toLowerCase() === "superadmin";
+            const bIsSuper = b.role.toLowerCase() === "superadmin";
+            if (aIsSuper !== bIsSuper) return aIsSuper ? -1 : 1;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          });
+        return res.json({ success: true, data: filtered });
       } catch (err) {
         console.error("Error in GET /api/admin/store-users", err);
         return res
@@ -4298,16 +4322,29 @@ export async function registerRoutes(
     createStoreUserHandler({ storage, sendStoreUserWelcomeEmail }),
   );
 
+  const ROOT_SUPERADMIN_EMAIL = "superadmin@rare.np";
   const updateStoreUserRoleEnum = z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff"]);
   const privilegedAdminRoles = new Set(["superadmin", "owner", "admin"]);
   const isSuperAdmin = (role: string | null | undefined) => role?.toLowerCase() === "superadmin";
+  const isRootSuperAdmin = (actor: Express.User | undefined) =>
+    isSuperAdmin(actor?.role) && actor?.email?.toLowerCase() === ROOT_SUPERADMIN_EMAIL;
 
   const updateStoreUserSchema = z
     .object({
       role: updateStoreUserRoleEnum.optional(),
       email_notifications: z.boolean().optional(),
+      name: z.string().trim().min(1).max(100).optional(),
+      profile_image_url: z.string().trim().url().optional(),
+      phone_number: z.string().trim().max(40).optional(),
     })
-    .refine((v) => v.role !== undefined || v.email_notifications !== undefined, {
+    .refine(
+      (v) =>
+        v.role !== undefined ||
+        v.email_notifications !== undefined ||
+        v.name !== undefined ||
+        v.profile_image_url !== undefined ||
+        v.phone_number !== undefined,
+      {
       message: "No update fields provided",
     });
 
@@ -4324,34 +4361,37 @@ export async function registerRoutes(
       try {
         const { role, email_notifications } = req.body;
         const actor = req.user as Express.User | undefined;
-        const actorRole = actor?.role?.toLowerCase() ?? "";
         const target = await storage.getUserById(id);
         if (!target) {
           return res.status(404).json({ success: false, error: "User not found" });
         }
 
         const targetRole = target.role?.toLowerCase() ?? "";
-        if (!isSuperAdmin(actorRole) && privilegedAdminRoles.has(targetRole)) {
+        if (!isRootSuperAdmin(actor) && privilegedAdminRoles.has(targetRole)) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin can manage owner/admin/superadmin users",
+            error: "Only superadmin@rare.np can manage owner/admin/superadmin users",
           });
         }
 
         if (
           role !== undefined &&
-          !isSuperAdmin(actorRole) &&
+          !isRootSuperAdmin(actor) &&
           privilegedAdminRoles.has(role.toLowerCase())
         ) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin can assign owner/admin/superadmin roles",
+            error: "Only superadmin@rare.np can assign owner/admin/superadmin roles",
           });
         }
 
         const updated = await storage.updateStoreUser(id, {
           role,
           emailNotifications: email_notifications,
+          name: typeof req.body.name === "string" ? req.body.name : undefined,
+          profileImageUrl:
+            typeof req.body.profile_image_url === "string" ? req.body.profile_image_url : undefined,
+          phoneNumber: typeof req.body.phone_number === "string" ? req.body.phone_number : undefined,
         });
 
         return res.json({ success: true, data: updated });
@@ -4383,10 +4423,10 @@ export async function registerRoutes(
         }
 
         const targetRole = target.role?.toLowerCase() ?? "";
-        if (!isSuperAdmin(actor?.role) && privilegedAdminRoles.has(targetRole)) {
+        if (!isRootSuperAdmin(actor) && privilegedAdminRoles.has(targetRole)) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin can delete owner/admin/superadmin users",
+            error: "Only superadmin@rare.np can delete owner/admin/superadmin users",
           });
         }
 
@@ -4746,10 +4786,10 @@ export async function registerRoutes(
           return res.status(404).json({ success: false, error: "User not found" });
         }
         const targetRole = target.role?.toLowerCase() ?? "";
-        if (!isSuperAdmin(actor?.role) && privilegedAdminRoles.has(targetRole)) {
+        if (!isRootSuperAdmin(actor) && privilegedAdminRoles.has(targetRole)) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin can manage owner/admin/superadmin users",
+            error: "Only superadmin@rare.np can manage owner/admin/superadmin users",
           });
         }
         await storage.updateUserTwoFactor(id, req.body.enabled);
@@ -4779,10 +4819,10 @@ export async function registerRoutes(
           return res.status(404).json({ success: false, error: "User not found" });
         }
         const targetRole = target.role?.toLowerCase() ?? "";
-        if (!isSuperAdmin(actor?.role) && privilegedAdminRoles.has(targetRole)) {
+        if (!isRootSuperAdmin(actor) && privilegedAdminRoles.has(targetRole)) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin can delete owner/admin/superadmin users",
+            error: "Only superadmin@rare.np can delete owner/admin/superadmin users",
           });
         }
         await storage.deleteUser(id);
@@ -4811,10 +4851,10 @@ export async function registerRoutes(
       try {
         const { name, email, role } = req.body;
         const actor = req.user as Express.User | undefined;
-        if (!isSuperAdmin(actor?.role) && privilegedAdminRoles.has(role.toLowerCase())) {
+        if (!isRootSuperAdmin(actor) && privilegedAdminRoles.has(role.toLowerCase())) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin can invite owner/admin/superadmin users",
+            error: "Only superadmin@rare.np can invite owner/admin/superadmin users",
           });
         }
         const code = Math.floor(100000 + Math.random() * 900000)

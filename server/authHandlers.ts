@@ -25,12 +25,17 @@ export const createStoreUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   role: storeUserRoleEnum,
+  phoneNumber: z.string().trim().max(40).optional(),
+  profileImageUrl: z.string().trim().url().optional(),
 });
 
 type StorageLike = typeof storageLib;
 type PassportLike = typeof passportLib;
 const PRIVILEGED_ADMIN_ROLES = new Set(["superadmin", "owner", "admin"]);
 const isSuperAdminRole = (role: string | null | undefined) => role?.toLowerCase() === "superadmin";
+const ROOT_SUPERADMIN_EMAIL = "superadmin@rare.np";
+const isRootSuperAdmin = (user: Express.User | undefined) =>
+  isSuperAdminRole(user?.role) && user?.email?.toLowerCase() === ROOT_SUPERADMIN_EMAIL;
 
 export function createLoginHandler(deps?: {
   storage?: StorageLike;
@@ -208,14 +213,13 @@ export function createStoreUserHandler(deps?: {
         return res.status(400).json({ success: false, error: "Invalid request body" });
       }
 
-      const { name, email, password, role } = validation.data;
+      const { name, email, password, role, phoneNumber, profileImageUrl } = validation.data;
       const actor = req.user as Express.User | undefined;
-      const actorRole = actor?.role?.toLowerCase() ?? "";
 
-      if (!isSuperAdminRole(actorRole) && PRIVILEGED_ADMIN_ROLES.has(role)) {
+      if (!isRootSuperAdmin(actor) && PRIVILEGED_ADMIN_ROLES.has(role)) {
         return res.status(403).json({
           success: false,
-          error: "Only superadmin can create owner/admin/superadmin users",
+          error: "Only superadmin@rare.np can create owner/admin/superadmin users",
         });
       }
 
@@ -231,6 +235,8 @@ export function createStoreUserHandler(deps?: {
         email,
         role,
         passwordHash: hashed,
+        phoneNumber: phoneNumber?.trim() || null,
+        profileImageUrl: profileImageUrl?.trim() || null,
       });
 
       const inviter = req.user as Express.User | undefined;

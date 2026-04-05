@@ -76,6 +76,7 @@ type StoreUser = {
   name: string | null;
   role: string;
   profileImageUrl: string | null;
+  phoneNumber?: string | null;
   emailNotifications: boolean;
   createdAt: string | Date;
 };
@@ -131,7 +132,9 @@ function roleBadge(role: string) {
 
 export default function StoreUsers() {
   const { user: currentUser } = useCurrentUser();
-  const isCurrentUserSuperAdmin = currentUser?.role?.toLowerCase() === "superadmin";
+  const isCurrentUserRootSuperAdmin =
+    currentUser?.role?.toLowerCase() === "superadmin" &&
+    currentUser?.email?.toLowerCase() === "superadmin@rare.np";
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -165,8 +168,8 @@ export default function StoreUsers() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
   const roleOptions = useMemo(
-    () => (isCurrentUserSuperAdmin ? SUPERADMIN_ROLE_OPTIONS : STANDARD_ROLE_OPTIONS),
-    [isCurrentUserSuperAdmin],
+    () => (isCurrentUserRootSuperAdmin ? SUPERADMIN_ROLE_OPTIONS : STANDARD_ROLE_OPTIONS),
+    [isCurrentUserRootSuperAdmin],
   );
   const normalizeEditableRole = (role: string) => {
     const lowered = role.toLowerCase();
@@ -314,7 +317,7 @@ export default function StoreUsers() {
                     const rb = roleBadge(u.role);
                     const addedAt = u.createdAt ? format(new Date(u.createdAt), "dd MMM yyyy") : "";
                     const targetRole = u.role?.toLowerCase() ?? "";
-                    const canManagePrivilegedTarget = isCurrentUserSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
+                    const canManagePrivilegedTarget = isCurrentUserRootSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
                     const canDeleteTarget = !isSelf(u) && canManagePrivilegedTarget;
 
                     return (
@@ -416,7 +419,7 @@ export default function StoreUsers() {
               const initials = getInitials(u.name || u.email);
               const addedAt = u.createdAt ? format(new Date(u.createdAt), "dd MMM yyyy") : "";
               const targetRole = u.role?.toLowerCase() ?? "";
-              const canManagePrivilegedTarget = isCurrentUserSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
+              const canManagePrivilegedTarget = isCurrentUserRootSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
               const canDeleteTarget = !isSelf(u) && canManagePrivilegedTarget;
               return (
                 <div key={u.id} className="bg-white dark:bg-card rounded-xl border border-border shadow-sm p-4">

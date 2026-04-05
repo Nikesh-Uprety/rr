@@ -22,6 +22,7 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("staff"),
   displayName: text("display_name"),
   profileImageUrl: text("profile_image_url"),
+  phoneNumber: text("phone_number"),
   requires2FASetup: boolean("requires_2fa_setup").notNull().default(false),
   emailNotifications: boolean("email_notifications").notNull().default(true),
   twoFactorEnabled: integer("two_factor_enabled").notNull().default(0),

@@ -197,6 +197,7 @@ export interface StoreUser {
   name: string | null;
   role: string;
   profileImageUrl: string | null;
+  phoneNumber: string | null;
   emailNotifications: boolean;
   createdAt: Date;
 }
@@ -351,11 +352,17 @@ export interface IStorage {
     requires2FASetup?: boolean;
     twoFactorEnabled?: number;
     lastLoginAt?: Date | null;
+    displayName?: string | null;
+    profileImageUrl?: string | null;
+    phoneNumber?: string | null;
   }): Promise<User>;
   updateLastLoginAt(id: string): Promise<void>;
   updateUserPassword(id: string, passwordHash: string): Promise<void>;
   updateUserTwoFactor(id: string, enabled: boolean): Promise<void>;
-  updateUserProfile(id: string, data: { displayName?: string; profileImageUrl?: string }): Promise<void>;
+  updateUserProfile(
+    id: string,
+    data: { displayName?: string; profileImageUrl?: string; phoneNumber?: string },
+  ): Promise<void>;
   updateUserEmail(id: string, newEmail: string): Promise<void>;
   deleteUser(id: string): Promise<void>;
   revokeUser(id: string): Promise<void>;
@@ -369,6 +376,7 @@ export interface IStorage {
       lastLoginAt: Date | null;
       status: string;
       profileImageUrl: string | null;
+      phoneNumber: string | null;
     }[]
   >;
   inviteAdminUser(data: {
@@ -385,10 +393,18 @@ export interface IStorage {
     email: string;
     passwordHash: string;
     role: string;
+    phoneNumber?: string | null;
+    profileImageUrl?: string | null;
   }): Promise<StoreUser>;
   updateStoreUser(
     id: string,
-    data: { role?: string; emailNotifications?: boolean },
+    data: {
+      role?: string;
+      emailNotifications?: boolean;
+      name?: string;
+      profileImageUrl?: string;
+      phoneNumber?: string;
+    },
   ): Promise<StoreUser>;
 
   getNewsletterSubscribers(includeUnsubscribed?: boolean): Promise<{ email: string; status: string; unsubscribedAt: Date | null; createdAt: Date | null }[]>;
@@ -2319,6 +2335,7 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        phoneNumber: users.phoneNumber,
         requires2FASetup: users.requires2FASetup,
         emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
@@ -2342,6 +2359,7 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        phoneNumber: users.phoneNumber,
         requires2FASetup: users.requires2FASetup,
         emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
@@ -2366,6 +2384,7 @@ export class PgStorage implements IStorage {
     lastLoginAt?: Date | null;
     displayName?: string | null;
     profileImageUrl?: string | null;
+    phoneNumber?: string | null;
   }): Promise<User> {
     const [row] = await db
       .insert(users)
@@ -2375,6 +2394,7 @@ export class PgStorage implements IStorage {
         role: data.role,
         displayName: data.displayName ?? null,
         profileImageUrl: data.profileImageUrl ?? null,
+        phoneNumber: data.phoneNumber ?? null,
         requires2FASetup: data.requires2FASetup ?? false,
         twoFactorEnabled: data.twoFactorEnabled ?? 0,
         emailNotifications: true,
@@ -2387,6 +2407,7 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        phoneNumber: users.phoneNumber,
         requires2FASetup: users.requires2FASetup,
         emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
@@ -2426,10 +2447,14 @@ export class PgStorage implements IStorage {
       .where(eq(users.id, id));
   }
 
-  async updateUserProfile(id: string, data: { displayName?: string; profileImageUrl?: string }): Promise<void> {
+  async updateUserProfile(
+    id: string,
+    data: { displayName?: string; profileImageUrl?: string; phoneNumber?: string },
+  ): Promise<void> {
     const updateData: Record<string, any> = {};
     if (data.displayName !== undefined) updateData.displayName = data.displayName;
     if (data.profileImageUrl !== undefined) updateData.profileImageUrl = data.profileImageUrl;
+    if (data.phoneNumber !== undefined) updateData.phoneNumber = data.phoneNumber;
     if (Object.keys(updateData).length === 0) return;
     await db.update(users).set(updateData).where(eq(users.id, id));
   }
@@ -2456,6 +2481,7 @@ export class PgStorage implements IStorage {
       lastLoginAt: Date | null;
       status: string;
       profileImageUrl: string | null;
+      phoneNumber: string | null;
     }[]
   > {
     const rows = await db
@@ -2468,6 +2494,7 @@ export class PgStorage implements IStorage {
         lastLoginAt: users.lastLoginAt,
         status: users.status,
         profileImageUrl: users.profileImageUrl,
+        phoneNumber: users.phoneNumber,
       })
       .from(users)
       .where(sql`${users.role} != 'customer'`);
@@ -2475,6 +2502,7 @@ export class PgStorage implements IStorage {
     return rows.map((row) => ({
       ...row,
       name: row.displayName || row.email,
+      phoneNumber: row.phoneNumber ?? null,
       twoFactorEnabled: !!row.twoFactorEnabled,
     }));
   }
@@ -2487,6 +2515,7 @@ export class PgStorage implements IStorage {
         name: users.displayName,
         role: users.role,
         profileImageUrl: users.profileImageUrl,
+        phoneNumber: users.phoneNumber,
         emailNotifications: users.emailNotifications,
         createdAt: users.createdAt,
       })
@@ -2498,6 +2527,7 @@ export class PgStorage implements IStorage {
       ...r,
       name: r.name ?? null,
       profileImageUrl: r.profileImageUrl ?? null,
+      phoneNumber: r.phoneNumber ?? null,
       emailNotifications: !!r.emailNotifications,
     }));
   }
@@ -2507,6 +2537,8 @@ export class PgStorage implements IStorage {
     email: string;
     passwordHash: string;
     role: string;
+    phoneNumber?: string | null;
+    profileImageUrl?: string | null;
   }): Promise<StoreUser> {
     const [row] = await db
       .insert(users)
@@ -2515,7 +2547,8 @@ export class PgStorage implements IStorage {
         password: data.passwordHash,
         role: data.role,
         displayName: data.name,
-        profileImageUrl: null,
+        profileImageUrl: data.profileImageUrl ?? null,
+        phoneNumber: data.phoneNumber ?? null,
         requires2FASetup: true,
         twoFactorEnabled: 0,
         status: "active",
@@ -2527,6 +2560,7 @@ export class PgStorage implements IStorage {
         name: users.displayName,
         role: users.role,
         profileImageUrl: users.profileImageUrl,
+        phoneNumber: users.phoneNumber,
         emailNotifications: users.emailNotifications,
         createdAt: users.createdAt,
       });
@@ -2535,18 +2569,28 @@ export class PgStorage implements IStorage {
       ...row,
       name: row.name ?? null,
       profileImageUrl: row.profileImageUrl ?? null,
+      phoneNumber: row.phoneNumber ?? null,
       emailNotifications: !!row.emailNotifications,
     };
   }
 
   async updateStoreUser(
     id: string,
-    data: { role?: string; emailNotifications?: boolean },
+    data: {
+      role?: string;
+      emailNotifications?: boolean;
+      name?: string;
+      profileImageUrl?: string;
+      phoneNumber?: string;
+    },
   ): Promise<StoreUser> {
     const updateData: Record<string, any> = {};
     if (data.role !== undefined) updateData.role = data.role;
     if (data.emailNotifications !== undefined)
       updateData.emailNotifications = data.emailNotifications;
+    if (data.name !== undefined) updateData.displayName = data.name;
+    if (data.profileImageUrl !== undefined) updateData.profileImageUrl = data.profileImageUrl;
+    if (data.phoneNumber !== undefined) updateData.phoneNumber = data.phoneNumber;
 
     const [row] = await db
       .update(users)
@@ -2558,6 +2602,7 @@ export class PgStorage implements IStorage {
         name: users.displayName,
         role: users.role,
         profileImageUrl: users.profileImageUrl,
+        phoneNumber: users.phoneNumber,
         emailNotifications: users.emailNotifications,
         createdAt: users.createdAt,
       });
@@ -2568,6 +2613,7 @@ export class PgStorage implements IStorage {
       ...row,
       name: row.name ?? null,
       profileImageUrl: row.profileImageUrl ?? null,
+      phoneNumber: row.phoneNumber ?? null,
       emailNotifications: !!row.emailNotifications,
     };
   }
@@ -2585,6 +2631,7 @@ export class PgStorage implements IStorage {
         password: data.passwordHash,
         role: data.role,
         displayName: data.name,
+        phoneNumber: null,
         status: "invited",
         requires2FASetup: true,
         twoFactorEnabled: 1,
@@ -2596,6 +2643,7 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        phoneNumber: users.phoneNumber,
         requires2FASetup: users.requires2FASetup,
         emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
@@ -3883,6 +3931,7 @@ export class MemStorage implements IStorage {
     lastLoginAt?: Date | null;
     displayName?: string | null;
     profileImageUrl?: string | null;
+    phoneNumber?: string | null;
   }): Promise<User> {
     const user: User = {
       id: crypto.randomUUID(),
@@ -3891,6 +3940,7 @@ export class MemStorage implements IStorage {
       role: data.role,
       displayName: data.displayName ?? null,
       profileImageUrl: data.profileImageUrl ?? null,
+      phoneNumber: data.phoneNumber ?? null,
       requires2FASetup: data.requires2FASetup ?? false,
       emailNotifications: true,
       twoFactorEnabled: 0,
@@ -3960,7 +4010,10 @@ export class MemStorage implements IStorage {
     user.twoFactorEnabled = enabled ? 1 : 0;
     user.requires2FASetup = false;
   }
-  async updateUserProfile(id: string, data: { displayName?: string; profileImageUrl?: string }): Promise<void> {}
+  async updateUserProfile(
+    id: string,
+    data: { displayName?: string; profileImageUrl?: string; phoneNumber?: string },
+  ): Promise<void> {}
   async updateUserEmail(id: string, newEmail: string): Promise<void> {}
   async deleteUser(id: string): Promise<void> {}
   async revokeUser(id: string): Promise<void> {}
@@ -3974,6 +4027,7 @@ export class MemStorage implements IStorage {
       lastLoginAt: Date | null;
       status: string;
       profileImageUrl: string | null;
+      phoneNumber: string | null;
     }[]
   > {
     return this._users.map((u) => ({
@@ -3985,6 +4039,7 @@ export class MemStorage implements IStorage {
       lastLoginAt: u.lastLoginAt,
       status: u.status,
       profileImageUrl: u.profileImageUrl || null,
+      phoneNumber: u.phoneNumber || null,
     }));
   }
 
@@ -3998,6 +4053,7 @@ export class MemStorage implements IStorage {
         name: u.displayName ?? null,
         role: u.role,
         profileImageUrl: u.profileImageUrl ?? null,
+        phoneNumber: u.phoneNumber ?? null,
         emailNotifications: !!u.emailNotifications,
         createdAt: u.createdAt,
       }));
@@ -4008,6 +4064,8 @@ export class MemStorage implements IStorage {
     email: string;
     passwordHash: string;
     role: string;
+    phoneNumber?: string | null;
+    profileImageUrl?: string | null;
   }): Promise<StoreUser> {
     const user: User = {
       id: crypto.randomUUID(),
@@ -4015,7 +4073,8 @@ export class MemStorage implements IStorage {
       password: data.passwordHash,
       role: data.role,
       displayName: data.name,
-      profileImageUrl: null,
+      profileImageUrl: data.profileImageUrl ?? null,
+      phoneNumber: data.phoneNumber ?? null,
       requires2FASetup: true,
       twoFactorEnabled: 0,
       lastLoginAt: null,
@@ -4030,6 +4089,7 @@ export class MemStorage implements IStorage {
       name: user.displayName ?? null,
       role: user.role,
       profileImageUrl: user.profileImageUrl ?? null,
+      phoneNumber: user.phoneNumber ?? null,
       emailNotifications: !!user.emailNotifications,
       createdAt: user.createdAt,
     };
@@ -4037,12 +4097,21 @@ export class MemStorage implements IStorage {
 
   async updateStoreUser(
     id: string,
-    data: { role?: string; emailNotifications?: boolean },
+    data: {
+      role?: string;
+      emailNotifications?: boolean;
+      name?: string;
+      profileImageUrl?: string;
+      phoneNumber?: string;
+    },
   ): Promise<StoreUser> {
     const user = this._users.find((u) => u.id === id);
     if (!user) throw new Error("User not found");
     if (data.role !== undefined) user.role = data.role;
     if (data.emailNotifications !== undefined) user.emailNotifications = data.emailNotifications;
+    if (data.name !== undefined) user.displayName = data.name;
+    if (data.profileImageUrl !== undefined) user.profileImageUrl = data.profileImageUrl;
+    if (data.phoneNumber !== undefined) user.phoneNumber = data.phoneNumber;
 
     return {
       id: user.id,
@@ -4050,6 +4119,7 @@ export class MemStorage implements IStorage {
       name: user.displayName ?? null,
       role: user.role,
       profileImageUrl: user.profileImageUrl ?? null,
+      phoneNumber: user.phoneNumber ?? null,
       emailNotifications: !!user.emailNotifications,
       createdAt: user.createdAt,
     };

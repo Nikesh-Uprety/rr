@@ -1673,6 +1673,7 @@ export async function registerRoutes(
       // --- New Customer Order Limit & Abuse Prevention ---
       const MAX_ITEMS_NEW_CUSTOMER = 5;
       const MIN_ORDERS_FOR_UNLIMITED = 5;
+      const MAX_FAILED_ORDER_ATTEMPTS = 30;
       const ABUSE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
       const totalQuantity = items.reduce((acc: number, item: any) => acc + Number(item.quantity), 0);
@@ -1683,30 +1684,10 @@ export async function registerRoutes(
       // Check if customer has enough order history to bypass limit
       const orderCount = await storage.getOrderCountByEmail(customerEmail);
       const isTrustedCustomer = orderCount >= MIN_ORDERS_FOR_UNLIMITED;
-
-      if (!isTrustedCustomer && totalQuantity > MAX_ITEMS_NEW_CUSTOMER) {
-        // Track abuse attempts
-        const existing = abuseAttempts.get(abuseKey) || { count: 0, blockedAt: 0 };
-        const newCount = existing.count + 1;
-        if (newCount >= 3) {
-          abuseAttempts.set(abuseKey, { count: newCount, blockedAt: Date.now() });
-        } else {
-          abuseAttempts.set(abuseKey, { count: newCount, blockedAt: existing.blockedAt });
-        }
-
-        logger.warn(`Order limit exceeded: ${customerEmail} tried to order ${totalQuantity} items (limit: ${MAX_ITEMS_NEW_CUSTOMER}, orders: ${orderCount}, attempts: ${newCount})`);
-        return res.status(400).json({
-          success: false,
-          error: `New customers can order up to ${MAX_ITEMS_NEW_CUSTOMER} items at a time. You currently have ${totalQuantity} items in your cart. Please reduce your quantity or contact us for large orders.`,
-          code: "NEW_CUSTOMER_LIMIT_EXCEEDED",
-          limit: MAX_ITEMS_NEW_CUSTOMER,
-          orderCount,
-        });
-      }
-
-      // Check if IP/email is temporarily blocked for abuse
       const abuseEntry = abuseAttempts.get(abuseKey);
-      if (abuseEntry && Date.now() - abuseEntry.blockedAt < ABUSE_TIMEOUT_MS) {
+
+      // If abuse block is active, fail fast before any further processing.
+      if (abuseEntry && abuseEntry.blockedAt > 0 && Date.now() - abuseEntry.blockedAt < ABUSE_TIMEOUT_MS) {
         const remaining = Math.ceil((ABUSE_TIMEOUT_MS - (Date.now() - abuseEntry.blockedAt)) / 1000 / 60);
         return res.status(429).json({
           success: false,
@@ -1716,9 +1697,39 @@ export async function registerRoutes(
         });
       }
 
-      // Clear abuse block if timeout has passed
-      if (abuseEntry && Date.now() - abuseEntry.blockedAt >= ABUSE_TIMEOUT_MS) {
+      // Reset stale abuse records once timeout expires.
+      if (abuseEntry && abuseEntry.blockedAt > 0 && Date.now() - abuseEntry.blockedAt >= ABUSE_TIMEOUT_MS) {
         abuseAttempts.delete(abuseKey);
+      }
+
+      if (!isTrustedCustomer && totalQuantity > MAX_ITEMS_NEW_CUSTOMER) {
+        // Track abuse attempts
+        const existing = abuseAttempts.get(abuseKey) || { count: 0, blockedAt: 0 };
+        const newCount = existing.count + 1;
+        if (newCount >= MAX_FAILED_ORDER_ATTEMPTS) {
+          abuseAttempts.set(abuseKey, { count: newCount, blockedAt: Date.now() });
+        } else {
+          abuseAttempts.set(abuseKey, { count: newCount, blockedAt: existing.blockedAt });
+        }
+
+        logger.warn(`Order limit exceeded: ${customerEmail} tried to order ${totalQuantity} items (limit: ${MAX_ITEMS_NEW_CUSTOMER}, orders: ${orderCount}, attempts: ${newCount})`);
+        if (newCount >= MAX_FAILED_ORDER_ATTEMPTS) {
+          return res.status(429).json({
+            success: false,
+            error: "Too many failed attempts. Please try again in 5 minutes.",
+            code: "ABUSE_TIMEOUT",
+            retryAfter: 5,
+          });
+        }
+
+        return res.status(400).json({
+          success: false,
+          error: `New customers can order up to ${MAX_ITEMS_NEW_CUSTOMER} items at a time. You currently have ${totalQuantity} items in your cart. Please reduce your quantity or contact us for large orders.`,
+          code: "NEW_CUSTOMER_LIMIT_EXCEEDED",
+          limit: MAX_ITEMS_NEW_CUSTOMER,
+          orderCount,
+          attemptsRemaining: Math.max(0, MAX_FAILED_ORDER_ATTEMPTS - newCount),
+        });
       }
 
       const orderSubtotal = items.reduce(
@@ -1868,6 +1879,9 @@ export async function registerRoutes(
           unitPrice: item.priceAtTime,
         })),
       });
+
+      // Successful order clears any previous abuse tracking for this key.
+      abuseAttempts.delete(abuseKey);
 
       for (const item of resolvedItems) {
         const productId = item.productId;

@@ -153,17 +153,12 @@ export default function Navbar() {
   const baseNavLinks = [
     { name: "Home", href: "/" },
     { name: "Shop", href: "/products" },
-    { name: "New Collection", href: "/new-collection" },
+    { name: "Collection", href: "/new-collection" },
     { name: "Atelier", href: "/atelier" },
   ];
   const navLinks = useMemo(() => {
-    if (!isTabletViewport || previewTemplateId !== null) {
-      return baseNavLinks;
-    }
-    return baseNavLinks.map((item) =>
-      item.href === "/new-collection" ? { ...item, name: "Collection" } : item,
-    );
-  }, [baseNavLinks, isTabletViewport, previewTemplateId]);
+    return baseNavLinks;
+  }, [baseNavLinks]);
 
   const getGlassChrome = (mode: "light" | "dark", options?: { active?: boolean }) => {
     if (options?.active === false) {

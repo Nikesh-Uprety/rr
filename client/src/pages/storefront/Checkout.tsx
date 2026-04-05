@@ -267,8 +267,30 @@ export default function Checkout() {
       const needsPaymentPage =
         paymentMethod === "esewa" ||
         paymentMethod === "khalti" ||
-        paymentMethod === "fonepay" ||
-        paymentMethod === "stripe";
+        paymentMethod === "fonepay";
+
+      if (paymentMethod === "stripe") {
+        setStep(3);
+        cacheLatestOrder(result.data.order);
+        clearCart();
+        toast({ title: "Order created. Redirecting to Stripe..." });
+        try {
+          const { createCheckoutSession } = await import("@/lib/api");
+          const sessionResult = await createCheckoutSession(result.data.order.id);
+          if (sessionResult.success && sessionResult.data?.checkoutUrl) {
+            window.location.href = sessionResult.data.checkoutUrl;
+          } else {
+            setLocation(
+              `/checkout/payment?orderId=${result.data.order.id}&method=stripe`,
+            );
+          }
+        } catch {
+          setLocation(
+            `/checkout/payment?orderId=${result.data.order.id}&method=stripe`,
+          );
+        }
+        return;
+      }
 
       if (needsPaymentPage) {
         setStep(3);

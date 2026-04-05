@@ -141,14 +141,13 @@ export default function OrderSuccess() {
       <div className="no-print relative mt-20 mb-10 overflow-visible rounded-3xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/8 via-background to-background px-6 pb-8 pt-24 md:px-10 md:pb-10 md:pt-28">
         <div className="pointer-events-none absolute -top-12 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-emerald-500/12 blur-2xl" />
         <div className="pointer-events-none absolute -top-20 left-1/2 z-20 -translate-x-1/2 text-center">
-          <div className="order-confirm-icon-float relative flex h-28 w-28 items-center justify-center rounded-full border border-emerald-300/70 bg-emerald-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)] md:h-32 md:w-32">
-            <span className="order-confirm-icon-glow absolute inset-0 rounded-full bg-emerald-500/30 blur-md" />
-            <span className="order-confirm-particle absolute left-3 top-6 h-2 w-2 rounded-full bg-emerald-200/80" />
-            <span className="order-confirm-particle absolute right-5 top-4 h-1.5 w-1.5 rounded-full bg-emerald-100/80 [animation-delay:0.5s]" />
-            <span className="order-confirm-particle absolute right-3 top-12 h-2 w-2 rounded-full bg-emerald-100/70 [animation-delay:1.2s]" />
-            <span className="order-confirm-particle absolute left-4 bottom-5 h-1.5 w-1.5 rounded-full bg-emerald-100/75 [animation-delay:0.9s]" />
-            <span className="order-confirm-particle absolute right-8 bottom-3 h-2 w-2 rounded-full bg-emerald-200/75 [animation-delay:1.6s]" />
-            <Check className="order-confirm-tick-breathe relative z-10 h-12 w-12 md:h-14 md:w-14" strokeWidth={3} aria-hidden />
+          <div className="order-confirm-icon-float relative flex h-28 w-28 items-center justify-center rounded-full border border-emerald-300/70 bg-white shadow-[0_0_20px_rgba(34,197,94,0.3)] md:h-32 md:w-32 overflow-hidden">
+            <span className="order-confirm-icon-glow absolute inset-0 rounded-full bg-emerald-500/10 blur-md" />
+            <img
+              src="/images/order-success-icon.webp"
+              alt="Order confirmed"
+              className="relative z-10 h-full w-full object-cover rounded-full"
+            />
           </div>
         </div>
         <div className="relative flex flex-col items-center text-center">

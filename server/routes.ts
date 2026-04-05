@@ -3771,6 +3771,12 @@ export async function registerRoutes(
         if (req.body.paymentVerified === "verified") {
           try {
             const orderDetails = await storage.getOrderById(id);
+            
+            // Auto-update status to "processing" if still pending
+            if (orderDetails.status === "pending") {
+              await storage.updateOrderStatus(id, "processing");
+            }
+            
             if (orderDetails.status === "completed") {
               const user = req.user as any;
               await generateBillFromOrder(

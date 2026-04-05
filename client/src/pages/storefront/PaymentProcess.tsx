@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -12,7 +13,7 @@ import {
   simulateStripePaymentSuccess,
 } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
-import { Upload, CheckCircle2, Loader2, CreditCard, ExternalLink, AlertCircle } from "lucide-react";
+import { Upload, CheckCircle2, Loader2, CreditCard, ExternalLink, AlertCircle, X, ZoomIn } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 function useSearchQuery() {
@@ -41,6 +42,7 @@ export default function PaymentProcess() {
   const [uploaded, setUploaded] = useState(false);
   const [redirectingToStripe, setRedirectingToStripe] = useState(false);
   const [simulatingPayment, setSimulatingPayment] = useState(false);
+  const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const paymentQrQuery = useQuery({
     queryKey: ["storefront", "payment-qr"],
@@ -382,14 +384,24 @@ export default function PaymentProcess() {
                 Scan QR code to pay with {paymentLabel}
               </p>
             </div>
-            <div className="w-56 h-56 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 p-2">
+            <div
+              className="w-56 h-56 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 p-2 cursor-pointer group relative"
+              onClick={() => setQrPreviewOpen(true)}
+            >
               <img
                 src={resolvedQrImageSrc}
                 alt={`${paymentLabel} QR Code`}
                 className="w-full h-full object-contain"
               />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200 flex items-center justify-center">
+                <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 drop-shadow-lg" />
+              </div>
             </div>
-            <p className="mt-4 text-xs text-muted-foreground text-center">
+            <p className="mt-2 text-[10px] text-muted-foreground text-center flex items-center justify-center gap-1">
+              <ZoomIn className="w-3 h-3" />
+              Click to view full size
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground text-center">
               {paymentLabel} • Nikesh Uprety • 9843010717
             </p>
           </>
@@ -448,6 +460,55 @@ export default function PaymentProcess() {
           <Link href="/">Back to Home</Link>
         </Button>
       </div>
+
+      {/* QR Code Full-Screen Preview Modal */}
+      <AnimatePresence>
+        {qrPreviewOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setQrPreviewOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="relative max-w-2xl max-h-[85vh] w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setQrPreviewOpen(false)}
+                className="absolute -top-3 -right-3 z-10 h-10 w-10 rounded-full bg-white dark:bg-zinc-900 shadow-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                aria-label="Close QR preview"
+              >
+                <X className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
+              </button>
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl p-6 flex flex-col items-center">
+                <p className="text-sm font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-4">
+                  {paymentLabel} QR Code
+                </p>
+                <div className="w-full max-w-md aspect-square bg-white rounded-xl overflow-hidden flex items-center justify-center p-4">
+                  <img
+                    src={resolvedQrImageSrc}
+                    alt={`${paymentLabel} QR Code Full Size`}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400 text-center">
+                  {paymentLabel} • Nikesh Uprety • 9843010717
+                </p>
+                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+                  Scan this QR code to complete your payment
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

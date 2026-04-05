@@ -139,10 +139,10 @@ export default function OrderSuccess() {
 
       {/* Success hero — screen only */}
       <div className="no-print relative mt-20 mb-10 overflow-visible rounded-3xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/8 via-background to-background px-6 pb-8 pt-24 md:px-10 md:pb-10 md:pt-28">
-        <div className="pointer-events-none absolute -top-12 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-emerald-500/12 blur-2xl" />
+        <div className="pointer-events-none absolute -top-12 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-black/15 blur-2xl" />
         <div className="pointer-events-none absolute -top-20 left-1/2 z-20 -translate-x-1/2 text-center">
-          <div className="order-confirm-icon-float relative flex h-28 w-28 items-center justify-center rounded-full border border-emerald-300/70 bg-white shadow-[0_0_20px_rgba(34,197,94,0.3)] md:h-32 md:w-32 overflow-hidden">
-            <span className="order-confirm-icon-glow absolute inset-0 rounded-full bg-emerald-500/10 blur-md" />
+          <div className="order-confirm-icon-float relative flex h-28 w-28 items-center justify-center rounded-full border border-gray-300/70 bg-white shadow-[0_0_30px_rgba(0,0,0,0.35)] md:h-32 md:w-32 overflow-hidden">
+            <span className="order-confirm-icon-glow absolute inset-0 rounded-full bg-black/10 blur-md" />
             <img
               src="/images/order-success-icon.webp"
               alt="Order confirmed"

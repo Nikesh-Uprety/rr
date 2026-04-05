@@ -66,12 +66,29 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
     _req.path === "/" &&
     typeof _req.query.canvasPreviewTemplateId === "string" &&
     _req.query.canvasPreviewTemplateId.length > 0;
+  const configuredEmbedAncestors = (process.env.EMBED_ALLOWED_FRAME_ANCESTORS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const defaultEmbedAncestors = [
+    "https://nikeshuprety.com.np",
+    "https://www.nikeshuprety.com.np",
+    "http://localhost:*",
+    "http://127.0.0.1:*",
+  ];
+  const embedAncestors =
+    configuredEmbedAncestors.length > 0 ? configuredEmbedAncestors : defaultEmbedAncestors;
+  const shouldAllowEmbedding = embedAncestors.length > 0;
 
   // Strict Transport Security - enforce HTTPS
   res.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
 
-  // Prevent clickjacking
-  res.set("X-Frame-Options", isCanvasPreviewRequest ? "SAMEORIGIN" : "DENY");
+  // Prevent clickjacking.
+  // If we allow embedding via CSP frame-ancestors for trusted parents,
+  // do not set X-Frame-Options (it cannot express an allowlist and would override CSP in some browsers).
+  if (!shouldAllowEmbedding) {
+    res.set("X-Frame-Options", isCanvasPreviewRequest ? "SAMEORIGIN" : "DENY");
+  }
 
   // Prevent MIME type sniffing
   res.set("X-Content-Type-Options", "nosniff");
@@ -83,7 +100,11 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
   res.set("Referrer-Policy", "strict-origin-when-cross-origin");
 
   // Content Security Policy
-  const frameAncestors = isCanvasPreviewRequest ? "'self'" : "'none'";
+  const frameAncestors = isCanvasPreviewRequest
+    ? "'self'"
+    : shouldAllowEmbedding
+      ? `'self' ${embedAncestors.join(" ")}`
+      : "'none'";
   if (process.env.NODE_ENV === "production") {
     res.set(
       "Content-Security-Policy",

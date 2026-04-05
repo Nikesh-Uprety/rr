@@ -23,7 +23,7 @@ const PAYMENT_OPTIONS = [
     label: "Khalti",
     logoUrl: "/images/khalti-logo.png",
     logoWrapClass: "px-0 justify-start",
-    logoImageClass: "h-10 w-auto",
+    logoImageClass: "h-10 w-auto mr-2",
   },
   {
     id: "fonepay",

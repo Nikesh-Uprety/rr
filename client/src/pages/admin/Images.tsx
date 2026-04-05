@@ -27,7 +27,10 @@ type ImageCategory =
   | "model"
   | "website"
   | "landing_page"
-  | "collection_page";
+  | "collection_page"
+  | "payment_qr_esewa"
+  | "payment_qr_khalti"
+  | "payment_qr_fonepay";
 
 const CATEGORY_LABELS: Record<ImageCategory, string> = {
   product: "Product images",
@@ -35,6 +38,9 @@ const CATEGORY_LABELS: Record<ImageCategory, string> = {
   website: "Website assets",
   landing_page: "Landing page",
   collection_page: "Collection page",
+  payment_qr_esewa: "Payment QR • eSewa",
+  payment_qr_khalti: "Payment QR • Khalti",
+  payment_qr_fonepay: "Payment QR • Fonepay",
 };
 
 const MAX_IMAGE_SIZE_BYTES = 30 * 1024 * 1024;

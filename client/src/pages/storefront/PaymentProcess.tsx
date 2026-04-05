@@ -1,19 +1,33 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { fetchOrderById, getCachedLatestOrder, uploadPaymentProof } from "@/lib/api";
+import {
+  fetchOrderById,
+  fetchPaymentQrConfig,
+  getCachedLatestOrder,
+  uploadPaymentProof,
+} from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { Upload, CheckCircle2, Loader2 } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
-function useQuery() {
+function useSearchQuery() {
   if (typeof window === "undefined") return new URLSearchParams();
   return new URLSearchParams(window.location.search);
 }
 
+const FALLBACK_PAYMENT_QR = {
+  esewa: "/images/esewa-qr.webp",
+  khalti:
+    "https://blog.khalti.com/wp-content/uploads/2023/03/MPQRCode-HYLEbgp9z64hDoqP9L8ZyQ-pdf.jpg",
+  fonepay:
+    "https://cdn11.bigcommerce.com/s-tgrcca6nho/images/stencil/original/products/65305/136311/Quick-Scan-Pay-Stand-Scan1_136310__37301.1758003923.jpg",
+} as const;
+
 export default function PaymentProcess() {
-  const query = useQuery();
+  const query = useSearchQuery();
   const orderId = query.get("orderId") ?? "";
   const method = query.get("method") ?? "esewa";
   const { toast } = useToast();
@@ -22,6 +36,11 @@ export default function PaymentProcess() {
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const paymentQrQuery = useQuery({
+    queryKey: ["storefront", "payment-qr"],
+    queryFn: fetchPaymentQrConfig,
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
     if (!orderId) return;
@@ -127,12 +146,41 @@ export default function PaymentProcess() {
     );
   }
 
+  const normalizedMethod =
+    method === "esewa" || method === "khalti" || method === "fonepay" || method === "bank"
+      ? method
+      : "esewa";
+
   const title =
-    method === "esewa"
+    normalizedMethod === "esewa"
       ? "Pay with eSewa"
-      : method === "khalti"
+      : normalizedMethod === "khalti"
         ? "Pay with Khalti"
-        : "Bank Transfer";
+        : normalizedMethod === "fonepay"
+          ? "Pay with Fonepay"
+          : "Bank Transfer";
+
+  const qrConfig = paymentQrQuery.data;
+  const paymentLabel =
+    normalizedMethod === "esewa"
+      ? "eSewa"
+      : normalizedMethod === "khalti"
+        ? "Khalti"
+        : "Fonepay";
+
+  const qrImageSrc =
+    normalizedMethod === "khalti"
+      ? qrConfig?.khaltiQrUrl
+      : normalizedMethod === "fonepay"
+        ? qrConfig?.fonepayQrUrl
+        : qrConfig?.esewaQrUrl;
+  const resolvedQrImageSrc =
+    qrImageSrc ||
+    (normalizedMethod === "khalti"
+      ? FALLBACK_PAYMENT_QR.khalti
+      : normalizedMethod === "fonepay"
+        ? FALLBACK_PAYMENT_QR.fonepay
+        : FALLBACK_PAYMENT_QR.esewa);
 
   return (
     <div className="container mx-auto px-4 py-32 max-w-xl mt-10">
@@ -144,7 +192,7 @@ export default function PaymentProcess() {
       </p>
 
       <div className="bg-gray-50 border border-gray-200 p-8 flex flex-col items-center mb-8">
-        {method === "bank" ? (
+        {normalizedMethod === "bank" ? (
           <div className="w-full text-center space-y-4">
             <h3 className="font-bold text-lg uppercase tracking-widest text-black">Bank Details</h3>
             <div className="bg-white p-6 border border-gray-200 rounded-none text-left space-y-3">
@@ -160,29 +208,29 @@ export default function PaymentProcess() {
           <>
             <div className="flex items-center gap-3 mb-4">
               <div className={`w-10 h-10 flex items-center justify-center overflow-hidden shrink-0 ${
-                method === "esewa" ? "rounded-full" : "rounded-none"
+                normalizedMethod === "esewa" ? "rounded-full" : "rounded-none"
               }`}>
                 <img 
-                  src={method === "khalti" ? "/images/esewa-qr.webp" : "/images/esewa-qr.webp"} 
-                  alt={method} 
+                  src={resolvedQrImageSrc} 
+                  alt={paymentLabel} 
                   className={`w-full h-full object-contain ${
-                    method === "esewa" ? "scale-150" : ""
+                    normalizedMethod === "esewa" ? "scale-150" : ""
                   }`}
                 />
               </div>
               <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                Scan QR code to pay with {method === "khalti" ? "Khalti" : "eSewa"}
+                Scan QR code to pay with {paymentLabel}
               </p>
             </div>
             <div className="w-56 h-56 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 p-2">
               <img
-                src={method === "khalti" ? "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=khalti" : "/images/esewa-qr.webp"}
-                alt={`${method} QR Code`}
+                src={resolvedQrImageSrc}
+                alt={`${paymentLabel} QR Code`}
                 className="w-full h-full object-contain"
               />
             </div>
             <p className="mt-4 text-xs text-muted-foreground text-center">
-              {method === "khalti" ? "Khalti" : "eSewa"} • Nikesh Uprety • 9843010717
+              {paymentLabel} • Nikesh Uprety • 9843010717
             </p>
           </>
         )}

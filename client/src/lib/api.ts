@@ -163,6 +163,34 @@ export async function fetchPageConfig(previewTemplateId?: string | null) {
   return res.json();
 }
 
+export interface PaymentQrConfig {
+  esewaQrUrl: string;
+  khaltiQrUrl: string;
+  fonepayQrUrl: string;
+}
+
+export async function fetchPaymentQrConfig(): Promise<PaymentQrConfig> {
+  const res = await fetch("/api/storefront/payment-qr", {
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to load payment QR config: ${res.status}`);
+  }
+
+  const json = (await res.json()) as { success: boolean; data?: PaymentQrConfig };
+  return (
+    json.data ?? {
+      esewaQrUrl: "/images/esewa-qr.webp",
+      khaltiQrUrl:
+        "https://blog.khalti.com/wp-content/uploads/2023/03/MPQRCode-HYLEbgp9z64hDoqP9L8ZyQ-pdf.jpg",
+      fonepayQrUrl:
+        "https://cdn11.bigcommerce.com/s-tgrcca6nho/images/stencil/original/products/65305/136311/Quick-Scan-Pay-Stand-Scan1_136310__37301.1758003923.jpg",
+    }
+  );
+}
+
 export async function fetchCategories(): Promise<CategoryApi[]> {
   const res = await apiRequest("GET", "/api/categories");
   const json = (await res.json()) as { success: boolean; data: CategoryApi[] };

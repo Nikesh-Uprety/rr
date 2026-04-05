@@ -81,6 +81,19 @@ const PRODUCTS_UPLOADS_DIR = path.join(UPLOADS_DIR, "products");
 const MEDIA_UPLOADS_DIR = path.join(UPLOADS_DIR, "media");
 const MAX_ADMIN_IMAGE_UPLOAD_BYTES = 30 * 1024 * 1024;
 const MAX_ADMIN_IMAGE_UPLOAD_LABEL = "30 MB";
+const PAYMENT_QR_CATEGORIES = {
+  esewa: "payment_qr_esewa",
+  khalti: "payment_qr_khalti",
+  fonepay: "payment_qr_fonepay",
+} as const;
+
+const DEFAULT_PAYMENT_QR_URLS = {
+  esewaQrUrl: "/images/esewa-qr.webp",
+  khaltiQrUrl:
+    "https://blog.khalti.com/wp-content/uploads/2023/03/MPQRCode-HYLEbgp9z64hDoqP9L8ZyQ-pdf.jpg",
+  fonepayQrUrl:
+    "https://cdn11.bigcommerce.com/s-tgrcca6nho/images/stencil/original/products/65305/136311/Quick-Scan-Pay-Stand-Scan1_136310__37301.1758003923.jpg",
+} as const;
 
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
@@ -5904,6 +5917,50 @@ export async function registerRoutes(
       });
     } catch (err) {
       handleApiError(res, err, "POST /api/promo/validate");
+    }
+  });
+
+  // Dynamic QR images for checkout payment methods.
+  app.get("/api/storefront/payment-qr", async (_req: Request, res: Response) => {
+    try {
+      const rows = await db
+        .select({
+          category: mediaAssets.category,
+          url: mediaAssets.url,
+        })
+        .from(mediaAssets)
+        .where(
+          inArray(mediaAssets.category, [
+            PAYMENT_QR_CATEGORIES.esewa,
+            PAYMENT_QR_CATEGORIES.khalti,
+            PAYMENT_QR_CATEGORIES.fonepay,
+          ]),
+        )
+        .orderBy(desc(mediaAssets.createdAt));
+
+      const latestByCategory = new Map<string, string>();
+      for (const row of rows) {
+        if (!latestByCategory.has(row.category)) {
+          latestByCategory.set(row.category, row.url);
+        }
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          esewaQrUrl:
+            latestByCategory.get(PAYMENT_QR_CATEGORIES.esewa) ??
+            DEFAULT_PAYMENT_QR_URLS.esewaQrUrl,
+          khaltiQrUrl:
+            latestByCategory.get(PAYMENT_QR_CATEGORIES.khalti) ??
+            DEFAULT_PAYMENT_QR_URLS.khaltiQrUrl,
+          fonepayQrUrl:
+            latestByCategory.get(PAYMENT_QR_CATEGORIES.fonepay) ??
+            DEFAULT_PAYMENT_QR_URLS.fonepayQrUrl,
+        },
+      });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/storefront/payment-qr");
     }
   });
 

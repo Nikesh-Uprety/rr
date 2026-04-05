@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ExternalLink } from "lucide-react";
 import { Link } from "wouter";
 
@@ -25,38 +25,17 @@ function NewArrivalCard({
     const rest = all.filter((_, idx) => idx !== clamped);
     return [preferred, ...rest];
   }, [preferredIndex, product]);
-  const [idx, setIdx] = useState(0);
-
-  useEffect(() => {
-    if (images.length <= 1) return;
-    const duration = idx === 0 ? 3800 : 2300;
-    const t = setTimeout(() => setIdx((p) => (p + 1) % images.length), duration);
-    return () => clearTimeout(t);
-  }, [images.length, idx]);
-
   return (
     <Link href={`/product/${product.id}`} className="group block cursor-pointer">
       <div
         className={`relative overflow-hidden rounded-xl border border-zinc-200/70 bg-zinc-100/70 dark:border-zinc-800/80 dark:bg-zinc-900/40 ${imageAspectClass} mb-4 shadow-[0_12px_40px_-30px_rgba(0,0,0,0.85)] transition-all duration-500 group-hover:-translate-y-1 group-hover:shadow-[0_24px_60px_-30px_rgba(0,0,0,0.9)]`}
       >
         <div className="absolute inset-0">
-          {images.slice(0, 6).map((src: string, imgIdx: number) => (
-            <div
-              key={`${product.id}-img-${imgIdx}`}
-              className="absolute inset-0"
-              style={{
-                opacity: imgIdx === idx ? 1 : 0,
-                transition: "opacity 1.4s cubic-bezier(0.22, 1, 0.36, 1)",
-                zIndex: imgIdx === idx ? 1 : 0,
-              }}
-            >
-              <OptimizedImage
-                src={src}
-                alt={`${product.name} view ${imgIdx + 1}`}
-                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.035]"
-              />
-            </div>
-          ))}
+          <OptimizedImage
+            src={images[0] ?? "/placeholder.svg"}
+            alt={product.name}
+            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.035]"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-60 z-[2]" />
           <div className="absolute inset-0 z-[3] border border-white/30 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
         </div>

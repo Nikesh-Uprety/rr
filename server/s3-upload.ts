@@ -1,4 +1,8 @@
-import crypto from 'crypto';
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 
 export interface S3Config {
   endpoint: string;
@@ -9,95 +13,127 @@ export interface S3Config {
 }
 
 export class S3Uploader {
-  private config: S3Config;
+  private readonly config: S3Config;
+  private readonly client: S3Client;
 
   constructor(config: S3Config) {
     this.config = config;
+    this.client = new S3Client({
+      region: this.config.region,
+      endpoint: this.config.endpoint,
+      forcePathStyle: true,
+      credentials: {
+        accessKeyId: this.config.accessKeyId,
+        secretAccessKey: this.config.secretAccessKey,
+      },
+    });
   }
 
-  private getSignature(method: string, path: string, expires: number): string {
-    const stringToSign = `${method}\n\n\n\nx-amz-date:${new Date().toISOString().replace(/[:\-]|\.\d{3}/g, '')}\n${path}`;
-    return crypto
-      .createHmac('sha256', this.config.secretAccessKey)
-      .update(stringToSign)
-      .digest('base64');
-  }
-
-  private getHeaders(method: string, path: string, contentType?: string): Record<string, string> {
-    const date = new Date().toISOString();
-    const signature = this.getSignature(method, path, Date.now() + 3600000);
-    
-    return {
-      'Host': `${this.config.bucket}.${this.config.endpoint.replace('https://', '')}`,
-      'X-Amz-Date': date,
-      'X-Amz-Content-Sha256': 'UNSIGNED-PAYLOAD',
-      'Authorization': `AWS4-HMAC-SHA256 Credential=${this.config.accessKeyId}/${date.substr(0, 8)}/${this.config.region}/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=${signature}`,
-      ...(contentType && { 'Content-Type': contentType }),
-    };
-  }
-
-  async uploadFile(file: Buffer, fileName: string, contentType: string = 'application/octet-stream'): Promise<string> {
-    const path = `/${fileName}`;
-    const url = `${this.config.endpoint}/${this.config.bucket}${path}`;
-    
-    const headers = this.getHeaders('PUT', path, contentType);
-
+  async uploadFile(
+    file: Buffer,
+    fileName: string,
+    contentType: string = "application/octet-stream",
+  ): Promise<string> {
     try {
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers,
-        body: file,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
-      }
-
-      return `${this.config.endpoint}/${this.config.bucket}/${fileName}`;
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.config.bucket,
+          Key: fileName,
+          Body: file,
+          ContentType: contentType,
+        }),
+      );
+      return this.getPublicUrl(fileName);
     } catch (error) {
-      console.error('S3 upload error:', error);
+      console.error("S3 upload error:", error);
       throw error;
     }
   }
 
   async deleteFile(fileName: string): Promise<void> {
-    const path = `/${fileName}`;
-    const url = `${this.config.endpoint}/${this.config.bucket}${path}`;
-    
-    const headers = this.getHeaders('DELETE', path);
-
     try {
-      const response = await fetch(url, {
-        method: 'DELETE',
-        headers,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Delete failed: ${response.statusText}`);
-      }
+      await this.client.send(
+        new DeleteObjectCommand({
+          Bucket: this.config.bucket,
+          Key: fileName,
+        }),
+      );
     } catch (error) {
-      console.error('S3 delete error:', error);
+      console.error("S3 delete error:", error);
       throw error;
     }
   }
 
   getPublicUrl(fileName: string): string {
-    return `${this.config.endpoint}/${this.config.bucket}/${fileName}`;
+    const endpoint = this.config.endpoint.replace(/\/+$/, "");
+    return `${endpoint}/${this.config.bucket}/${fileName}`;
   }
 }
 
-export function createS3Uploader(): S3Uploader {
+function readFirst(...values: Array<string | undefined>): string | undefined {
+  return values.find((value) => typeof value === "string" && value.trim().length > 0)?.trim();
+}
+
+export function resolveS3ConfigFromEnv(): S3Config {
+  const endpoint =
+    readFirst(
+      process.env.TIGRIS_STORAGE_ENDPOINT,
+      process.env.TIGRIS_ENDPOINT,
+      process.env.S3_ENDPOINT,
+      process.env.AWS_ENDPOINT_URL_S3,
+      process.env.AWS_ENDPOINT_URL,
+    ) ?? "https://t3.storageapi.dev";
+
+  const region =
+    readFirst(
+      process.env.TIGRIS_STORAGE_REGION,
+      process.env.TIGRIS_REGION,
+      process.env.S3_REGION,
+      process.env.AWS_REGION,
+    ) ?? "auto";
+
+  const bucket =
+    readFirst(
+      process.env.TIGRIS_STORAGE_BUCKET,
+      process.env.TIGRIS_STORAGE_BUCKET_NAME,
+      process.env.TIGRIS_BUCKET,
+      process.env.TIGRIS_BUCKET_NAME,
+      process.env.S3_BUCKET,
+      process.env.AWS_S3_BUCKET,
+      process.env.AWS_BUCKET,
+    ) ?? "";
+
+  const accessKeyId =
+    readFirst(
+      process.env.TIGRIS_STORAGE_ACCESS_KEY_ID,
+      process.env.TIGRIS_ACCESS_KEY_ID,
+      process.env.S3_ACCESS_KEY_ID,
+      process.env.AWS_ACCESS_KEY_ID,
+    ) ?? "";
+
+  const secretAccessKey =
+    readFirst(
+      process.env.TIGRIS_STORAGE_SECRET_ACCESS_KEY,
+      process.env.TIGRIS_SECRET_ACCESS_KEY,
+      process.env.S3_SECRET_ACCESS_KEY,
+      process.env.AWS_SECRET_ACCESS_KEY,
+    ) ?? "";
+
   const config: S3Config = {
-    endpoint: process.env.S3_ENDPOINT || 'https://t3.storageapi.dev',
-    region: process.env.S3_REGION || 'auto',
-    bucket: process.env.S3_BUCKET || '',
-    accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+    endpoint,
+    region,
+    bucket,
+    accessKeyId,
+    secretAccessKey,
   };
 
   if (!config.bucket || !config.accessKeyId || !config.secretAccessKey) {
-    throw new Error('Missing S3 configuration. Please check environment variables.');
+    throw new Error("Missing S3 configuration. Please check TIGRIS_STORAGE_ / TIGRIS_ / S3_ / AWS_ environment variables.");
   }
 
-  return new S3Uploader(config);
+  return config;
+}
+
+export function createS3Uploader(): S3Uploader {
+  return new S3Uploader(resolveS3ConfigFromEnv());
 }

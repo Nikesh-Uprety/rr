@@ -183,9 +183,23 @@ export interface AdminStorefrontImageEntry {
   relPath: string;
 }
 
+export type PaymentQrProvider = "esewa" | "khalti" | "fonepay";
+
+export interface AdminPaymentQrSelection {
+  id: string | null;
+  url: string;
+  createdAt: string | null;
+}
+
+export interface AdminPaymentQrConfig {
+  esewa: AdminPaymentQrSelection;
+  khalti: AdminPaymentQrSelection;
+  fonepay: AdminPaymentQrSelection;
+}
+
 export async function fetchAdminImages(params?: {
   category?: string;
-  provider?: string;
+  provider?: "local" | "cloudinary" | "tigris" | string;
   search?: string;
   limit?: number;
   offset?: number;
@@ -203,7 +217,7 @@ export async function fetchAdminImages(params?: {
 
 export async function fetchAdminImagesPage(params?: {
   category?: string;
-  provider?: string;
+  provider?: "local" | "cloudinary" | "tigris" | string;
   search?: string;
   limit?: number;
   offset?: number;
@@ -221,6 +235,19 @@ export async function fetchAdminImagesPage(params?: {
     total?: number;
   };
   return { data: json.data ?? [], total: json.total ?? 0 };
+}
+
+export async function fetchAdminPaymentQrConfig(): Promise<AdminPaymentQrConfig> {
+  const res = await apiRequest("GET", "/api/admin/payment-qr/config");
+  const json = (await res.json()) as { success: boolean; data: AdminPaymentQrConfig };
+  return json.data;
+}
+
+export async function activateAdminPaymentQr(input: {
+  provider: PaymentQrProvider;
+  assetId: string;
+}): Promise<void> {
+  await apiRequest("POST", "/api/admin/payment-qr/activate", input);
 }
 
 export interface AdminOrderTrendPoint {
@@ -325,7 +352,7 @@ function uploadWithProgress<T>(options: {
 export async function uploadAdminImage(input: {
   file: File;
   category: string;
-  provider: "local" | "cloudinary";
+  provider: "local" | "cloudinary" | "tigris";
   onProgress?: UploadProgressHandler;
 }): Promise<AdminImageAsset> {
   const form = new FormData();

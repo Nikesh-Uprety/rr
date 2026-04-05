@@ -85,6 +85,7 @@ const MEDIA_UPLOADS_DIR = path.join(UPLOADS_DIR, "media");
 const MAX_ADMIN_IMAGE_UPLOAD_BYTES = 30 * 1024 * 1024;
 const MAX_ADMIN_IMAGE_UPLOAD_LABEL = "30 MB";
 const PAYMENT_QR_CATEGORIES = {
+  all: "payment_qr",
   esewa: "payment_qr_esewa",
   khalti: "payment_qr_khalti",
   fonepay: "payment_qr_fonepay",
@@ -97,6 +98,8 @@ const DEFAULT_PAYMENT_QR_URLS = {
   fonepayQrUrl:
     "https://cdn11.bigcommerce.com/s-tgrcca6nho/images/stencil/original/products/65305/136311/Quick-Scan-Pay-Stand-Scan1_136310__37301.1758003923.jpg",
 } as const;
+
+const PAYMENT_PROOF_STORAGE = (process.env.PAYMENT_PROOF_STORAGE || "cloudinary").toLowerCase();
 
 // Abuse prevention: tracks IPs/emails that repeatedly exceed new customer limits
 const abuseAttempts = new Map<string, { count: number; blockedAt: number }>();
@@ -1471,7 +1474,13 @@ export async function registerRoutes(
       const featured = await db
         .select()
         .from(products)
-        .where(eq(products.homeFeatured, true))
+        .where(
+          and(
+            eq(products.homeFeatured, true),
+            eq(products.isActive, true),
+            gte(products.stock, 1),
+          ),
+        )
         .orderBy(desc(products.updatedAt))
         .limit(8);
       res.set("Cache-Control", "public, max-age=300");
@@ -1924,7 +1933,11 @@ export async function registerRoutes(
 
           await db
             .update(products)
-            .set({ stock: totalStock })
+            .set({
+              stock: totalStock,
+              isActive: totalStock > 0 ? sql`${products.isActive}` : false,
+              updatedAt: new Date(),
+            })
             .where(eq(products.id, productId));
         } else {
           const existingProduct = await db
@@ -1937,7 +1950,11 @@ export async function registerRoutes(
             const newStock = Math.max(0, (existingProduct[0].stock ?? 0) - item.quantity);
             await db
               .update(products)
-              .set({ stock: newStock })
+              .set({
+                stock: newStock,
+                isActive: newStock > 0 ? sql`${products.isActive}` : false,
+                updatedAt: new Date(),
+              })
               .where(eq(products.id, productId));
           }
         }
@@ -2044,10 +2061,20 @@ export async function registerRoutes(
           match ? match[2] : base64,
           "base64",
         );
-        const { url: proofUrl } = await uploadPaymentProofToCloudinary(
-          buffer,
-          orderId,
-        );
+        let proofUrl = "";
+        if (PAYMENT_PROOF_STORAGE === "tigris" || PAYMENT_PROOF_STORAGE === "s3") {
+          const fileName = `payment-proofs/order-${orderId}-${Date.now()}.png`;
+          proofUrl = await storageService.uploadFile(buffer, fileName, "image/png");
+        } else if (PAYMENT_PROOF_STORAGE === "local") {
+          const fileName = `payment-proofs/order-${orderId}-${Date.now()}.png`;
+          proofUrl = await storageService.uploadFile(buffer, fileName, "image/png");
+        } else {
+          const uploaded = await uploadPaymentProofToCloudinary(
+            buffer,
+            orderId,
+          );
+          proofUrl = uploaded.url;
+        }
 
         await storage.updateOrderPaymentProof(orderId, proofUrl);
         return res.json({ success: true, data: { paymentProofUrl: proofUrl } });
@@ -2956,7 +2983,11 @@ export async function registerRoutes(
 
     await db
       .update(products)
-      .set({ stock: totalStock })
+      .set({
+        stock: totalStock,
+        isActive: totalStock > 0 ? sql`${products.isActive}` : false,
+        updatedAt: new Date(),
+      })
       .where(eq(products.id, input.productId));
   };
 
@@ -3000,9 +3031,11 @@ export async function registerRoutes(
         const products = productRows.map((product) => {
           const stockBySize = stockByProduct[product.id] ?? {};
           const totalStock = Object.values(stockBySize).reduce((sum, value) => sum + value, 0);
+          const effectiveStock = Object.keys(stockBySize).length > 0 ? totalStock : (product.stock ?? 0);
           return {
             ...product,
-            stock: Object.keys(stockBySize).length > 0 ? totalStock : product.stock,
+            stock: effectiveStock,
+            isActive: effectiveStock > 0 ? product.isActive : false,
             stockBySize,
           };
         });
@@ -3094,7 +3127,7 @@ export async function registerRoutes(
           homeFeaturedImageIndex: req.body.homeFeaturedImageIndex ?? 2,
           isNewArrival: req.body.isNewArrival || false,
           isNewCollection: req.body.isNewCollection || false,
-          isActive: true,
+          isActive: Number(req.body.stock ?? 0) > 0,
         };
         const product = await storage.createProduct(data);
         const sizeOptions = parseSizeOptions(req.body.sizeOptions);
@@ -3152,6 +3185,12 @@ export async function registerRoutes(
           originalPrice: req.body.originalPrice === undefined ? undefined : (req.body.originalPrice ? req.body.originalPrice.toString() : null),
           homeFeatured: req.body.homeFeatured,
           homeFeaturedImageIndex: req.body.homeFeaturedImageIndex,
+          isActive:
+            req.body.stock === undefined
+              ? undefined
+              : Number(req.body.stock) <= 0
+                ? false
+                : undefined,
         };
 
         const updated = await storage.updateProduct(productId, data);
@@ -3234,6 +3273,12 @@ export async function registerRoutes(
 
         const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
         if (!product) return res.status(404).json({ success: false, error: "Product not found" });
+        if (!product.isActive && Number(product.stock ?? 0) <= 0) {
+          return res.status(400).json({
+            success: false,
+            error: "Cannot activate a product with zero stock",
+          });
+        }
 
         const [updated] = await db
           .update(products)
@@ -3510,7 +3555,11 @@ export async function registerRoutes(
 
           await db
             .update(products)
-            .set({ stock: totalStock })
+            .set({
+              stock: totalStock,
+              isActive: totalStock > 0 ? sql`${products.isActive}` : false,
+              updatedAt: new Date(),
+            })
             .where(eq(products.id, productId as string));
         }
 
@@ -4390,7 +4439,7 @@ export async function registerRoutes(
   // Upload avatar image
   const uploadAvatarSchema = z.object({
     imageBase64: z.string().min(1),
-    provider: z.enum(["local", "cloudinary"]).optional(),
+    provider: z.enum(["local", "cloudinary", "tigris"]).optional(),
   });
 
   app.post(
@@ -4426,6 +4475,13 @@ export async function registerRoutes(
           const uploaded = await uploadMediaToCloudinary(finalBuffer, "profile");
           await storage.updateUserProfile(user.id, { profileImageUrl: uploaded.url });
           return res.json({ success: true, url: uploaded.url, provider: "cloudinary" });
+        }
+
+        if (provider === "tigris") {
+          const fileName = `avatars/avatar-${user.id}-${Date.now()}.webp`;
+          const url = await storageService.uploadFile(finalBuffer, fileName, "image/webp");
+          await storage.updateUserProfile(user.id, { profileImageUrl: url });
+          return res.json({ success: true, url, provider: "tigris" });
         }
 
         const avatarDir = path.join(UPLOADS_DIR, "avatars");
@@ -5811,7 +5867,11 @@ export async function registerRoutes(
 
           await db
             .update(products)
-            .set({ stock: totalStock })
+            .set({
+              stock: totalStock,
+              isActive: totalStock > 0 ? sql`${products.isActive}` : false,
+              updatedAt: new Date(),
+            })
             .where(eq(products.id, productId));
         } else {
           const existingProduct = await db
@@ -5824,7 +5884,11 @@ export async function registerRoutes(
             const newStock = Math.max(0, (existingProduct[0].stock ?? 0) - Number(item.quantity ?? 0));
             await db
               .update(products)
-              .set({ stock: newStock })
+              .set({
+                stock: newStock,
+                isActive: newStock > 0 ? sql`${products.isActive}` : false,
+                updatedAt: new Date(),
+              })
               .where(eq(products.id, productId));
           }
         }
@@ -6258,6 +6322,117 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/admin/payment-qr/config", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const rows = await db
+        .select({
+          id: mediaAssets.id,
+          category: mediaAssets.category,
+          url: mediaAssets.url,
+          createdAt: mediaAssets.createdAt,
+        })
+        .from(mediaAssets)
+        .where(
+          inArray(mediaAssets.category, [
+            PAYMENT_QR_CATEGORIES.esewa,
+            PAYMENT_QR_CATEGORIES.khalti,
+            PAYMENT_QR_CATEGORIES.fonepay,
+          ]),
+        )
+        .orderBy(desc(mediaAssets.createdAt));
+
+      const latestByCategory = new Map<
+        string,
+        { id: string; url: string; createdAt: Date | null }
+      >();
+      for (const row of rows) {
+        if (!latestByCategory.has(row.category)) {
+          latestByCategory.set(row.category, {
+            id: row.id,
+            url: row.url,
+            createdAt: row.createdAt ?? null,
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          esewa: latestByCategory.get(PAYMENT_QR_CATEGORIES.esewa) ?? {
+            id: null,
+            url: DEFAULT_PAYMENT_QR_URLS.esewaQrUrl,
+            createdAt: null,
+          },
+          khalti: latestByCategory.get(PAYMENT_QR_CATEGORIES.khalti) ?? {
+            id: null,
+            url: DEFAULT_PAYMENT_QR_URLS.khaltiQrUrl,
+            createdAt: null,
+          },
+          fonepay: latestByCategory.get(PAYMENT_QR_CATEGORIES.fonepay) ?? {
+            id: null,
+            url: DEFAULT_PAYMENT_QR_URLS.fonepayQrUrl,
+            createdAt: null,
+          },
+        },
+      });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/admin/payment-qr/config");
+    }
+  });
+
+  app.post(
+    "/api/admin/payment-qr/activate",
+    requireAdmin,
+    validateRequest(
+      z.object({
+        provider: z.enum(["esewa", "khalti", "fonepay"]),
+        assetId: z.string().min(1),
+      }),
+    ),
+    async (req: Request, res: Response) => {
+      try {
+        const { provider, assetId } = req.body as {
+          provider: "esewa" | "khalti" | "fonepay";
+          assetId: string;
+        };
+
+        const [source] = await db
+          .select()
+          .from(mediaAssets)
+          .where(eq(mediaAssets.id, assetId))
+          .limit(1);
+
+        if (!source) {
+          return res.status(404).json({ success: false, error: "Image not found" });
+        }
+
+        const category = PAYMENT_QR_CATEGORIES[provider];
+        const [created] = await db
+          .insert(mediaAssets)
+          .values({
+            url: source.url,
+            provider: source.provider,
+            category,
+            publicId: source.publicId,
+            filename: source.filename,
+            bytes: source.bytes,
+            width: source.width,
+            height: source.height,
+          })
+          .returning({
+            id: mediaAssets.id,
+            url: mediaAssets.url,
+            category: mediaAssets.category,
+            createdAt: mediaAssets.createdAt,
+          });
+
+        return res.json({ success: true, data: created });
+      } catch (err) {
+        handleApiError(res, err, "POST /api/admin/payment-qr/activate");
+      }
+    },
+  );
+
   // ── Media Discovery (Admin Only) ──────────────────────────────────
   app.get("/api/admin/images", requireAdmin, async (req: Request, res: Response) => {
     try {
@@ -6267,8 +6442,20 @@ export async function registerRoutes(
       const limit = Math.min(200, Math.max(1, Number(getQueryParam(req.query.limit) ?? "60") || 60));
       const offset = Math.max(0, Number(getQueryParam(req.query.offset) ?? "0") || 0);
 
-      const conditions: Array<ReturnType<typeof sql>> = [
-        category ? eq(mediaAssets.category, category) : sql`true`,
+      const categoryCondition =
+        category === PAYMENT_QR_CATEGORIES.all
+          ? inArray(mediaAssets.category, [
+              PAYMENT_QR_CATEGORIES.all,
+              PAYMENT_QR_CATEGORIES.esewa,
+              PAYMENT_QR_CATEGORIES.khalti,
+              PAYMENT_QR_CATEGORIES.fonepay,
+            ])
+          : category
+            ? eq(mediaAssets.category, category)
+            : sql`true`;
+
+      const conditions = [
+        categoryCondition,
         provider ? eq(mediaAssets.provider, provider) : sql`true`,
       ];
 
@@ -6378,6 +6565,28 @@ export async function registerRoutes(
               cleanedName
             );
             results.push(asset);
+          } else if (provider === "tigris") {
+            const fileName = `media/${category}/${Date.now()}_${cleanedName.replace(/\.[^.]+$/, "")}.webp`;
+            const webpBuffer = await sharp(file.buffer)
+              .webp({ quality: 85, effort: 4 })
+              .toBuffer();
+            const uploadedUrl = await storageService.uploadFile(
+              webpBuffer,
+              fileName,
+              "image/webp",
+            );
+            const [row] = await db
+              .insert(mediaAssets)
+              .values({
+                url: uploadedUrl,
+                provider: "tigris",
+                category,
+                publicId: fileName,
+                filename: cleanedName,
+                bytes: webpBuffer.byteLength,
+              })
+              .returning();
+            results.push(row);
           } else {
             const uploaded = await uploadMediaToCloudinary(file.buffer, category);
             const [row] = await db
@@ -6431,6 +6640,20 @@ export async function registerRoutes(
         await deleteFromCloudinary(asset.publicId);
       } else if (asset.provider === "local") {
         await deleteLocalImage(asset.url);
+      } else if (asset.provider === "tigris") {
+        const key =
+          asset.publicId ||
+          (() => {
+            try {
+              const u = new URL(asset.url);
+              return u.pathname.split("/").slice(2).join("/");
+            } catch {
+              return "";
+            }
+          })();
+        if (key) {
+          await storageService.deleteFile(key);
+        }
       }
 
       await db.delete(mediaAssets).where(eq(mediaAssets.id, id));

@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { createS3Uploader, type S3Uploader } from "./s3-upload";
+import { createS3Uploader, resolveS3ConfigFromEnv, type S3Uploader } from "./s3-upload";
 import { resolveUploadsDir } from "./uploads";
 
 export interface StorageConfig {
@@ -28,6 +28,7 @@ export class LocalStorageService implements StorageService {
     const filePath = path.join(this.uploadsDir, fileName);
     
     try {
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
       await fs.promises.writeFile(filePath, file);
       return `/uploads/${fileName}`;
     } catch (error) {
@@ -62,31 +63,14 @@ export class S3StorageService implements StorageService {
   }
 
   private getStorageConfig(): StorageConfig {
-    // Try Tigris first, fallback to t3.storageapi.dev
-    if (process.env.TIGRIS_ENDPOINT && process.env.TIGRIS_BUCKET) {
-      console.log('🐅 Using Tigris S3 storage');
-      return {
-        endpoint: process.env.TIGRIS_ENDPOINT,
-        region: process.env.TIGRIS_REGION || 'auto',
-        bucket: process.env.TIGRIS_BUCKET,
-        accessKeyId: process.env.TIGRIS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.TIGRIS_SECRET_ACCESS_KEY || '',
-      };
-    }
-
-    // Fallback to t3.storageapi.dev (original setup)
-    if (process.env.S3_ENDPOINT && process.env.S3_BUCKET) {
-      console.log('🗂️ Using t3.storageapi.dev S3 storage');
-      return {
-        endpoint: process.env.S3_ENDPOINT,
-        region: process.env.S3_REGION || 'auto',
-        bucket: process.env.S3_BUCKET,
-        accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
-      };
-    }
-
-    throw new Error('No S3 storage configuration found. Please set S3_ or TIGRIS_ environment variables.');
+    const resolved = resolveS3ConfigFromEnv();
+    return {
+      endpoint: resolved.endpoint,
+      region: resolved.region,
+      bucket: resolved.bucket,
+      accessKeyId: resolved.accessKeyId,
+      secretAccessKey: resolved.secretAccessKey,
+    };
   }
 
   async uploadFile(file: Buffer, fileName: string, contentType?: string): Promise<string> {
@@ -111,37 +95,21 @@ export class S3StorageService implements StorageService {
   }
 
   getPublicUrl(fileName: string): string {
-    const endpoint = this.config.endpoint.replace('https://', '').replace('.storageapi.dev', '');
-    return `https://${endpoint}/${this.config.bucket}/${fileName}`;
+    const endpoint = this.config.endpoint.replace(/\/+$/, "");
+    return `${endpoint}/${this.config.bucket}/${fileName}`;
   }
 }
 
 export function createStorageService(): StorageService {
-  // Use Tigris if available, fallback to t3.storageapi.dev
-  if (
-    process.env.TIGRIS_ENDPOINT &&
-    process.env.TIGRIS_BUCKET &&
-    process.env.TIGRIS_ACCESS_KEY_ID &&
-    process.env.TIGRIS_SECRET_ACCESS_KEY
-  ) {
-    console.log('🐅 Using Tigris S3 storage');
+  try {
+    const config = resolveS3ConfigFromEnv();
+    const isTigrisEndpoint = config.endpoint.toLowerCase().includes("tigris");
+    console.log(isTigrisEndpoint ? "🐅 Using Tigris object storage" : "🗂️ Using S3-compatible object storage");
     return new S3StorageService();
+  } catch {
+    console.log("💾 Using local file storage");
+    return new LocalStorageService();
   }
-
-  // Fallback to t3.storageapi.dev if configured
-  if (
-    process.env.S3_ENDPOINT &&
-    process.env.S3_BUCKET &&
-    process.env.S3_ACCESS_KEY_ID &&
-    process.env.S3_SECRET_ACCESS_KEY
-  ) {
-    console.log('🗂️ Using t3.storageapi.dev S3 storage');
-    return new S3StorageService();
-  }
-
-  // Fallback to local storage
-  console.log('💾 Using local file storage');
-  return new LocalStorageService();
 }
 
 export const storageService = createStorageService();

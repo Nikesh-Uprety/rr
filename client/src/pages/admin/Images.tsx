@@ -13,10 +13,13 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
+  activateAdminPaymentQr,
   deleteAdminImage,
+  fetchAdminPaymentQrConfig,
   fetchAdminImagesPage,
   uploadAdminImage,
   type AdminImageAsset,
+  type PaymentQrProvider,
 } from "@/lib/adminApi";
 import { Trash2, Upload, Images as ImagesIcon, Copy, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -28,9 +31,7 @@ type ImageCategory =
   | "website"
   | "landing_page"
   | "collection_page"
-  | "payment_qr_esewa"
-  | "payment_qr_khalti"
-  | "payment_qr_fonepay";
+  | "payment_qr";
 
 const CATEGORY_LABELS: Record<ImageCategory, string> = {
   product: "Product images",
@@ -38,10 +39,14 @@ const CATEGORY_LABELS: Record<ImageCategory, string> = {
   website: "Website assets",
   landing_page: "Landing page",
   collection_page: "Collection page",
-  payment_qr_esewa: "Payment QR • eSewa",
-  payment_qr_khalti: "Payment QR • Khalti",
-  payment_qr_fonepay: "Payment QR • Fonepay",
+  payment_qr: "Payment QR",
 };
+
+const PAYMENT_QR_PROVIDER_META: Array<{ key: PaymentQrProvider; label: string }> = [
+  { key: "esewa", label: "eSewa" },
+  { key: "khalti", label: "Khalti" },
+  { key: "fonepay", label: "Fonepay" },
+];
 
 const MAX_IMAGE_SIZE_BYTES = 30 * 1024 * 1024;
 const MAX_IMAGE_SIZE_LABEL = "30MB";
@@ -49,7 +54,7 @@ const MAX_IMAGE_SIZE_LABEL = "30MB";
 export default function AdminImagesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [provider, setProvider] = useState<"local" | "cloudinary">("local");
+  const [provider, setProvider] = useState<"local" | "cloudinary" | "tigris">("local");
   const [category, setCategory] = useState<ImageCategory>("product");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -79,6 +84,12 @@ export default function AdminImagesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
+  const paymentQrConfigQuery = useQuery({
+    queryKey: ["admin", "payment-qr", "config"],
+    queryFn: fetchAdminPaymentQrConfig,
+    enabled: category === "payment_qr",
+  });
+
   const imagesQuery = useQuery<{ data: AdminImageAsset[]; total: number }>({
     queryKey: ["admin", "images", { provider, category, search: debouncedSearch, page: imagePage, limit: imagePageSize }],
     queryFn: () =>
@@ -93,6 +104,20 @@ export default function AdminImagesPage() {
 
   const images = imagesQuery.data?.data ?? [];
   const totalImages = imagesQuery.data?.total ?? 0;
+  const paymentQrConfig = paymentQrConfigQuery.data;
+
+  const qrImageProvidersMap = useMemo(() => {
+    const map = new Map<string, PaymentQrProvider[]>();
+    if (!paymentQrConfig) return map;
+    for (const provider of PAYMENT_QR_PROVIDER_META.map((entry) => entry.key)) {
+      const url = paymentQrConfig[provider]?.url;
+      if (!url) continue;
+      const list = map.get(url) ?? [];
+      list.push(provider);
+      map.set(url, list);
+    }
+    return map;
+  }, [paymentQrConfig]);
 
   useEffect(() => {
     setImagePage(1);
@@ -249,6 +274,22 @@ export default function AdminImagesPage() {
     },
   });
 
+  const activatePaymentQrMutation = useMutation({
+    mutationFn: (input: { provider: PaymentQrProvider; assetId: string }) =>
+      activateAdminPaymentQr(input),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "payment-qr", "config"] });
+      toast({ title: `${vars.provider.toUpperCase()} QR activated` });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Failed to activate QR image",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   function addBulkFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const next: BulkFile[] = [];
@@ -370,7 +411,7 @@ export default function AdminImagesPage() {
             Images
           </h1>
           <p className="text-muted-foreground mt-1">
-            Central library for product, model, and website assets.
+            Central library for product, model, website, and payment QR assets.
           </p>
         </div>
       </div>
@@ -379,7 +420,7 @@ export default function AdminImagesPage() {
         <div className="flex flex-col lg:flex-row lg:items-center gap-3 justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-1 rounded-full bg-muted p-1">
-              {(["cloudinary", "local"] as const).map((p) => (
+              {(["cloudinary", "tigris", "local"] as const).map((p) => (
                 <button
                   key={p}
                   type="button"
@@ -391,7 +432,7 @@ export default function AdminImagesPage() {
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {p === "cloudinary" ? "Cloudinary" : "Local"}
+                  {p === "cloudinary" ? "Cloudinary" : p === "tigris" ? "Tigris" : "Local"}
                 </button>
               ))}
             </div>
@@ -455,6 +496,35 @@ export default function AdminImagesPage() {
             </Button>
           </div>
         </div>
+
+        {category === "payment_qr" && (
+          <div className="rounded-xl border border-border bg-muted/30 p-3">
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-muted-foreground mb-2">
+              Active QR by Provider
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {PAYMENT_QR_PROVIDER_META.map((provider) => {
+                const active = paymentQrConfig?.[provider.key];
+                return (
+                  <div key={provider.key} className="rounded-lg border border-border bg-background p-2 flex items-center gap-3">
+                    {active?.url ? (
+                      <img src={active.url} alt={`${provider.label} active QR`} className="h-12 w-12 rounded object-cover border border-border" />
+                    ) : (
+                      <div className="h-12 w-12 rounded border border-border bg-muted" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold">{provider.label}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{active?.url ?? "No active QR"}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              Upload QR images here, then click provider buttons on any image card to activate for checkout.
+            </p>
+          </div>
+        )}
 
         {/* Bulk upload drop zone + preview */}
         <div
@@ -657,6 +727,33 @@ export default function AdminImagesPage() {
                     <p className="text-[10px] text-foreground truncate" title={displayName}>
                       {displayName}
                     </p>
+                    {category === "payment_qr" && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {PAYMENT_QR_PROVIDER_META.map((provider) => {
+                          const linkedProviders = qrImageProvidersMap.get(item.url) ?? [];
+                          const isActiveForProvider = linkedProviders.includes(provider.key);
+                          return (
+                            <button
+                              key={`${item.id}-${provider.key}`}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                activatePaymentQrMutation.mutate({ provider: provider.key, assetId: item.id });
+                              }}
+                              disabled={activatePaymentQrMutation.isPending}
+                              className={cn(
+                                "rounded px-2 py-1 text-[10px] font-semibold border transition-colors",
+                                isActiveForProvider
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "bg-background border-border hover:border-primary/60",
+                              )}
+                            >
+                              {provider.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

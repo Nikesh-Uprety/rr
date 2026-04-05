@@ -691,6 +691,7 @@ export class PgStorage implements IStorage {
   async createProduct(
     data: Omit<Product, "id" | "createdAt" | "updatedAt">,
   ): Promise<Product> {
+    const nextIsActive = (data.isActive ?? true) && Number(data.stock ?? 0) > 0;
     const [row] = await db
       .insert(products)
       .values({
@@ -714,6 +715,7 @@ export class PgStorage implements IStorage {
         homeFeaturedImageIndex: data.homeFeaturedImageIndex ?? 2,
         isNewArrival: false,
         isNewCollection: false,
+        isActive: nextIsActive,
       })
       .returning({
         id: products.id,
@@ -774,6 +776,13 @@ export class PgStorage implements IStorage {
     id: string,
     data: Partial<Omit<Product, "id">>,
   ): Promise<Product> {
+    const computedIsActive =
+      data.stock !== undefined
+        ? Number(data.stock) > 0
+          ? data.isActive
+          : false
+        : data.isActive;
+
     const [row] = await db
       .update(products)
       .set({
@@ -796,6 +805,7 @@ export class PgStorage implements IStorage {
         homeFeaturedImageIndex: data.homeFeaturedImageIndex,
         isNewArrival: data.isNewArrival ?? false,
         isNewCollection: data.isNewCollection ?? false,
+        isActive: computedIsActive,
         updatedAt: new Date(),
       })
       .where(eq(products.id, id))
@@ -3278,6 +3288,7 @@ export class MemStorage implements IStorage {
   async createProduct(
     data: Omit<Product, "id" | "createdAt" | "updatedAt">,
   ): Promise<Product> {
+    const nextIsActive = (data.isActive ?? true) && Number(data.stock ?? 0) > 0;
     const product: Product = {
       id: crypto.randomUUID(),
       name: data.name,
@@ -3300,7 +3311,7 @@ export class MemStorage implements IStorage {
       homeFeaturedImageIndex: data.homeFeaturedImageIndex ?? 2,
         isNewArrival: false,
         isNewCollection: false,
-      isActive: true,
+      isActive: nextIsActive,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -3326,6 +3337,9 @@ export class MemStorage implements IStorage {
       throw new Error("Product not found");
     }
     Object.assign(product, data, { updatedAt: new Date() });
+    if (data.stock !== undefined && Number(data.stock) <= 0) {
+      product.isActive = false;
+    }
 
     if (product.stock === 0) {
       await this.createAdminNotification({

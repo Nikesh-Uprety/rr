@@ -14,8 +14,8 @@ type ServiceCardConfig = {
 };
 
 const GRAIN_DATA_URI = `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E")`;
-const EASY_EXCHANGE_IMAGE_URL =
-  "https://cdn.vectorstock.com/i/1000v/17/13/return-parcel-exchange-icon-vector-22621713.jpg";
+const EASY_EXCHANGE_IMAGE_URL = "/images/easy-exchange-final.png?v=1";
+const MADE_IN_NEPAL_IMAGE_URL = "/images/nepalrare.png";
 
 function SectionMountainSilhouette() {
   return (
@@ -88,17 +88,16 @@ function Card2MountainBg() {
 function Card2Art() {
   return (
     <div className="relative flex h-[240px] lg:h-[280px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
-      <Card2MountainBg />
-      <div className="our-services-flag-wrap relative z-[2] flex justify-center">
-        <img
-          src="/nepal-flag-icon.svg"
-          alt=""
-          width={72}
-          height={88}
-          className="h-[88px] w-[72px] object-contain select-none"
-          draggable={false}
-        />
-      </div>
+      <img
+        src={MADE_IN_NEPAL_IMAGE_URL}
+        alt="Made in Nepal visual"
+        width={1024}
+        height={1024}
+        decoding="async"
+        className="h-full w-full object-cover object-center"
+        draggable={false}
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/25" />
     </div>
   );
 }
@@ -115,10 +114,6 @@ function Card3ExchangeArt() {
           decoding="async"
           className="block h-[156px] w-[156px] shrink-0 rounded-full border border-white/25 object-contain object-center opacity-[0.98] select-none"
           draggable={false}
-          onError={(event) => {
-            const target = event.currentTarget;
-            target.src = `${import.meta.env.BASE_URL}easyexchange.svg`;
-          }}
         />
       </div>
     </div>

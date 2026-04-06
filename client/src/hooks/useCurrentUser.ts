@@ -1,10 +1,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import type { AdminPageKey } from "@shared/auth-policy";
+
 export interface CurrentUser {
   id: string;
   email: string;
   name?: string;
   role: string;
+  adminPageAccess?: AdminPageKey[];
   profileImageUrl?: string | null;
   twoFactorEnabled?: boolean;
 }

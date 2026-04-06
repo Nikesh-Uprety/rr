@@ -75,18 +75,39 @@ export function canAccessAdminPanel(role: string | null | undefined): boolean {
   return normalizeAdminRole(role) !== null;
 }
 
-export function getAdminAllowedPages(role: string | null | undefined): AdminPageKey[] {
+export function normalizeAdminPageKey(page: string | null | undefined): AdminPageKey | null {
+  if (!page) return null;
+  return ADMIN_PAGE_KEYS.includes(page as AdminPageKey) ? (page as AdminPageKey) : null;
+}
+
+export function normalizeAdminPageList(
+  pages: Array<string | null | undefined> | null | undefined,
+): AdminPageKey[] {
+  const normalized = (pages ?? [])
+    .map((page) => normalizeAdminPageKey(page))
+    .filter((page): page is AdminPageKey => Boolean(page));
+
+  return Array.from(new Set(normalized));
+}
+
+export function getAdminAllowedPages(
+  role: string | null | undefined,
+  additionalPages?: Array<string | null | undefined> | null,
+): AdminPageKey[] {
   const normalizedRole = normalizeAdminRole(role);
-  return normalizedRole ? [...ADMIN_PAGE_ACCESS[normalizedRole]] : [];
+  const basePages = normalizedRole ? [...ADMIN_PAGE_ACCESS[normalizedRole]] : [];
+  const extraPages = normalizeAdminPageList(additionalPages);
+  return Array.from(new Set([...basePages, ...extraPages]));
 }
 
 export function canAccessAdminPage(
   role: string | null | undefined,
   page: AdminPageKey,
+  additionalPages?: Array<string | null | undefined> | null,
 ): boolean {
   const normalizedRole = normalizeAdminRole(role);
   if (!normalizedRole) return false;
-  return ADMIN_PAGE_ACCESS[normalizedRole].includes(page);
+  return getAdminAllowedPages(role, additionalPages).includes(page);
 }
 
 export function requiresTwoFactorChallenge(input: {

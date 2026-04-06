@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { ChevronRight, Home } from "lucide-react";
 import { ADMIN_NAV_ITEMS } from "@/lib/adminAccess";
@@ -25,13 +25,43 @@ function getPageTitle(pathname: string): string | undefined {
   return undefined;
 }
 
-function getBreadcrumbs(pathname: string): BreadcrumbItem[] {
+function getInventorySubpageLabel(search: string): string | undefined {
+  const params = new URLSearchParams(search);
+  const tab = params.get("tab");
+
+  switch (tab) {
+    case "inventory":
+      return "Inventory";
+    case "movements":
+      return "Stock Movements";
+    case "settings":
+      return "Settings";
+    case "overview":
+    case null:
+      return "Inventory Overview";
+    default:
+      return undefined;
+  }
+}
+
+function getBreadcrumbs(pathname: string, search: string): BreadcrumbItem[] {
   const segments = pathname.split("/").filter(Boolean);
   const breadcrumbs: BreadcrumbItem[] = [];
 
   breadcrumbs.push({ label: "Dashboard", href: "/admin" });
 
   if (segments.length <= 1) return breadcrumbs;
+
+  if (pathname === "/admin/inventory") {
+    breadcrumbs.push({ label: "Inventory", href: "/admin/inventory" });
+    const inventorySubpage = getInventorySubpageLabel(search);
+    if (inventorySubpage && inventorySubpage !== "Inventory") {
+      breadcrumbs.push({ label: inventorySubpage, isCurrent: true });
+    } else {
+      breadcrumbs[breadcrumbs.length - 1] = { label: "Inventory", isCurrent: true };
+    }
+    return breadcrumbs;
+  }
 
   let accumulatedPath = "";
   for (let i = 0; i < segments.length; i++) {
@@ -67,8 +97,38 @@ function getBreadcrumbs(pathname: string): BreadcrumbItem[] {
 export function AdminBreadcrumbs() {
   const [location] = useLocation();
   const pathname = location.split("?")[0];
+  const [search, setSearch] = useState(() =>
+    typeof window === "undefined" ? "" : window.location.search.replace(/^\?/, ""),
+  );
 
-  const breadcrumbs = useMemo(() => getBreadcrumbs(pathname), [pathname]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncSearch = () => setSearch(window.location.search.replace(/^\?/, ""));
+    const syncSearchFromEvent = (event: Event) => {
+      const nextTab = (event as CustomEvent<{ tab?: string }>).detail?.tab;
+      if (nextTab && nextTab !== "overview") {
+        setSearch(`tab=${nextTab}`);
+        return;
+      }
+      if (nextTab === "overview") {
+        setSearch("");
+        return;
+      }
+      syncSearch();
+    };
+
+    syncSearch();
+    window.addEventListener("popstate", syncSearch);
+    window.addEventListener("admin-inventory-tab-change", syncSearchFromEvent as EventListener);
+
+    return () => {
+      window.removeEventListener("popstate", syncSearch);
+      window.removeEventListener("admin-inventory-tab-change", syncSearchFromEvent as EventListener);
+    };
+  }, [pathname]);
+
+  const breadcrumbs = useMemo(() => getBreadcrumbs(pathname, search), [pathname, search]);
 
   if (breadcrumbs.length <= 1) return null;
 

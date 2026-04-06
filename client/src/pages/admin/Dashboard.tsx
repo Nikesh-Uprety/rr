@@ -10,6 +10,8 @@ import {
   Package,
   User as UserIcon,
 } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   fetchAdminOrders,
   fetchAdminProducts,
@@ -47,6 +49,7 @@ function isSameDay(a: Date, b: Date) {
 export default function AdminDashboard() {
   const today = new Date();
   const [, setLocation] = useLocation();
+  const { user } = useCurrentUser();
   const quickActionBtnClass =
     "group relative h-12 rounded-2xl border px-4 text-[#1C2E1E] dark:text-foreground shadow-[0_8px_22px_rgba(34,63,41,0.12)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(34,63,41,0.18)]";
   const quickActionLightClass =
@@ -133,19 +136,62 @@ export default function AdminDashboard() {
   });
 
   const loadingKpis = ordersLoading && productsLoading && customersLoading;
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return "Good Morning";
+    if (hour >= 12 && hour < 17) return "Good Afternoon";
+    if (hour >= 17 && hour < 22) return "Good Evening";
+    return "Good Night";
+  }, []);
+  const greetingName = user?.name || user?.email?.split("@")[0] || "there";
+  const initials = (user?.name || user?.email || "U")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
-            Dashboard
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Live snapshot of today&apos;s performance.
-          </p>
+      <section className="overflow-hidden rounded-[30px] border border-[#D9E1D3] bg-gradient-to-r from-[#FCF9F1] via-white to-[#F3F7F2] p-6 shadow-[0_20px_40px_rgba(43,62,45,0.08)] dark:border-border dark:from-card dark:via-card dark:to-card/90">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-16 w-16 border border-black/5 shadow-sm dark:border-white/10">
+              {user?.profileImageUrl ? (
+                <img src={user.profileImageUrl} alt={greetingName} className="object-cover" />
+              ) : (
+                <AvatarFallback className="bg-muted text-lg font-semibold">{initials}</AvatarFallback>
+              )}
+            </Avatar>
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6D7C6A] dark:text-muted-foreground">
+                Dashboard
+              </p>
+              <h1 className="mt-1 text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
+                {greeting}, {greetingName}
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Here are your live stats for {today.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-start xl:justify-end">
+            <Button
+              variant="outline"
+              className="h-12 rounded-2xl border-[#D6DDCE] bg-white/90 px-5 text-sm font-semibold text-[#1C2E1E] shadow-[0_8px_22px_rgba(34,63,41,0.12)] transition-all duration-300 hover:-translate-y-0.5 hover:border-[#95B39B] hover:bg-white dark:border-border dark:bg-card/70 dark:text-foreground"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.open("/", "_blank", "noopener,noreferrer");
+                }
+              }}
+            >
+              Go to Website
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </div>
+      </section>
 
       {/* Today's Summary Row */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

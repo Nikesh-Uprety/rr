@@ -1,9 +1,15 @@
 import { Link, useLocation } from "wouter";
 import {
+  ChevronRight,
   Bell,
+  FileText,
+  Layers3,
+  Link2,
   LogOut,
   Moon,
+  Paintbrush2,
   Settings,
+  Sparkles,
   Sun,
   Type,
   User,
@@ -33,6 +39,7 @@ import {
   SidebarHeader,
   SidebarContent,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -257,13 +264,64 @@ export default function AdminLayout({
   const collapsedThemeSidebarClass = !isVisuallyExpanded
     ? "[&_[data-slot=sidebar-inner]]:bg-[#101A22] [&_[data-slot=sidebar-inner]]:text-white [&_[data-slot=sidebar-container]]:border-[#2D3A45] dark:[&_[data-slot=sidebar-inner]]:bg-[#F8FAFC] dark:[&_[data-slot=sidebar-inner]]:text-[#111827] dark:[&_[data-slot=sidebar-container]]:border-[#D7DEE7]"
     : "";
-  const adminNav = getAdminNavigation(user?.role);
-  const sidebarNavItems = adminNav.filter((item) => item.page !== "profile");
+  const adminNav = getAdminNavigation(user?.role, user?.adminPageAccess);
+  const sidebarNavItems = adminNav.filter(
+    (item) => item.page !== "profile" && item.page !== "landing-page",
+  );
   const storeUsersNavItem = adminNav.find((item) => item.page === "store-users");
   const notificationsNavItem = adminNav.find((item) => item.page === "notifications");
   const devFontHref = "/admin/dev-font";
-  const canvasHref = "/admin/canvas";
-  const isCanvasRoute = pathname === canvasHref;
+  const canvasLegacyHref = "/admin/canvas/legacy";
+  const websiteNavItems = [
+    {
+      href: canvasLegacyHref,
+      label: "Canvas Beta",
+      description: "Classic template editor",
+      icon: Sparkles,
+      badge: "BETA" as const,
+    },
+    {
+      href: "/admin/canvas?tab=pages&panel=list",
+      label: "Pages",
+      description: "Pages, add section, redesign",
+      icon: FileText,
+      badge: "BETA" as const,
+    },
+    {
+      href: "/admin/canvas?tab=templates",
+      label: "Templates",
+      description: "Homepage layouts",
+      icon: Layers3,
+    },
+    {
+      href: "/admin/canvas?tab=theme",
+      label: "Theme",
+      description: "Fonts and tone",
+      icon: Type,
+    },
+    {
+      href: "/admin/canvas?tab=branding",
+      label: "Branding",
+      description: "Logo, favicon, colors",
+      icon: Paintbrush2,
+    },
+    {
+      href: "/admin/canvas?tab=navigation",
+      label: "Navigation",
+      description: "Menus and links",
+      icon: Link2,
+    },
+  ];
+  const currentCanvasLocation =
+    typeof window !== "undefined"
+      ? `${window.location.pathname}${window.location.search}`
+      : location;
+  const navigateToCustomization = (href: string) => {
+    if (typeof window === "undefined") return;
+    window.history.pushState({}, "", href);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    window.dispatchEvent(new Event("canvas-customization-nav"));
+  };
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };
@@ -330,7 +388,7 @@ export default function AdminLayout({
           <nav className="space-y-1">
             {sidebarNavItems.map((item) => {
               const isActive = pathname === item.href;
-              const isCanvasItem = item.href === canvasHref;
+              const inventoryBadge = item.href === "/admin/inventory";
               return (
                 <Link
                   key={item.href}
@@ -344,15 +402,77 @@ export default function AdminLayout({
                 >
                   <item.icon className="h-4 w-4" />
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                  {isCanvasItem ? (
-                    <span className="ml-auto inline-flex rounded-full border border-red-700/60 bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-red-500/70 dark:bg-red-500">
-                      BETA
+                  {inventoryBadge ? (
+                    <span className="ml-auto inline-flex rounded-full border border-emerald-700/50 bg-emerald-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-emerald-500/70 dark:bg-emerald-500">
+                      NEW
                     </span>
                   ) : null}
                 </Link>
               );
             })}
           </nav>
+          {adminNav.some((item) => item.page === "landing-page") ? (
+            <div className="mt-6 border-t border-border pt-4">
+              <p className="px-4 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
+                Customization
+              </p>
+              <div className="space-y-1">
+                {websiteNavItems.map((item) => {
+                const isActive = currentCanvasLocation === item.href;
+                return item.href.startsWith("/admin/canvas?") ? (
+                    <button
+                      key={item.href}
+                      type="button"
+                      onClick={() => navigateToCustomization(item.href)}
+                      className={cn(
+                        "flex w-full items-start gap-3 rounded-xl px-4 py-3 text-left transition-colors",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <item.icon className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-[12px] font-semibold">{item.label}</span>
+                          {item.badge ? (
+                            <span className="inline-flex rounded-full border border-red-700/60 bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-red-500/70 dark:bg-red-500">
+                              {item.badge}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="truncate text-[10px] text-muted-foreground">{item.description}</p>
+                      </div>
+                    </button>
+                  ) : (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "flex items-start gap-3 rounded-xl px-4 py-3 transition-colors",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <item.icon className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-[12px] font-semibold">{item.label}</span>
+                          {item.badge ? (
+                            <span className="inline-flex rounded-full border border-red-700/60 bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-red-500/70 dark:bg-red-500">
+                              {item.badge}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="truncate text-[10px] text-muted-foreground">{item.description}</p>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
 
       </div>
@@ -388,7 +508,7 @@ export default function AdminLayout({
             <SidebarMenu>
               {sidebarNavItems.map((item) => {
                 const isActive = pathname === item.href;
-                const isCanvasItem = item.href === canvasHref;
+                const isInventoryItem = item.href === "/admin/inventory";
                 const count = getUnreadCountByType(item.type);
                 const isCollapsedActive = !isVisuallyExpanded && isActive;
                 return (
@@ -435,9 +555,9 @@ export default function AdminLayout({
                         >
                           <span>{item.label}</span>
                         </span>
-                        {isCanvasItem && isVisuallyExpanded ? (
-                          <span className="ml-auto inline-flex rounded-full border border-red-700/60 bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-red-500/70 dark:bg-red-500">
-                            BETA
+                        {isInventoryItem && isVisuallyExpanded ? (
+                          <span className="ml-auto inline-flex rounded-full border border-emerald-700/50 bg-emerald-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-emerald-500/70 dark:bg-emerald-500">
+                            NEW
                           </span>
                         ) : null}
                         {count > 0 && (
@@ -457,6 +577,70 @@ export default function AdminLayout({
               })}
             </SidebarMenu>
           </SidebarGroup>
+          {adminNav.some((item) => item.page === "landing-page") ? (
+            <SidebarGroup className="mt-6 p-0">
+              {isVisuallyExpanded ? (
+                <SidebarGroupLabel className="px-3 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
+                  Customization
+                </SidebarGroupLabel>
+              ) : null}
+              <SidebarMenu>
+                {websiteNavItems.map((item) => {
+                  const isActive = currentCanvasLocation === item.href;
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        tooltip={isVisuallyExpanded ? undefined : item.label}
+                        className={cn(
+                          "h-10 rounded-lg text-[11px] font-black tracking-[0.06em] transition-all duration-300 ease-out",
+                          isVisuallyExpanded ? "px-3" : "justify-center px-2",
+                          !isVisuallyExpanded &&
+                            "text-white hover:bg-white/12 hover:text-white dark:text-[#111827] dark:hover:bg-[#E6EBF2] dark:hover:text-[#111827]",
+                          isActive &&
+                            "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
+                        )}
+                        onClick={() => {
+                          if (item.href.startsWith("/admin/canvas?")) {
+                            navigateToCustomization(item.href);
+                            return;
+                          }
+                          if (typeof window !== "undefined") {
+                            window.location.href = item.href;
+                          }
+                        }}
+                      >
+                        <div
+                          className={cn(
+                            "flex w-full items-center gap-3",
+                            !isVisuallyExpanded && "justify-center",
+                          )}
+                        >
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          <span
+                            className={cn(
+                              "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
+                              isVisuallyExpanded ? "min-w-0 flex-1 opacity-100" : "max-w-0 opacity-0",
+                            )}
+                          >
+                            {item.label}
+                          </span>
+                          {item.badge && isVisuallyExpanded ? (
+                            <span className="inline-flex rounded-full border border-red-700/60 bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-red-500/70 dark:bg-red-500">
+                              {item.badge}
+                            </span>
+                          ) : null}
+                          {isVisuallyExpanded ? (
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                          ) : null}
+                        </div>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroup>
+          ) : null}
         </SidebarContent>
 
         <div
@@ -510,20 +694,6 @@ export default function AdminLayout({
             </div>
           </div>
           <div className="flex items-center gap-2.5">
-            <Link
-              href={canvasHref}
-              className={cn(
-                "hidden lg:inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition-colors",
-                isCanvasRoute
-                  ? "border-red-300/90 bg-red-50 text-red-800 dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-200"
-                  : "border-border bg-card/50 text-[#111111] hover:border-red-300/70 hover:text-[#111111] dark:text-[#111827] dark:hover:border-red-400/40 dark:hover:text-[#111827]",
-              )}
-            >
-              <span>Canvas</span>
-              <span className="rounded-full border border-red-700/60 bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-red-500/70 dark:bg-red-500">
-                BETA
-              </span>
-            </Link>
             <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
               <PopoverTrigger asChild>
                 <button

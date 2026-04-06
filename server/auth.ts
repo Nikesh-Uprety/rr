@@ -2,6 +2,8 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
+import { getEffectiveAdminPageAccess } from "./adminPageAccess";
+import type { AdminPageKey } from "@shared/auth-policy";
 
 declare global {
   // eslint-disable-next-line no-unused-vars
@@ -15,6 +17,7 @@ declare global {
       twoFactorEnabled?: boolean;
       requires2FASetup?: boolean;
       status?: string;
+      adminPageAccess?: AdminPageKey[];
     }
   }
 }
@@ -41,6 +44,7 @@ export function configurePassport(): void {
             });
           }
 
+          const adminPageAccess = await getEffectiveAdminPageAccess(user.id, user.role);
           const expressUser: Express.User = {
             id: user.id,
             email: user.username,
@@ -50,6 +54,7 @@ export function configurePassport(): void {
             twoFactorEnabled: !!user.twoFactorEnabled,
             requires2FASetup: !!user.requires2FASetup,
             status: user.status,
+            adminPageAccess,
           };
 
           return done(null, expressUser);
@@ -70,6 +75,7 @@ export function configurePassport(): void {
       if (!user) {
         return done(null, false);
       }
+      const adminPageAccess = await getEffectiveAdminPageAccess(user.id, user.role);
       const expressUser: Express.User = {
         id: user.id,
         email: user.username,
@@ -78,6 +84,7 @@ export function configurePassport(): void {
         profileImageUrl: user.profileImageUrl || undefined,
         twoFactorEnabled: !!user.twoFactorEnabled,
         requires2FASetup: !!user.requires2FASetup,
+        adminPageAccess,
       };
       return done(null, expressUser);
     } catch (err) {

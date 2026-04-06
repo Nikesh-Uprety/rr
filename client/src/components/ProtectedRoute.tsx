@@ -16,7 +16,7 @@ export function ProtectedRoute({ children, requireAdmin, requiredAdminPage }: Pr
   const needsAdminAccess = requireAdmin || !!requiredAdminPage;
   const isAllowedAdminRoute = user
     ? requiredAdminPage
-      ? canAccessAdminPage(user.role, requiredAdminPage)
+      ? canAccessAdminPage(user.role, requiredAdminPage, user.adminPageAccess)
       : canAccessAdminPanel(user.role)
     : false;
 
@@ -39,7 +39,7 @@ export function ProtectedRoute({ children, requireAdmin, requiredAdminPage }: Pr
       return;
     }
     if (needsAdminAccess && user && !isAllowedAdminRoute) {
-      const redirectPath = getAdminRedirectPath(user.role, requiredAdminPage);
+      const redirectPath = getAdminRedirectPath(user.role, requiredAdminPage, user.adminPageAccess);
       if (location !== redirectPath) {
         setLocation(redirectPath);
       }

@@ -57,6 +57,10 @@ export const adminProfileSettings = pgTable("admin_profile_settings", {
     }>()
     .notNull()
     .default(sql`'{}'::jsonb`),
+  pageAccessOverrides: jsonb("page_access_overrides")
+    .$type<string[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -525,6 +529,37 @@ export const productVariants = pgTable("product_variants", {
 
 export type ProductVariant = typeof productVariants.$inferSelect;
 export type InsertProductVariant = typeof productVariants.$inferInsert;
+
+export const inventoryMovements = pgTable("inventory_movements", {
+  id: serial("id").primaryKey(),
+  productId: varchar("product_id")
+    .notNull()
+    .references(() => products.id, { onDelete: "cascade" }),
+  variantId: integer("variant_id").references(() => productVariants.id, {
+    onDelete: "set null",
+  }),
+  movementType: text("movement_type").notNull(), // stock_in | stock_out | transfer
+  quantity: integer("quantity").notNull(),
+  unitCost: numeric("unit_cost", { precision: 10, scale: 2 }).notNull().default("0"),
+  totalValue: numeric("total_value", { precision: 12, scale: 2 }).notNull().default("0"),
+  outlet: text("outlet").notNull().default("Main Outlet"),
+  channel: text("channel").notNull().default("Website"),
+  batch: integer("batch").notNull().default(1),
+  reference: text("reference"),
+  notes: text("notes"),
+  createdById: varchar("created_by_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}, (table) => ({
+  inventoryMovementsByCreatedAt: index("inventory_movements_created_at_idx").on(table.createdAt),
+  inventoryMovementsByProduct: index("inventory_movements_product_id_idx").on(table.productId),
+}));
+
+export type InventoryMovement = typeof inventoryMovements.$inferSelect;
+export type InsertInventoryMovement = typeof inventoryMovements.$inferInsert;
 
 export const pageTemplates = pgTable('page_templates', {
   id: serial('id').primaryKey(),

@@ -8,7 +8,7 @@ import path from "path";
 import sharp from "sharp";
 import multer from "multer";
 import { z } from "zod";
-import { canAccessAdminPage, canAccessAdminPanel, getAdminAllowedPages, requiresTwoFactorChallenge } from "@shared/auth-policy";
+import { ADMIN_PAGE_KEYS, canAccessAdminPage, canAccessAdminPanel, getAdminAllowedPages, normalizeAdminPageList, requiresTwoFactorChallenge } from "@shared/auth-policy";
 import { MAISON_NOCTURNE_DEFAULT_HERO_SLIDES } from "@shared/canvasDefaults";
 import { storage } from "./storage";
 import { logger } from "./logger";
@@ -30,11 +30,13 @@ import {
     bills,
     customers,
     emailTemplates,
+    inventoryMovements,
     insertNewsletterSubscriberSchema,
     insertProductAttributeSchema,
     mediaAssets,
     newsletterSubscribers,
     orders,
+    orderItems,
     pageSections,
     pageTemplates,
     pages,
@@ -79,6 +81,7 @@ import { getUsdToNprRate, convertNprToUsdCents } from "./lib/exchangeRate";
 import { stripe, createCheckoutSession, constructWebhookEvent } from "./lib/stripe";
 import type Stripe from "stripe";
 import { cartService } from "./services/cartService";
+import { ensureAdminProfileAccessStorage, getAdminPageAccessOverrides, getEffectiveAdminPageAccess } from "./adminPageAccess";
 import {
   uploadToCloudinary,
   deleteFromCloudinary,
@@ -226,22 +229,7 @@ const DEFAULT_NOTIFICATION_PREFS = {
 
 async function ensureAdminProfileSettingsTable() {
   if (adminProfileSettingsReady) return;
-  await db.execute(sql`
-    create table if not exists admin_profile_settings (
-      user_id varchar primary key references users(id) on delete cascade,
-      first_name text,
-      last_name text,
-      language text not null default 'en',
-      timezone text not null default 'Asia/Kathmandu',
-      department text,
-      compact_sidebar boolean not null default false,
-      show_npr_currency boolean not null default true,
-      order_alert_sound boolean not null default true,
-      login_alerts boolean not null default true,
-      notification_prefs jsonb not null default '{}'::jsonb,
-      updated_at timestamptz not null default now()
-    )
-  `);
+  await ensureAdminProfileAccessStorage();
   adminProfileSettingsReady = true;
 }
 
@@ -264,6 +252,174 @@ function mergeNotificationPrefs(raw: Record<string, unknown> | null | undefined)
   return {
     ...DEFAULT_NOTIFICATION_PREFS,
     ...(raw || {}),
+  };
+}
+
+async function getAdminOperationalInsights(userId: string, role: string | null | undefined) {
+  await ensureAdminProfileAccessStorage();
+
+  const [salesStats] = await db
+    .select({
+      totalSales: sql<string>`coalesce(sum(${bills.totalAmount}), '0')`,
+      salesCount: sql<number>`count(*)::int`,
+      posSalesCount: sql<number>`sum(case when ${bills.source} = 'pos' then 1 else 0 end)::int`,
+      onlineSalesCount: sql<number>`sum(case when ${bills.source} = 'pos' then 0 else 1 end)::int`,
+      ordersCompleted: sql<number>`sum(case when ${bills.orderId} is not null then 1 else 0 end)::int`,
+    })
+    .from(bills)
+    .where(
+      and(
+        eq(bills.processedById, userId),
+        sql`coalesce(${bills.status}, 'issued') != 'void'`,
+        sql`coalesce(${bills.billType}, 'sale') != 'refund'`,
+      ),
+    );
+
+  const [inventoryStats] = await db
+    .select({
+      stockEntries: sql<number>`count(*)::int`,
+      stockAddedUnits: sql<number>`coalesce(sum(${inventoryMovements.quantity}), 0)::int`,
+      productsManaged: sql<number>`count(distinct ${inventoryMovements.productId})::int`,
+    })
+    .from(inventoryMovements)
+    .where(
+      and(
+        eq(inventoryMovements.createdById, userId),
+        eq(inventoryMovements.movementType, "stock_in"),
+      ),
+    );
+
+  const [activityStats] = await db
+    .select({
+      ordersProcessed: sql<number>`sum(case when ${securityLogs.url} like '/api/admin/orders/%' and ${securityLogs.url} not like '/api/admin/orders/%/verify-payment' and ${securityLogs.method} in ('PUT', 'PATCH') and ${securityLogs.status} between 200 and 299 then 1 else 0 end)::int`,
+      paymentVerifications: sql<number>`sum(case when ${securityLogs.url} like '/api/admin/orders/%/verify-payment' and ${securityLogs.method} in ('PUT', 'PATCH') and ${securityLogs.status} between 200 and 299 then 1 else 0 end)::int`,
+      adminActions30d: sql<number>`sum(case when ${securityLogs.createdAt} >= now() - interval '30 days' then 1 else 0 end)::int`,
+    })
+    .from(securityLogs)
+    .where(eq(securityLogs.userId, userId));
+
+  const recentActivity = await db
+    .select({
+      id: securityLogs.id,
+      method: securityLogs.method,
+      url: securityLogs.url,
+      status: securityLogs.status,
+      createdAt: securityLogs.createdAt,
+    })
+    .from(securityLogs)
+    .where(eq(securityLogs.userId, userId))
+    .orderBy(desc(securityLogs.createdAt))
+    .limit(12);
+
+  const recentOrders = await db.execute(sql`
+    select
+      b.id,
+      b.bill_number,
+      b.order_id,
+      b.customer_name,
+      b.customer_email,
+      b.customer_phone,
+      b.items,
+      b.total_amount,
+      b.payment_method,
+      b.delivery_required,
+      b.delivery_provider,
+      b.delivery_address,
+      b.source,
+      b.created_at as processed_at,
+      o.id as linked_order_id,
+      o.status as order_status,
+      o.created_at as order_created_at,
+      o.updated_at as order_updated_at,
+      o.email as order_email,
+      o.full_name as order_full_name,
+      o.delivery_location,
+      o.payment_verified
+    from bills b
+    left join orders o on o.id = b.order_id
+    where b.processed_by_id = ${userId}
+      and coalesce(b.status, 'issued') != 'void'
+      and coalesce(b.bill_type, 'sale') != 'refund'
+    order by b.created_at desc
+    limit 20
+  `);
+
+  const sessionsResult = await db.execute(sql`
+    select
+      sid,
+      expire,
+      coalesce(sess->>'ip', '') as ip,
+      coalesce(sess->>'userAgent', '') as user_agent,
+      coalesce(sess->>'createdAt', '') as created_at,
+      coalesce(sess->>'lastAccessedAt', '') as last_accessed_at
+    from session
+    where (sess->'passport'->>'user') = ${userId}
+    order by expire desc
+  `);
+
+  const accessOverrides = await getAdminPageAccessOverrides(userId);
+  const effectiveAccess = await getEffectiveAdminPageAccess(userId, role);
+
+  const sessions = sessionsResult.rows.map((row: any) => ({
+    sid: String(row.sid),
+    expiresAt: row.expire ? new Date(row.expire as string).toISOString() : null,
+    createdAt: row.created_at ? String(row.created_at) : null,
+    lastAccessedAt: row.last_accessed_at ? String(row.last_accessed_at) : null,
+    ip: row.ip ? String(row.ip) : null,
+    userAgent: row.user_agent ? String(row.user_agent) : null,
+  }));
+
+  return {
+    stats: {
+      totalSales: String(salesStats?.totalSales ?? "0"),
+      salesCount: Number(salesStats?.salesCount ?? 0),
+      posSalesCount: Number(salesStats?.posSalesCount ?? 0),
+      onlineSalesCount: Number(salesStats?.onlineSalesCount ?? 0),
+      ordersProcessed: Number(activityStats?.ordersProcessed ?? 0),
+      ordersCompleted: Number(salesStats?.ordersCompleted ?? 0),
+      paymentVerifications: Number(activityStats?.paymentVerifications ?? 0),
+      stockEntries: Number(inventoryStats?.stockEntries ?? 0),
+      stockAddedUnits: Number(inventoryStats?.stockAddedUnits ?? 0),
+      productsManaged: Number(inventoryStats?.productsManaged ?? 0),
+      adminActions30d: Number(activityStats?.adminActions30d ?? 0),
+      activeSessionsCount: sessions.length,
+    },
+    accessScope: effectiveAccess,
+    permissions: effectiveAccess,
+    accessOverrides,
+    recentActivity: recentActivity.map((entry) => ({
+      id: entry.id,
+      action: `${entry.method} ${entry.url}`,
+      target: entry.url,
+      status: entry.status,
+      timestamp: entry.createdAt,
+    })),
+    orderActivity: recentOrders.rows.map((row: any) => ({
+      id: String(row.id),
+      billNumber: String(row.bill_number),
+      orderId: row.order_id ? String(row.order_id) : null,
+      source: row.source ? String(row.source) : null,
+      customer: {
+        name: row.customer_name ? String(row.customer_name) : null,
+        email: row.customer_email ? String(row.customer_email) : null,
+        phone: row.customer_phone ? String(row.customer_phone) : null,
+      },
+      items: Array.isArray(row.items) ? row.items : [],
+      totalAmount: String(row.total_amount ?? "0"),
+      paymentMethod: row.payment_method ? String(row.payment_method) : null,
+      paymentVerified: row.payment_verified ? String(row.payment_verified) : null,
+      orderStatus: row.order_status ? String(row.order_status) : null,
+      orderCreatedAt: row.order_created_at ? new Date(row.order_created_at as string).toISOString() : null,
+      orderUpdatedAt: row.order_updated_at ? new Date(row.order_updated_at as string).toISOString() : null,
+      processedAt: row.processed_at ? new Date(row.processed_at as string).toISOString() : null,
+      deliveryRequired: Boolean(row.delivery_required),
+      deliveryProvider: row.delivery_provider ? String(row.delivery_provider) : null,
+      deliveryAddress: row.delivery_address ? String(row.delivery_address) : null,
+      deliveryLocation: row.delivery_location ? String(row.delivery_location) : null,
+      linkedOrderEmail: row.order_email ? String(row.order_email) : null,
+      linkedOrderFullName: row.order_full_name ? String(row.order_full_name) : null,
+    })),
+    sessions,
   };
 }
 
@@ -2064,6 +2220,7 @@ export async function registerRoutes(
         email: user.email,
         name: user.name,
         role: user.role,
+        adminPageAccess: user.adminPageAccess ?? [],
         profileImageUrl: user.profileImageUrl || null,
         twoFactorEnabled: !!user.twoFactorEnabled,
       },
@@ -3796,6 +3953,11 @@ export async function registerRoutes(
         const search = getQueryParam(req.query.search);
         const page = getQueryParam(req.query.page);
         const limit = getQueryParam(req.query.limit);
+        const status = getQueryParam(req.query.status);
+        const normalizedStatus =
+          status === "active" || status === "draft" || status === "archived"
+            ? status
+            : undefined;
 
         const productRows = await storage.getProducts({
           category,
@@ -3803,6 +3965,7 @@ export async function registerRoutes(
           page: page ? Number(page) || 1 : undefined,
           limit: limit ? Number(limit) || 24 : undefined,
           includeInactive: true,
+          status: normalizedStatus,
         });
         const variants = await db
           .select({
@@ -3840,6 +4003,7 @@ export async function registerRoutes(
           category: category || undefined,
           search: search || undefined,
           includeInactive: true,
+          status: normalizedStatus,
         });
 
         return res.json({ success: true, data: products, total });
@@ -4141,15 +4305,7 @@ export async function registerRoutes(
     return 0;
   };
 
-  const resolveInventoryStatus = (totalStock: number): "healthy" | "low" | "critical" => {
-    if (totalStock <= 3) return "critical";
-    if (totalStock <= 10) return "low";
-    return "healthy";
-  };
-
-  let summaryCache: { data: InventorySummaryResponse; ts: number } | null = null;
-  const CACHE_TTL = 30_000;
-
+  type InventoryStatus = "in_stock" | "low_stock" | "out_of_stock";
   type InventorySummaryResponse = {
     totalProducts: number;
     totalSkus: number;
@@ -4158,6 +4314,121 @@ export async function registerRoutes(
     totalInventoryCost: number;
     lowStockCount: number;
     criticalStockCount: number;
+    inStockCount: number;
+    outletCount: number;
+  };
+  type InventoryListItemResponse = {
+    id: string;
+    productId: string;
+    variantId: number | null;
+    name: string;
+    thumbnail: string | null;
+    batch: number;
+    outlet: string;
+    channel: string;
+    status: InventoryStatus;
+    units: number;
+    avgCost: number;
+    totalValue: number;
+    variant: string;
+    sku: string;
+    category: string;
+    currentQty: number;
+    size: string;
+  };
+
+  const INVENTORY_DEFAULT_OUTLET = "Main Outlet";
+  const CACHE_TTL = 30_000;
+  let summaryCache: { data: InventorySummaryResponse; ts: number } | null = null;
+
+  const resolveInventoryStatus = (units: number): InventoryStatus => {
+    if (units <= 0) return "out_of_stock";
+    if (units <= 10) return "low_stock";
+    return "in_stock";
+  };
+
+  const formatInventoryChannel = (source: string | null | undefined): string => {
+    if (!source) return "Website";
+    const normalized = source.trim().toLowerCase();
+    if (normalized === "pos") return "POS";
+    if (normalized === "website") return "Website";
+    return normalized
+      .split(/[_\s-]+/)
+      .filter(Boolean)
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(" ");
+  };
+
+  const formatInventoryOutlet = (source: string | null | undefined): string => {
+    const normalized = source?.trim().toLowerCase();
+    if (normalized === "pos") return "POS Counter";
+    return INVENTORY_DEFAULT_OUTLET;
+  };
+
+  const syncProductStock = async (productId: string) => {
+    const allVariants = await db
+      .select()
+      .from(productVariants)
+      .where(eq(productVariants.productId, productId));
+
+    const totalStock = allVariants.reduce(
+      (sum, variant) => sum + (variant.stock ?? 0),
+      0,
+    );
+
+    await db
+      .update(products)
+      .set({
+        stock: totalStock,
+        isActive: totalStock > 0 ? sql`${products.isActive}` : false,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, productId));
+  };
+
+  const recordInventoryMovement = async ({
+    productId,
+    variantId,
+    movementType,
+    quantity,
+    unitCost,
+    totalValue,
+    outlet,
+    channel,
+    batch,
+    reference,
+    notes,
+    createdById,
+  }: {
+    productId: string;
+    variantId?: number | null;
+    movementType: "stock_in" | "stock_out" | "transfer";
+    quantity: number;
+    unitCost: number;
+    totalValue: number;
+    outlet?: string;
+    channel?: string;
+    batch?: number;
+    reference?: string | null;
+    notes?: string | null;
+    createdById?: string | null;
+  }) => {
+    if (quantity <= 0) return;
+
+    await db.insert(inventoryMovements).values({
+      productId,
+      variantId: variantId ?? null,
+      movementType,
+      quantity,
+      unitCost: unitCost.toFixed(2),
+      totalValue: totalValue.toFixed(2),
+      outlet: outlet || INVENTORY_DEFAULT_OUTLET,
+      channel: channel || "Admin",
+      batch: batch ?? 1,
+      reference: reference ?? null,
+      notes: notes ?? null,
+      createdById: createdById ?? null,
+    });
   };
 
   app.get(
@@ -4169,13 +4440,8 @@ export async function registerRoutes(
           return res.json(summaryCache.data);
         }
 
-        const variants = await db
-          .select()
-          .from(productVariants);
-
-        const productRows = await db
-          .select()
-          .from(products);
+        const variants = await db.select().from(productVariants);
+        const productRows = await db.select().from(products);
 
         const totalQuantity = variants.reduce(
           (sum, variant) => sum + (variant.stock ?? 0),
@@ -4196,23 +4462,27 @@ export async function registerRoutes(
         });
 
         const lowStockCount = productTotals.filter(
-          (product) => product.totalStock > 3 && product.totalStock <= 10,
+          (product) => product.totalStock > 0 && product.totalStock <= 10,
         ).length;
-
         const criticalStockCount = productTotals.filter(
-          (product) => product.totalStock <= 3,
+          (product) => product.totalStock <= 0,
         ).length;
-
+        const inStockCount = productTotals.filter((product) => product.totalStock > 10).length;
         const totalInventoryValue = parseNumericValue(inventoryValueRow?.value);
 
         const result: InventorySummaryResponse = {
           totalProducts: productRows.length,
-          totalSkus: variants.length + productRows.length,
+          totalSkus: variants.length,
           totalQuantity,
           totalInventoryValue,
-          totalInventoryCost: totalInventoryValue * 0.5,
+          totalInventoryCost: productTotals.reduce((sum, product) => {
+            const costPrice = product.costPrice || Math.floor(parseNumericValue(product.price) * 0.5);
+            return sum + product.totalStock * costPrice;
+          }, 0),
           lowStockCount,
           criticalStockCount,
+          inStockCount,
+          outletCount: 1,
         };
 
         summaryCache = { data: result, ts: Date.now() };
@@ -4231,64 +4501,135 @@ export async function registerRoutes(
       try {
         const status = getQueryParam(req.query.status) ?? "all";
         const category = (getQueryParam(req.query.category) ?? "").trim();
-        const search = (getQueryParam(req.query.search) ?? "").trim();
+        const search = (getQueryParam(req.query.search) ?? "").trim().toLowerCase();
+        const outlet = (getQueryParam(req.query.outlet) ?? "").trim().toLowerCase();
 
-        const productRows = await db
+        const productRows = await db.select().from(products).orderBy(products.name);
+        const variantRows = await db
           .select()
-          .from(products)
-          .orderBy(products.name);
+          .from(productVariants)
+          .orderBy(productVariants.productId, productVariants.id);
+        const productChannelRows = await db
+          .select({
+            productId: orderItems.productId,
+            source: orders.source,
+            createdAt: orders.createdAt,
+          })
+          .from(orderItems)
+          .innerJoin(orders, eq(orderItems.orderId, orders.id))
+          .orderBy(desc(orders.createdAt));
 
-        const variants = await db
-          .select()
-          .from(productVariants);
-
-        const variantsByProduct: Record<string, Record<string, number>> = {};
-        variants.forEach((variant) => {
-          if (!variantsByProduct[variant.productId]) {
-            variantsByProduct[variant.productId] = {};
+        const latestChannelByProduct = new Map<string, string>();
+        for (const row of productChannelRows) {
+          if (!latestChannelByProduct.has(row.productId)) {
+            latestChannelByProduct.set(row.productId, formatInventoryChannel(row.source));
           }
-          variantsByProduct[variant.productId][variant.size] = variant.stock ?? 0;
-        });
+        }
 
-        const result = productRows.map((product) => {
-          const stockBySize = variantsByProduct[product.id] || {};
-          const totalStock = Object.values(stockBySize)
-            .reduce((sum, value) => sum + value, 0);
-          const price = parseNumericValue(product.price);
-          const costPrice = product.costPrice || Math.floor(price * 0.5);
-          const statusValue = resolveInventoryStatus(totalStock);
+        const variantsByProduct = new Map<string, typeof variantRows>();
+        for (const variant of variantRows) {
+          const bucket = variantsByProduct.get(variant.productId) ?? [];
+          bucket.push(variant);
+          variantsByProduct.set(variant.productId, bucket);
+        }
 
-          return {
-            id: product.id,
-            name: product.name,
-            sku: product.sku || `RR-${product.id}`,
-            category: product.category || "Uncategorized",
-            imageUrl: product.imageUrl || null,
-            price,
-            costPrice,
-            stockBySize,
-            totalStock,
-            inventoryValue: totalStock * price,
-            status: statusValue,
-          };
-        });
+        const items: InventoryListItemResponse[] = [];
+        for (const product of productRows) {
+          const channel = latestChannelByProduct.get(product.id) || "Website";
+          const productOutlet = formatInventoryOutlet(channel);
+          const productCost = product.costPrice || Math.floor(parseNumericValue(product.price) * 0.5);
+          const productVariantsRows = variantsByProduct.get(product.id) ?? [];
 
-        let filtered = result;
+          if (productVariantsRows.length === 0) {
+            const units = product.stock ?? 0;
+            items.push({
+              id: `${product.id}:fallback`,
+              productId: product.id,
+              variantId: null,
+              name: product.name,
+              thumbnail: product.imageUrl || null,
+              batch: 1,
+              outlet: productOutlet,
+              channel,
+              status: resolveInventoryStatus(units),
+              units,
+              avgCost: productCost,
+              totalValue: units * productCost,
+              variant: "Standard",
+              sku: product.sku || `RR-${product.id}`,
+              category: product.category || "Uncategorized",
+              currentQty: units,
+              size: "ONE",
+            });
+            continue;
+          }
+
+          for (let index = 0; index < productVariantsRows.length; index += 1) {
+            const variant = productVariantsRows[index];
+            const units = variant.stock ?? 0;
+            const variantLabel = [variant.color?.trim(), variant.size?.trim()]
+              .filter(Boolean)
+              .join(" / ") || variant.size || "Standard";
+
+            items.push({
+              id: `${product.id}:${variant.id}`,
+              productId: product.id,
+              variantId: variant.id,
+              name: product.name,
+              thumbnail: product.imageUrl || null,
+              batch: index + 1,
+              outlet: productOutlet,
+              channel,
+              status: resolveInventoryStatus(units),
+              units,
+              avgCost: productCost,
+              totalValue: units * productCost,
+              variant: variantLabel,
+              sku: variant.sku || product.sku || `RR-${product.id}-${variant.size}`,
+              category: product.category || "Uncategorized",
+              currentQty: units,
+              size: variant.size || "ONE",
+            });
+          }
+        }
+
+        let filtered = items;
         if (status && status !== "all") {
-          filtered = filtered.filter((product) => product.status === status);
+          filtered = filtered.filter((item) => item.status === status);
         }
         if (category) {
           filtered = filtered.filter(
-            (product) => product.category.toLowerCase() === category.toLowerCase(),
+            (item) => item.category.toLowerCase() === category.toLowerCase(),
           );
         }
+        if (outlet) {
+          filtered = filtered.filter((item) => item.outlet.toLowerCase() === outlet);
+        }
         if (search) {
-          filtered = filtered.filter((product) =>
-            product.name.toLowerCase().includes(search.toLowerCase()),
+          filtered = filtered.filter((item) =>
+            [
+              item.name,
+              item.variant,
+              item.sku,
+              item.channel,
+              item.outlet,
+            ].some((value) => value.toLowerCase().includes(search)),
           );
         }
 
-        filtered.sort((a, b) => a.totalStock - b.totalStock);
+        const statusWeight: Record<InventoryStatus, number> = {
+          out_of_stock: 0,
+          low_stock: 1,
+          in_stock: 2,
+        };
+
+        filtered.sort((a, b) => {
+          const statusDelta = statusWeight[a.status] - statusWeight[b.status];
+          if (statusDelta !== 0) return statusDelta;
+          if (a.name !== b.name) return a.name.localeCompare(b.name);
+          return a.variant.localeCompare(b.variant);
+        });
+
         return res.json(filtered);
       } catch (err) {
         console.error("Error in GET /api/admin/inventory/products", err);
@@ -4297,66 +4638,288 @@ export async function registerRoutes(
     },
   );
 
+  app.get(
+    "/api/admin/inventory/movements",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const type = (getQueryParam(req.query.type) ?? "all").trim().toLowerCase();
+        const search = (getQueryParam(req.query.search) ?? "").trim().toLowerCase();
+        const outlet = (getQueryParam(req.query.outlet) ?? "").trim().toLowerCase();
+
+        const manualMovementRows = await db
+          .select()
+          .from(inventoryMovements)
+          .orderBy(desc(inventoryMovements.createdAt));
+
+        const orderMovementRows = await db
+          .select({
+            orderId: orders.id,
+            createdAt: orders.createdAt,
+            source: orders.source,
+            productId: orderItems.productId,
+            quantity: orderItems.quantity,
+            unitPrice: orderItems.unitPrice,
+          })
+          .from(orderItems)
+          .innerJoin(orders, eq(orderItems.orderId, orders.id))
+          .orderBy(desc(orders.createdAt));
+
+        const orderGroups = new Map<string, {
+          id: string;
+          occurredAt: Date;
+          outlet: string;
+          ref: string;
+          type: "stock_out";
+          quantity: number;
+          value: number;
+          skuIds: Set<string>;
+          channel: string;
+        }>();
+
+        for (const row of orderMovementRows) {
+          const existing = orderGroups.get(row.orderId) ?? {
+            id: `order-${row.orderId}`,
+            occurredAt: row.createdAt ?? new Date(),
+            outlet: formatInventoryOutlet(row.source),
+            ref: `ORD-${row.orderId.slice(0, 8)}`,
+            type: "stock_out" as const,
+            quantity: 0,
+            value: 0,
+            skuIds: new Set<string>(),
+            channel: formatInventoryChannel(row.source),
+          };
+          existing.quantity += row.quantity;
+          existing.value += parseNumericValue(row.unitPrice) * row.quantity;
+          existing.skuIds.add(row.productId);
+          orderGroups.set(row.orderId, existing);
+        }
+
+        const movements = [
+          ...manualMovementRows.map((movement) => ({
+            id: `manual-${movement.id}`,
+            occurredAt: movement.createdAt,
+            outlet: movement.outlet,
+            ref: movement.reference || `MOV-${movement.id}`,
+            type: movement.movementType as "stock_in" | "stock_out" | "transfer",
+            quantity: movement.quantity,
+            value: parseNumericValue(movement.totalValue),
+            skuCount: 1,
+            channel: movement.channel,
+            notes: movement.notes,
+          })),
+          ...Array.from(orderGroups.values()).map((movement) => ({
+            id: movement.id,
+            occurredAt: movement.occurredAt,
+            outlet: movement.outlet,
+            ref: movement.ref,
+            type: movement.type,
+            quantity: movement.quantity,
+            value: movement.value,
+            skuCount: movement.skuIds.size,
+            channel: movement.channel,
+            notes: null,
+          })),
+        ];
+
+        let filtered = movements;
+        if (type && type !== "all" && type !== "all types") {
+          const normalizedType = type.replace(/\s+/g, "_");
+          filtered = filtered.filter((movement) => movement.type === normalizedType);
+        }
+        if (outlet) {
+          filtered = filtered.filter((movement) => movement.outlet.toLowerCase() === outlet);
+        }
+        if (search) {
+          filtered = filtered.filter((movement) =>
+            [movement.outlet, movement.ref, movement.channel].some((value) =>
+              value.toLowerCase().includes(search),
+            ),
+          );
+        }
+
+        filtered.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
+
+        return res.json(
+          filtered.map((movement) => ({
+            ...movement,
+            occurredAt: movement.occurredAt.toISOString(),
+          })),
+        );
+      } catch (err) {
+        console.error("Error in GET /api/admin/inventory/movements", err);
+        return res.status(500).json({ error: "Failed to load inventory movements" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/inventory/stock-in",
+    requireAdmin,
+    validateRequest(z.object({
+      items: z.array(z.object({
+        productId: z.string().trim().min(1),
+        variantId: z.number().int().nullable().optional(),
+        quantity: z.number().int().min(1),
+      })).min(1),
+    })),
+    async (req: Request, res: Response) => {
+      try {
+        const { items } = req.body as {
+          items: Array<{
+            productId: string;
+            variantId?: number | null;
+            quantity: number;
+          }>;
+        };
+        const actorId = (req.user as { id?: string } | undefined)?.id ?? null;
+
+        for (const item of items) {
+          const [product] = await db
+            .select()
+            .from(products)
+            .where(eq(products.id, item.productId))
+            .limit(1);
+
+          if (!product) {
+            return res.status(404).json({ error: `Product not found: ${item.productId}` });
+          }
+
+          const costPrice = product.costPrice || Math.floor(parseNumericValue(product.price) * 0.5);
+          let variantId = item.variantId ?? null;
+          let batch = 1;
+
+          if (variantId) {
+            const [variant] = await db
+              .select()
+              .from(productVariants)
+              .where(eq(productVariants.id, variantId))
+              .limit(1);
+
+            if (!variant) {
+              return res.status(404).json({ error: `Variant not found: ${variantId}` });
+            }
+
+            batch = variant.id;
+            await db
+              .update(productVariants)
+              .set({
+                stock: (variant.stock ?? 0) + item.quantity,
+                updatedAt: new Date(),
+              })
+              .where(eq(productVariants.id, variant.id));
+          } else {
+            const [created] = await db
+              .insert(productVariants)
+              .values({
+                productId: item.productId,
+                size: "ONE",
+                stock: item.quantity,
+                sku: `${product.sku || `RR-${product.id}`}-ONE`,
+              })
+              .returning();
+
+            variantId = created.id;
+            batch = created.id;
+          }
+
+          await syncProductStock(item.productId);
+          await recordInventoryMovement({
+            productId: item.productId,
+            variantId,
+            movementType: "stock_in",
+            quantity: item.quantity,
+            unitCost: costPrice,
+            totalValue: item.quantity * costPrice,
+            outlet: INVENTORY_DEFAULT_OUTLET,
+            channel: "Admin",
+            batch,
+            reference: "MANUAL-STOCK-IN",
+            createdById: actorId,
+          });
+        }
+
+        summaryCache = null;
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in POST /api/admin/inventory/stock-in", err);
+        return res.status(500).json({ error: "Failed to stock in items" });
+      }
+    },
+  );
+
   app.patch(
     "/api/admin/inventory/:productId/stock",
     requireAdmin,
     validateRequest(z.object({
-      size: z.string().trim().min(1).optional(),
+      variantId: z.number().int().nullable().optional(),
       newStock: z.number().int(),
     })),
     async (req: Request, res: Response) => {
       try {
         const { productId } = req.params;
-        const { size, newStock } = req.body;
+        const { variantId, newStock } = req.body;
+        const actorId = (req.user as { id?: string } | undefined)?.id ?? null;
 
         if (newStock < 0) {
           return res.status(400).json({ error: "Stock cannot be negative" });
         }
 
-        if (size) {
-          const existing = await db
-            .select()
-            .from(productVariants)
-            .where(and(
+        const [product] = await db
+          .select()
+          .from(products)
+          .where(eq(products.id, productId as string))
+          .limit(1);
+
+        if (!product) {
+          return res.status(404).json({ error: "Product not found" });
+        }
+
+        if (!variantId) {
+          return res.status(400).json({ error: "Variant ID is required for precise stock updates" });
+        }
+
+        const [existingVariant] = await db
+          .select()
+          .from(productVariants)
+          .where(
+            and(
+              eq(productVariants.id, variantId),
               eq(productVariants.productId, productId as string),
-              eq(productVariants.size, size),
-            ))
-            .limit(1);
+            ),
+          )
+          .limit(1);
 
-          if (existing.length > 0) {
-            await db
-              .update(productVariants)
-              .set({ stock: newStock, updatedAt: new Date() })
-              .where(eq(productVariants.id, existing[0].id));
-          } else {
-            await db
-              .insert(productVariants)
-              .values({
-                productId: productId as string,
-                size,
-                stock: newStock,
-                sku: `RR-${productId}-${size}`,
-              });
-          }
+        if (!existingVariant) {
+          return res.status(404).json({ error: "Variant not found" });
+        }
 
-          const allVariants = await db
-            .select()
-            .from(productVariants)
-            .where(eq(productVariants.productId, productId as string));
+        const previousStock = existingVariant.stock ?? 0;
+        const quantityDelta = newStock - previousStock;
 
-          const totalStock = allVariants.reduce(
-            (sum, variant) => sum + (variant.stock ?? 0),
-            0,
-          );
+        await db
+          .update(productVariants)
+          .set({ stock: newStock, updatedAt: new Date() })
+          .where(eq(productVariants.id, existingVariant.id));
 
-          await db
-            .update(products)
-            .set({
-              stock: totalStock,
-              isActive: totalStock > 0 ? sql`${products.isActive}` : false,
-              updatedAt: new Date(),
-            })
-            .where(eq(products.id, productId as string));
+        await syncProductStock(productId as string);
+
+        if (quantityDelta !== 0) {
+          const costPrice = product.costPrice || Math.floor(parseNumericValue(product.price) * 0.5);
+          await recordInventoryMovement({
+            productId: productId as string,
+            variantId: existingVariant.id,
+            movementType: quantityDelta > 0 ? "stock_in" : "stock_out",
+            quantity: Math.abs(quantityDelta),
+            unitCost: costPrice,
+            totalValue: Math.abs(quantityDelta) * costPrice,
+            outlet: INVENTORY_DEFAULT_OUTLET,
+            channel: "Admin",
+            batch: existingVariant.id,
+            reference: "MANUAL-ADJUSTMENT",
+            notes: `Adjusted ${existingVariant.size}${existingVariant.color ? ` / ${existingVariant.color}` : ""} stock from ${previousStock} to ${newStock}`,
+            createdById: actorId,
+          });
         }
 
         summaryCache = null;
@@ -5061,9 +5624,7 @@ export async function registerRoutes(
     async (req: Request, res: Response) => {
       try {
         const actor = req.user as Express.User | undefined;
-        const isRootActor =
-          actor?.role?.toLowerCase() === "superadmin" &&
-          actor?.email?.toLowerCase() === "superadmin@rare.np";
+        const isRootActor = actor?.role?.toLowerCase() === "superadmin";
         const users = await storage.getAdminUsers();
         const filtered = users
           .filter((userRow) => isRootActor || userRow.role.toLowerCase() !== "superadmin")
@@ -5090,9 +5651,7 @@ export async function registerRoutes(
     async (req: Request, res: Response) => {
       try {
         const actor = req.user as Express.User | undefined;
-        const isRootActor =
-          actor?.role?.toLowerCase() === "superadmin" &&
-          actor?.email?.toLowerCase() === "superadmin@rare.np";
+        const isRootActor = actor?.role?.toLowerCase() === "superadmin";
         const users = await storage.getStoreUsers();
         const filtered = users
           .filter((userRow) => isRootActor || userRow.role.toLowerCase() !== "superadmin")
@@ -5118,12 +5677,11 @@ export async function registerRoutes(
     createStoreUserHandler({ storage, sendStoreUserWelcomeEmail }),
   );
 
-  const ROOT_SUPERADMIN_EMAIL = "superadmin@rare.np";
   const updateStoreUserRoleEnum = z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff"]);
   const privilegedAdminRoles = new Set(["superadmin", "owner", "admin"]);
   const isSuperAdmin = (role: string | null | undefined) => role?.toLowerCase() === "superadmin";
-  const isRootSuperAdmin = (actor: Express.User | undefined) =>
-    isSuperAdmin(actor?.role) && actor?.email?.toLowerCase() === ROOT_SUPERADMIN_EMAIL;
+  const canManagePrivilegedAdminRoles = (actor: Express.User | undefined) =>
+    isSuperAdmin(actor?.role);
 
   const updateStoreUserSchema = z
     .object({
@@ -5163,21 +5721,21 @@ export async function registerRoutes(
         }
 
         const targetRole = target.role?.toLowerCase() ?? "";
-        if (!isRootSuperAdmin(actor) && privilegedAdminRoles.has(targetRole)) {
+        if (!canManagePrivilegedAdminRoles(actor) && privilegedAdminRoles.has(targetRole)) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin@rare.np can manage owner/admin/superadmin users",
+            error: "Only superadmin users can manage owner/admin/superadmin users",
           });
         }
 
         if (
           role !== undefined &&
-          !isRootSuperAdmin(actor) &&
+          !canManagePrivilegedAdminRoles(actor) &&
           privilegedAdminRoles.has(role.toLowerCase())
         ) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin@rare.np can assign owner/admin/superadmin roles",
+            error: "Only superadmin users can assign owner/admin/superadmin roles",
           });
         }
 
@@ -5219,10 +5777,10 @@ export async function registerRoutes(
         }
 
         const targetRole = target.role?.toLowerCase() ?? "";
-        if (!isRootSuperAdmin(actor) && privilegedAdminRoles.has(targetRole)) {
+        if (!canManagePrivilegedAdminRoles(actor) && privilegedAdminRoles.has(targetRole)) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin@rare.np can delete owner/admin/superadmin users",
+            error: "Only superadmin users can delete owner/admin/superadmin users",
           });
         }
 
@@ -5231,6 +5789,194 @@ export async function registerRoutes(
       } catch (err) {
         console.error("Error in DELETE /api/admin/store-users/:id", err);
         return res.status(500).json({ success: false, error: "Failed to delete store user" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/store-users/:id/overview",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") {
+        return res.status(400).json({ success: false, error: "Invalid ID" });
+      }
+
+      try {
+        const actor = req.user as Express.User | undefined;
+        const targetUser = await storage.getUserById(id);
+
+        if (!targetUser) {
+          return res.status(404).json({ success: false, error: "User not found" });
+        }
+
+        const targetRole = targetUser.role?.toLowerCase() ?? "";
+        if (!canManagePrivilegedAdminRoles(actor) && privilegedAdminRoles.has(targetRole)) {
+          return res.status(403).json({
+            success: false,
+            error: "Only superadmin users can view owner/admin/superadmin users",
+          });
+        }
+
+        await ensureAdminProfileSettingsTable();
+
+        await db
+          .insert(adminProfileSettings)
+          .values({ userId: id })
+          .onConflictDoNothing({ target: adminProfileSettings.userId });
+
+        const [settings] = await db
+          .select()
+          .from(adminProfileSettings)
+          .where(eq(adminProfileSettings.userId, id))
+          .limit(1);
+
+        const { firstName: fallbackFirst, lastName: fallbackLast } = parseName(
+          targetUser.displayName,
+          targetUser.username,
+        );
+
+        const operationalInsights = await getAdminOperationalInsights(id, targetUser.role);
+        const sessions = operationalInsights.sessions.map((session) => ({
+          ...session,
+          isCurrent: actor?.id === id && session.sid === req.sessionID,
+        }));
+
+        return res.json({
+          success: true,
+          data: {
+            profile: {
+              id: targetUser.id,
+              firstName: settings?.firstName?.trim() || fallbackFirst,
+              lastName: settings?.lastName?.trim() || fallbackLast,
+              email: targetUser.username,
+              phone: targetUser.phoneNumber || "",
+              language: settings?.language || "en",
+              timezone: settings?.timezone || "Asia/Kathmandu",
+              department: settings?.department || "",
+              role: targetUser.role,
+              status: targetUser.status || "active",
+              adminSince: targetUser.createdAt,
+              lastLoginAt: targetUser.lastLoginAt,
+              twoFactorEnabled: !!targetUser.twoFactorEnabled,
+              emailNotifications: !!targetUser.emailNotifications,
+              avatarUrl: targetUser.profileImageUrl || null,
+            },
+            accessScope: operationalInsights.accessScope,
+            permissions: operationalInsights.permissions,
+            accessOverrides: operationalInsights.accessOverrides,
+            stats: {
+              ...operationalInsights.stats,
+            },
+            recentActivity: operationalInsights.recentActivity,
+            orderActivity: operationalInsights.orderActivity,
+            sessions,
+          },
+        });
+      } catch (err) {
+        console.error("Error in GET /api/admin/store-users/:id/overview", err);
+        return res.status(500).json({ success: false, error: "Failed to load store user overview" });
+      }
+    },
+  );
+
+  const updateStoreUserProfileSchema = z
+    .object({
+      firstName: z.string().trim().min(1).max(60).optional(),
+      lastName: z.string().trim().max(60).optional(),
+      phone: z.string().trim().max(40).optional(),
+      language: z.string().trim().min(2).max(60).optional(),
+      timezone: z.string().trim().min(2).max(80).optional(),
+      department: z.string().trim().max(120).optional(),
+      loginAlerts: z.boolean().optional(),
+      emailNotifications: z.boolean().optional(),
+      pageAccessOverrides: z.array(z.enum(ADMIN_PAGE_KEYS)).optional(),
+    })
+    .refine(
+      (value) =>
+        value.firstName !== undefined ||
+        value.lastName !== undefined ||
+        value.phone !== undefined ||
+        value.language !== undefined ||
+        value.timezone !== undefined ||
+        value.department !== undefined ||
+        value.loginAlerts !== undefined ||
+        value.emailNotifications !== undefined ||
+        value.pageAccessOverrides !== undefined,
+      { message: "No update fields provided" },
+    );
+
+  app.patch(
+    "/api/admin/store-users/:id/profile",
+    requireAdmin,
+    validateRequest(updateStoreUserProfileSchema),
+    async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") {
+        return res.status(400).json({ success: false, error: "Invalid ID" });
+      }
+
+      try {
+        const actor = req.user as Express.User | undefined;
+        if (!canManagePrivilegedAdminRoles(actor)) {
+          return res.status(403).json({ success: false, error: "Only superadmin users can edit store-user profiles" });
+        }
+
+        const targetUser = await storage.getUserById(id);
+        if (!targetUser) {
+          return res.status(404).json({ success: false, error: "User not found" });
+        }
+
+        await ensureAdminProfileSettingsTable();
+
+        await db
+          .insert(adminProfileSettings)
+          .values({ userId: id })
+          .onConflictDoNothing({ target: adminProfileSettings.userId });
+
+        const [existingSettings] = await db
+          .select()
+          .from(adminProfileSettings)
+          .where(eq(adminProfileSettings.userId, id))
+          .limit(1);
+
+        const payload = req.body as z.infer<typeof updateStoreUserProfileSchema>;
+        const currentName = parseName(targetUser.displayName, targetUser.username);
+        const nextFirstName = payload.firstName ?? existingSettings?.firstName ?? currentName.firstName;
+        const nextLastName = payload.lastName ?? existingSettings?.lastName ?? currentName.lastName;
+
+        const userUpdateData: Record<string, unknown> = {};
+        if (payload.phone !== undefined) userUpdateData.phoneNumber = payload.phone;
+        if (payload.emailNotifications !== undefined) userUpdateData.emailNotifications = payload.emailNotifications;
+        if (payload.firstName !== undefined || payload.lastName !== undefined) {
+          userUpdateData.displayName = buildDisplayName(nextFirstName, nextLastName, targetUser.displayName);
+        }
+
+        if (Object.keys(userUpdateData).length > 0) {
+          await db.update(users).set(userUpdateData).where(eq(users.id, id));
+        }
+
+        await db
+          .update(adminProfileSettings)
+          .set({
+            firstName: nextFirstName,
+            lastName: nextLastName,
+            language: payload.language ?? existingSettings?.language ?? "en",
+            timezone: payload.timezone ?? existingSettings?.timezone ?? "Asia/Kathmandu",
+            department: payload.department ?? existingSettings?.department ?? null,
+            loginAlerts: payload.loginAlerts ?? existingSettings?.loginAlerts ?? true,
+            pageAccessOverrides:
+              payload.pageAccessOverrides !== undefined
+                ? normalizeAdminPageList(payload.pageAccessOverrides)
+                : normalizeAdminPageList(existingSettings?.pageAccessOverrides),
+            updatedAt: sql`now()`,
+          })
+          .where(eq(adminProfileSettings.userId, id));
+
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/store-users/:id/profile", err);
+        return res.status(500).json({ success: false, error: "Failed to update store user profile" });
       }
     },
   );
@@ -5312,66 +6058,10 @@ export async function registerRoutes(
         (settings?.notificationPrefs as Record<string, unknown> | null | undefined) ?? undefined,
       );
 
-      const [ordersStats] = await db
-        .select({
-          ordersManaged: sql<number>`count(*)::int`,
-          revenueProcessed: sql<string>`coalesce(sum(${orders.total}), '0')`,
-        })
-        .from(orders);
-
-      const [productsStats] = await db
-        .select({
-          productsListed: sql<number>`count(*)::int`,
-        })
-        .from(products)
-        .where(eq(products.isActive, true));
-
-      const [actionsStats] = await db
-        .select({
-          adminActions30d: sql<number>`count(*)::int`,
-        })
-        .from(securityLogs)
-        .where(
-          and(
-            eq(securityLogs.userId, actor.id),
-            gte(securityLogs.createdAt, sql`now() - interval '30 days'`),
-          ),
-        );
-
-      const recentActivity = await db
-        .select({
-          id: securityLogs.id,
-          method: securityLogs.method,
-          url: securityLogs.url,
-          status: securityLogs.status,
-          createdAt: securityLogs.createdAt,
-        })
-        .from(securityLogs)
-        .where(eq(securityLogs.userId, actor.id))
-        .orderBy(desc(securityLogs.createdAt))
-        .limit(10);
-
-      const sessionsResult = await db.execute(sql`
-        select
-          sid,
-          expire,
-          coalesce(sess->>'ip', '') as ip,
-          coalesce(sess->>'userAgent', '') as user_agent,
-          coalesce(sess->>'createdAt', '') as created_at,
-          coalesce(sess->>'lastAccessedAt', '') as last_accessed_at
-        from session
-        where (sess->'passport'->>'user') = ${actor.id}
-        order by expire desc
-      `);
-
-      const sessionData = sessionsResult.rows.map((row: any) => ({
-        sid: String(row.sid),
-        isCurrent: String(row.sid) === req.sessionID,
-        expiresAt: row.expire ? new Date(row.expire as string).toISOString() : null,
-        createdAt: row.created_at ? String(row.created_at) : null,
-        lastAccessedAt: row.last_accessed_at ? String(row.last_accessed_at) : null,
-        ip: row.ip ? String(row.ip) : null,
-        userAgent: row.user_agent ? String(row.user_agent) : null,
+      const operationalInsights = await getAdminOperationalInsights(actor.id, currentUser.role);
+      const sessionData = operationalInsights.sessions.map((session) => ({
+        ...session,
+        isCurrent: session.sid === req.sessionID,
       }));
 
       return res.json({
@@ -5398,20 +6088,17 @@ export async function registerRoutes(
           },
           notifications: notificationPrefs,
           stats: {
-            ordersManaged: Number(ordersStats?.ordersManaged ?? 0),
-            revenueProcessed: String(ordersStats?.revenueProcessed ?? "0"),
-            productsListed: Number(productsStats?.productsListed ?? 0),
-            adminActions30d: Number(actionsStats?.adminActions30d ?? 0),
+            ordersManaged: operationalInsights.stats.ordersProcessed,
+            revenueProcessed: operationalInsights.stats.totalSales,
+            productsManaged: operationalInsights.stats.productsManaged,
+            stockEntries: operationalInsights.stats.stockEntries,
+            adminActions30d: operationalInsights.stats.adminActions30d,
           },
-          accessScope: getAdminAllowedPages(currentUser.role),
-          permissions: getAdminAllowedPages(currentUser.role),
-          recentActivity: recentActivity.map((entry) => ({
-            id: entry.id,
-            action: `${entry.method} ${entry.url}`,
-            target: entry.url,
-            status: entry.status,
-            timestamp: entry.createdAt,
-          })),
+          accessScope: operationalInsights.accessScope,
+          permissions: operationalInsights.permissions,
+          accessOverrides: operationalInsights.accessOverrides,
+          recentActivity: operationalInsights.recentActivity,
+          orderActivity: operationalInsights.orderActivity,
           sessions: sessionData,
         },
       });
@@ -6029,10 +6716,10 @@ export async function registerRoutes(
           return res.status(404).json({ success: false, error: "User not found" });
         }
         const targetRole = target.role?.toLowerCase() ?? "";
-        if (!isRootSuperAdmin(actor) && privilegedAdminRoles.has(targetRole)) {
+        if (!canManagePrivilegedAdminRoles(actor) && privilegedAdminRoles.has(targetRole)) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin@rare.np can manage owner/admin/superadmin users",
+            error: "Only superadmin users can manage owner/admin/superadmin users",
           });
         }
         await storage.updateUserTwoFactor(id, req.body.enabled);
@@ -6062,10 +6749,10 @@ export async function registerRoutes(
           return res.status(404).json({ success: false, error: "User not found" });
         }
         const targetRole = target.role?.toLowerCase() ?? "";
-        if (!isRootSuperAdmin(actor) && privilegedAdminRoles.has(targetRole)) {
+        if (!canManagePrivilegedAdminRoles(actor) && privilegedAdminRoles.has(targetRole)) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin@rare.np can delete owner/admin/superadmin users",
+            error: "Only superadmin users can delete owner/admin/superadmin users",
           });
         }
         await storage.deleteUser(id);
@@ -6094,10 +6781,10 @@ export async function registerRoutes(
       try {
         const { name, email, role } = req.body;
         const actor = req.user as Express.User | undefined;
-        if (!isRootSuperAdmin(actor) && privilegedAdminRoles.has(role.toLowerCase())) {
+        if (!canManagePrivilegedAdminRoles(actor) && privilegedAdminRoles.has(role.toLowerCase())) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin@rare.np can invite owner/admin/superadmin users",
+            error: "Only superadmin users can invite owner/admin/superadmin users",
           });
         }
         const code = Math.floor(100000 + Math.random() * 900000)

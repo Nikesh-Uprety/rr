@@ -121,6 +121,8 @@ import {
 } from "./productStock";
 import { getErrorMessage } from "@/lib/queryClient";
 
+const ARCHIVED_PRODUCT_CATEGORY = "__archived__";
+
 const AttributesManager = lazy(() =>
   import("./AttributesManager").then((module) => ({ default: module.AttributesManager })),
 );
@@ -196,6 +198,7 @@ type PendingGalleryImage = {
 export default function AdminProducts() {
   const [location, setLocation] = useLocation();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"active" | "draft" | "archived">("active");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -290,16 +293,22 @@ export default function AdminProducts() {
 
   useEffect(() => {
     setProductPage(1);
-  }, [search, categoryFilter, productPageSize]);
+  }, [search, categoryFilter, productPageSize, statusFilter]);
 
   const filters = useMemo(
     () => ({
       search: search || undefined,
-      category: categoryFilter === "all" ? undefined : categoryFilter,
+      category:
+        statusFilter === "archived"
+          ? undefined
+          : categoryFilter === "all"
+            ? undefined
+            : categoryFilter,
       page: productPage,
       limit: productPageSize,
+      status: statusFilter,
     }),
-    [search, categoryFilter, productPage, productPageSize],
+    [search, categoryFilter, productPage, productPageSize, statusFilter],
   );
 
   const {
@@ -313,8 +322,8 @@ export default function AdminProducts() {
 
   const quickSearch = search.trim();
   const { data: quickSearchData, isFetching: quickSearchLoading } = useQuery<{ data: ProductApi[]; total: number }>({
-    queryKey: ["admin", "products", "quick-search", quickSearch],
-    queryFn: () => fetchAdminProductsPage({ search: quickSearch, page: 1, limit: 5 }),
+    queryKey: ["admin", "products", "quick-search", quickSearch, statusFilter],
+    queryFn: () => fetchAdminProductsPage({ search: quickSearch, page: 1, limit: 5, status: statusFilter }),
     enabled: quickSearch.length > 1,
     staleTime: 30_000,
   });
@@ -568,8 +577,9 @@ export default function AdminProducts() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory-products"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-products-v2"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-movements"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast({ title: "Product added" });
       setAddOpen(false);
@@ -680,8 +690,9 @@ export default function AdminProducts() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory-products"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-products-v2"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-movements"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       if (editProduct?.id) {
         queryClient.invalidateQueries({ queryKey: ["product", editProduct.id] });
@@ -898,8 +909,16 @@ export default function AdminProducts() {
   const productTotalPages = Math.max(1, Math.ceil(totalProducts / productPageSize));
   const paginatedProducts = filteredProducts;
   const featuredCount = productStats?.featuredCount ?? 0;
+  const statusTabs = useMemo(
+    () => [
+      { id: "active" as const, label: "Active", count: productStats?.activeCount ?? 0 },
+      { id: "draft" as const, label: "Draft", count: productStats?.draftCount ?? 0 },
+      { id: "archived" as const, label: "Archived", count: productStats?.archivedCount ?? 0 },
+    ],
+    [productStats],
+  );
   const categoryTabs = useMemo(
-    () => [{ id: "all", slug: "all", name: "All" }, ...categories],
+    () => [{ id: "all", slug: "all", name: "All" }, ...categories.filter((category) => category.slug !== ARCHIVED_PRODUCT_CATEGORY)],
     [categories],
   );
   const visibleCategoryTabs = categoryTabs.slice(0, 8);
@@ -935,12 +954,7 @@ export default function AdminProducts() {
     setEditOpen(true);
   };
 
-  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < 640 ? "list" : "grid";
-    }
-    return "grid";
-  });
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -1090,6 +1104,39 @@ export default function AdminProducts() {
       {/* Filter & Category Section with Search Bar */}
       <div className="-mx-1 px-1 pb-2">
         <div className="space-y-3">
+          <div className="rounded-2xl border border-[#DCE8DB] bg-white/90 p-2 shadow-[0_8px_20px_rgba(34,63,41,0.08)] dark:border-[#2E3B32] dark:bg-[#151E17]/90 dark:shadow-[0_10px_22px_rgba(0,0,0,0.35)]">
+            <div className="flex flex-wrap items-center gap-2">
+              {statusTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setStatusFilter(tab.id);
+                    setSelectedProductIds(new Set());
+                  }}
+                  className={cn(
+                    "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all",
+                    statusFilter === tab.id
+                      ? "bg-[#2f3430] text-white shadow-sm dark:bg-[#d9decf] dark:text-[#162117]"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em]",
+                      statusFilter === tab.id
+                        ? "bg-white/15 text-white dark:bg-[#162117]/10 dark:text-[#162117]"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-[#F8FCF8]/95 to-white/95 dark:from-[#151E17]/95 dark:to-[#111915]/95 p-4 rounded-2xl border border-[#DCE8DB] dark:border-[#2E3B32] shadow-[0_8px_20px_rgba(34,63,41,0.08)] dark:shadow-[0_10px_22px_rgba(0,0,0,0.35)] overflow-visible">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1 w-full">
               <div className="flex items-center gap-3 shrink-0">
@@ -1261,56 +1308,58 @@ export default function AdminProducts() {
             
             <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end shrink-0">
               <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest whitespace-nowrap dark:text-[#CFE0D1]">
-                {totalProducts} Items
+                {totalProducts} {statusFilter === "active" ? "Active" : statusFilter === "draft" ? "Draft" : "Archived"} Items
               </p>
               <ViewToggle view={viewMode} onViewChange={setViewMode} />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#DFE9DF] dark:border-[#2E3B32] bg-white/80 dark:bg-[#121A15]/80 p-3 shadow-[0_6px_16px_rgba(34,63,41,0.06)] dark:shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
-            <div className="flex flex-wrap items-center gap-2 min-w-0 justify-start">
-              {visibleCategoryTabs.map((cat) => (
-                <Button
-                  key={cat.id}
-                  variant={categoryFilter === cat.slug ? "default" : "outline"}
-                  onClick={() => setCategoryFilter(cat.slug)}
-                  className={cn(
-                    "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0",
-                    categoryFilter !== cat.slug &&
-                      "bg-background text-muted-foreground border-[#CAD9CA] hover:border-primary hover:text-foreground dark:bg-[#19241D] dark:text-[#D5E8D7] dark:border-[#334437] dark:hover:bg-[#223027] dark:hover:text-white",
-                  )}
-                >
-                  {cat.name}
-                </Button>
-              ))}
-              {moreCategoryTabs.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0 dark:bg-[#19241D] dark:text-[#D5E8D7] dark:border-[#334437] dark:hover:bg-[#223027] dark:hover:text-white"
-                    >
-                      More <ChevronDown className="h-3.5 w-3.5 ml-1" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto w-56">
-                    {moreCategoryTabs.map((cat) => (
-                      <DropdownMenuItem
-                        key={cat.id}
-                        onClick={() => setCategoryFilter(cat.slug)}
-                        className={cn(
-                          "cursor-pointer",
-                          categoryFilter === cat.slug && "bg-muted font-semibold",
-                        )}
+          {statusFilter !== "archived" && (
+            <div className="rounded-2xl border border-[#DFE9DF] dark:border-[#2E3B32] bg-white/80 dark:bg-[#121A15]/80 p-3 shadow-[0_6px_16px_rgba(34,63,41,0.06)] dark:shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
+              <div className="flex flex-wrap items-center gap-2 min-w-0 justify-start">
+                {visibleCategoryTabs.map((cat) => (
+                  <Button
+                    key={cat.id}
+                    variant={categoryFilter === cat.slug ? "default" : "outline"}
+                    onClick={() => setCategoryFilter(cat.slug)}
+                    className={cn(
+                      "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0",
+                      categoryFilter !== cat.slug &&
+                        "bg-background text-muted-foreground border-[#CAD9CA] hover:border-primary hover:text-foreground dark:bg-[#19241D] dark:text-[#D5E8D7] dark:border-[#334437] dark:hover:bg-[#223027] dark:hover:text-white",
+                    )}
+                  >
+                    {cat.name}
+                  </Button>
+                ))}
+                {moreCategoryTabs.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0 dark:bg-[#19241D] dark:text-[#D5E8D7] dark:border-[#334437] dark:hover:bg-[#223027] dark:hover:text-white"
                       >
-                        {cat.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+                        More <ChevronDown className="h-3.5 w-3.5 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto w-56">
+                      {moreCategoryTabs.map((cat) => (
+                        <DropdownMenuItem
+                          key={cat.id}
+                          onClick={() => setCategoryFilter(cat.slug)}
+                          className={cn(
+                            "cursor-pointer",
+                            categoryFilter === cat.slug && "bg-muted font-semibold",
+                          )}
+                        >
+                          {cat.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

@@ -33,9 +33,8 @@ type StorageLike = typeof storageLib;
 type PassportLike = typeof passportLib;
 const PRIVILEGED_ADMIN_ROLES = new Set(["superadmin", "owner", "admin"]);
 const isSuperAdminRole = (role: string | null | undefined) => role?.toLowerCase() === "superadmin";
-const ROOT_SUPERADMIN_EMAIL = "superadmin@rare.np";
-const isRootSuperAdmin = (user: Express.User | undefined) =>
-  isSuperAdminRole(user?.role) && user?.email?.toLowerCase() === ROOT_SUPERADMIN_EMAIL;
+const canManagePrivilegedAdminRoles = (user: Express.User | undefined) =>
+  isSuperAdminRole(user?.role);
 
 export function createLoginHandler(deps?: {
   storage?: StorageLike;
@@ -216,10 +215,10 @@ export function createStoreUserHandler(deps?: {
       const { name, email, password, role, phoneNumber, profileImageUrl } = validation.data;
       const actor = req.user as Express.User | undefined;
 
-      if (!isRootSuperAdmin(actor) && PRIVILEGED_ADMIN_ROLES.has(role)) {
+      if (!canManagePrivilegedAdminRoles(actor) && PRIVILEGED_ADMIN_ROLES.has(role)) {
         return res.status(403).json({
           success: false,
-          error: "Only superadmin@rare.np can create owner/admin/superadmin users",
+          error: "Only superadmin users can create owner/admin/superadmin users",
         });
       }
 

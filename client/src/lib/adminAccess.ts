@@ -97,17 +97,23 @@ const ADMIN_DEFAULT_PAGE_ORDER: AdminPageKey[] = [
   "logs",
 ];
 
-export function getAdminNavigation(role: string | null | undefined): AdminNavItem[] {
-  return ADMIN_NAV_ITEMS.filter((item) => canAccessAdminPage(role, item.page));
+export function getAdminNavigation(
+  role: string | null | undefined,
+  additionalPages?: AdminPageKey[] | null,
+): AdminNavItem[] {
+  return ADMIN_NAV_ITEMS.filter((item) => canAccessAdminPage(role, item.page, additionalPages));
 }
 
-export function getDefaultAdminPath(role: string | null | undefined): string {
+export function getDefaultAdminPath(
+  role: string | null | undefined,
+  additionalPages?: AdminPageKey[] | null,
+): string {
   if (!canAccessAdminPanel(role)) {
     return "/";
   }
 
   for (const page of ADMIN_DEFAULT_PAGE_ORDER) {
-    if (canAccessAdminPage(role, page)) {
+    if (canAccessAdminPage(role, page, additionalPages)) {
       return ADMIN_ROUTE_BY_PAGE[page];
     }
   }
@@ -138,19 +144,20 @@ export function getRoleLabel(role: string | null | undefined): string {
 export function getAdminRedirectPath(
   role: string | null | undefined,
   requiredPage?: AdminPageKey,
+  additionalPages?: AdminPageKey[] | null,
 ): string {
   if (!canAccessAdminPanel(role)) {
     return "/";
   }
 
-  if (requiredPage && canAccessAdminPage(role, requiredPage)) {
+  if (requiredPage && canAccessAdminPage(role, requiredPage, additionalPages)) {
     return ADMIN_ROUTE_BY_PAGE[requiredPage];
   }
 
-  const allowedPages = getAdminAllowedPages(role);
+  const allowedPages = getAdminAllowedPages(role, additionalPages);
   if (allowedPages.includes("dashboard")) {
     return ADMIN_ROUTE_BY_PAGE.dashboard;
   }
 
-  return getDefaultAdminPath(role);
+  return getDefaultAdminPath(role, additionalPages);
 }

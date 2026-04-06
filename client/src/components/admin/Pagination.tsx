@@ -1,6 +1,13 @@
-import * as React from "react";
-import MuiTablePagination from "@mui/material/TablePagination";
-import { styled } from "@mui/material/styles";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface PaginationProps {
   currentPage: number;
@@ -11,50 +18,7 @@ interface PaginationProps {
   onPageSizeChange?: (pageSize: number) => void;
 }
 
-const StyledTablePagination = styled(MuiTablePagination)(({ theme }) => ({
-  color: theme.palette.text.primary,
-  backgroundColor: theme.palette.background.paper,
-  borderTop: `1px solid ${theme.palette.divider}`,
-  "& .MuiTablePagination-toolbar": {
-    minHeight: 48,
-    paddingLeft: 8,
-    paddingRight: 8,
-  },
-  "& .MuiTablePagination-select": {
-    paddingLeft: 8,
-    paddingRight: 24,
-    borderRadius: 6,
-    fontSize: 13,
-    fontWeight: 500,
-  },
-  "& .MuiTablePagination-selectLabel": {
-    fontSize: 12,
-    fontWeight: 500,
-    color: theme.palette.text.secondary,
-    opacity: 0.7,
-  },
-  "& .MuiTablePagination-displayedRows": {
-    fontSize: 12,
-    fontWeight: 500,
-    color: theme.palette.text.secondary,
-  },
-  "& .MuiTablePagination-actions": {
-    marginLeft: 4,
-  },
-  "& .MuiIconButton-root": {
-    padding: 4,
-    borderRadius: 6,
-    color: theme.palette.text.primary,
-  },
-  "& .MuiIconButton-root.Mui-disabled": {
-    color: theme.palette.text.disabled,
-  },
-  "& .MuiSelect-select": {
-    display: "flex",
-    alignItems: "center",
-    color: theme.palette.text.primary,
-  },
-}));
+const PAGE_SIZE_OPTIONS = [10, 15, 20, 25, 50, 100];
 
 export function Pagination({
   currentPage,
@@ -66,36 +30,109 @@ export function Pagination({
 }: PaginationProps) {
   if (totalItems === 0) return null;
 
-  const [rowsPerPage, setRowsPerPage] = React.useState(pageSize);
+  const safeTotalPages = Math.max(totalPages, 1);
+  const startItem = (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
 
-  const handlePageChange = (
-    _event: React.MouseEvent<HTMLButtonElement> | null,
-    newPage: number,
-  ) => {
-    onPageChange(newPage + 1);
-  };
+  const pageButtons = [];
+  const windowStart = Math.max(1, currentPage - 1);
+  const windowEnd = Math.min(safeTotalPages, windowStart + 2);
+  const adjustedStart = Math.max(1, windowEnd - 2);
 
-  const handleRowsPerPageChange = (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    const newSize = parseInt(event.target.value, 10);
-    setRowsPerPage(newSize);
-    onPageChange(1);
-    onPageSizeChange?.(newSize);
-  };
+  for (let page = adjustedStart; page <= windowEnd; page += 1) {
+    pageButtons.push(page);
+  }
 
   return (
-    <StyledTablePagination
-      count={totalItems}
-      page={currentPage - 1}
-      onPageChange={handlePageChange}
-      rowsPerPage={rowsPerPage}
-      onRowsPerPageChange={handleRowsPerPageChange}
-      rowsPerPageOptions={[10, 15, 20, 25, 50, 100]}
-      labelRowsPerPage="Per page"
-      labelDisplayedRows={({ from, to, count }) =>
-        `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`
-      }
-    />
+    <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+        <span>
+          Showing {startItem}-{endItem} of {totalItems}
+        </span>
+
+        {onPageSizeChange ? (
+          <div className="flex items-center gap-2">
+            <span>Per page</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                onPageSizeChange(Number(value));
+                onPageChange(1);
+              }}
+            >
+              <SelectTrigger className="h-8 w-[84px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage <= 1}
+          aria-label="Previous page"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+
+        {adjustedStart > 1 ? (
+          <>
+            <Button variant="outline" size="sm" className="h-8 min-w-8 px-2" onClick={() => onPageChange(1)}>
+              1
+            </Button>
+            {adjustedStart > 2 ? <span className="px-1 text-sm text-muted-foreground">…</span> : null}
+          </>
+        ) : null}
+
+        {pageButtons.map((page) => (
+          <Button
+            key={page}
+            variant={page === currentPage ? "default" : "outline"}
+            size="sm"
+            className="h-8 min-w-8 px-2"
+            onClick={() => onPageChange(page)}
+          >
+            {page}
+          </Button>
+        ))}
+
+        {windowEnd < safeTotalPages ? (
+          <>
+            {windowEnd < safeTotalPages - 1 ? <span className="px-1 text-sm text-muted-foreground">…</span> : null}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 min-w-8 px-2"
+              onClick={() => onPageChange(safeTotalPages)}
+            >
+              {safeTotalPages}
+            </Button>
+          </>
+        ) : null}
+
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage >= safeTotalPages}
+          aria-label="Next page"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
   );
 }

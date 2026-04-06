@@ -14,7 +14,10 @@ export function requireAdminPageAccess(page: AdminPageKey | AdminPageKey[]) {
 
   return (req: Request, res: Response, next: NextFunction) => {
     const user = req.user as Express.User | undefined;
-    if (!user || !allowedPages.some((pageKey) => canAccessAdminPage(user.role, pageKey))) {
+    if (
+      !user ||
+      !allowedPages.some((pageKey) => canAccessAdminPage(user.role, pageKey, user.adminPageAccess))
+    ) {
       return res.status(403).json({ success: false, error: "Forbidden" });
     }
     next();

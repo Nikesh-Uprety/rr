@@ -64,7 +64,7 @@ export default function Navbar() {
   const isDark = theme === "dark";
   const dashboardPath = user
     ? canAccessAdminPanel(user.role)
-      ? getDefaultAdminPath(user.role)
+      ? getDefaultAdminPath(user.role, user.adminPageAccess)
       : "/admin"
     : "/admin";
 

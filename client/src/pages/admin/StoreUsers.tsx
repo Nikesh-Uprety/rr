@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Plus, MoreVertical, Trash2, User as UserIcon, ShieldCheck } from "lucide-react";
+import { ChevronRight, Loader2, MoreVertical, Plus, ShieldCheck, Trash2, User as UserIcon } from "lucide-react";
+import { useLocation } from "wouter";
 
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -131,10 +132,9 @@ function roleBadge(role: string) {
 }
 
 export default function StoreUsers() {
+  const [, setLocation] = useLocation();
   const { user: currentUser } = useCurrentUser();
-  const isCurrentUserRootSuperAdmin =
-    currentUser?.role?.toLowerCase() === "superadmin" &&
-    currentUser?.email?.toLowerCase() === "superadmin@rare.np";
+  const isCurrentUserSuperAdmin = currentUser?.role?.toLowerCase() === "superadmin";
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -165,11 +165,14 @@ export default function StoreUsers() {
   const [editingRole, setEditingRole] = useState("manager");
 
   const [deletingUser, setDeletingUser] = useState<StoreUser | null>(null);
+  const [navigatingUserId, setNavigatingUserId] = useState<string | null>(null);
+  const [pendingPatchUserId, setPendingPatchUserId] = useState<string | null>(null);
+  const [pendingDeleteUserId, setPendingDeleteUserId] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
   const roleOptions = useMemo(
-    () => (isCurrentUserRootSuperAdmin ? SUPERADMIN_ROLE_OPTIONS : STANDARD_ROLE_OPTIONS),
-    [isCurrentUserRootSuperAdmin],
+    () => (isCurrentUserSuperAdmin ? SUPERADMIN_ROLE_OPTIONS : STANDARD_ROLE_OPTIONS),
+    [isCurrentUserSuperAdmin],
   );
   const normalizeEditableRole = (role: string) => {
     const lowered = role.toLowerCase();
@@ -210,6 +213,9 @@ export default function StoreUsers() {
       const res = await apiRequest("PATCH", `/api/admin/store-users/${payload.id}`, payload.data);
       return (await res.json()) as { success: boolean; data: StoreUser };
     },
+    onMutate: async (payload) => {
+      setPendingPatchUserId(payload.id);
+    },
     onError: (err: any) => {
       toast({
         title: "Update failed",
@@ -220,12 +226,18 @@ export default function StoreUsers() {
     onSuccess: () => {
       invalidate();
     },
+    onSettled: () => {
+      setPendingPatchUserId(null);
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("DELETE", `/api/admin/store-users/${id}`);
       return (await res.json()) as { success: boolean; error?: string };
+    },
+    onMutate: async (id) => {
+      setPendingDeleteUserId(id);
     },
     onSuccess: (result) => {
       if (!result.success) {
@@ -243,9 +255,16 @@ export default function StoreUsers() {
         variant: "destructive",
       });
     },
+    onSettled: () => {
+      setPendingDeleteUserId(null);
+    },
   });
 
   const isSelf = (u: StoreUser) => currentUser?.id && u.id === currentUser.id;
+  const openUserProfile = (userId: string) => {
+    setNavigatingUserId(userId);
+    setLocation(`/admin/store-users/${userId}`);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -261,7 +280,7 @@ export default function StoreUsers() {
           <Button
             className="flex-1 sm:flex-none bg-[#2C3E2D] hover:bg-[#1A251B] text-white"
             onClick={() => setIsAddOpen(true)}
-            disabled={isLoading}
+            disabled={isLoading || createMutation.isPending}
           >
             <Plus className="w-4 h-4 mr-2" /> Add User
           </Button>
@@ -317,11 +336,15 @@ export default function StoreUsers() {
                     const rb = roleBadge(u.role);
                     const addedAt = u.createdAt ? format(new Date(u.createdAt), "dd MMM yyyy") : "";
                     const targetRole = u.role?.toLowerCase() ?? "";
-                    const canManagePrivilegedTarget = isCurrentUserRootSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
+                    const canManagePrivilegedTarget = isCurrentUserSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
                     const canDeleteTarget = !isSelf(u) && canManagePrivilegedTarget;
 
                     return (
-                      <TableRow key={u.id} className="border-b border-[#E5E5E0] dark:border-border">
+                      <TableRow
+                        key={u.id}
+                        className="group cursor-pointer border-b border-[#E5E5E0] transition-all duration-200 hover:bg-[#F7F5EF] dark:border-border dark:hover:bg-muted/40"
+                        onClick={() => openUserProfile(u.id)}
+                      >
                         <TableCell className="py-4">
                           <div className="flex items-center gap-3">
                             <Avatar className="w-11 h-11 shadow-sm border border-black/5 dark:border-white/5">
@@ -334,8 +357,15 @@ export default function StoreUsers() {
                               )}
                             </Avatar>
                             <div className="min-w-0">
-                              <div className="font-semibold text-[#2C3E2D] dark:text-foreground truncate">
-                                {u.name ?? "—"}
+                              <div className="flex items-center gap-2">
+                                <div className="font-semibold text-[#2C3E2D] dark:text-foreground truncate">
+                                  {u.name ?? "—"}
+                                </div>
+                                {navigatingUserId === u.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                                ) : (
+                                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                                )}
                               </div>
                             </div>
                           </div>
@@ -350,10 +380,13 @@ export default function StoreUsers() {
                         </TableCell>
 
                         <TableCell className="py-4">
-                          <div className="flex items-center gap-3">
+                          <div
+                            className="flex items-center gap-3"
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             <Switch
                               checked={u.emailNotifications}
-                              disabled={!canManagePrivilegedTarget}
+                              disabled={!canManagePrivilegedTarget || pendingPatchUserId === u.id}
                               onCheckedChange={(checked) => {
                                 patchMutation.mutate({
                                   id: u.id,
@@ -361,6 +394,9 @@ export default function StoreUsers() {
                                 });
                               }}
                             />
+                            {pendingPatchUserId === u.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            ) : null}
                             <span className="text-xs text-muted-foreground w-10">
                               {u.emailNotifications ? "On" : "Off"}
                             </span>
@@ -375,7 +411,12 @@ export default function StoreUsers() {
                           <div className="flex justify-end">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted rounded-full">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 hover:bg-muted rounded-full"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
                                   <MoreVertical className="w-4 h-4" />
                                 </Button>
                               </DropdownMenuTrigger>
@@ -383,7 +424,8 @@ export default function StoreUsers() {
                                 <DropdownMenuItem
                                   disabled={!canManagePrivilegedTarget}
                                   className="cursor-pointer flex items-center gap-2 py-2"
-                                  onClick={() => {
+                                  onClick={(event) => {
+                                    event.stopPropagation();
                                     setEditingRoleUser(u);
                                     setEditingRole(normalizeEditableRole(u.role));
                                   }}
@@ -391,11 +433,24 @@ export default function StoreUsers() {
                                   <ShieldCheck className="w-4 h-4 text-primary" />
                                   Edit Role
                                 </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="cursor-pointer flex items-center gap-2 py-2"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openUserProfile(u.id);
+                                  }}
+                                >
+                                  <ShieldCheck className="w-4 h-4 text-primary" />
+                                  Manage Access
+                                </DropdownMenuItem>
 
                                 {canDeleteTarget && (
                                   <DropdownMenuItem
                                     className="cursor-pointer flex items-center gap-2 py-2 text-destructive focus:text-destructive"
-                                    onClick={() => setDeletingUser(u)}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setDeletingUser(u);
+                                    }}
                                   >
                                     <Trash2 className="w-4 h-4" /> Delete User
                                   </DropdownMenuItem>
@@ -419,10 +474,14 @@ export default function StoreUsers() {
               const initials = getInitials(u.name || u.email);
               const addedAt = u.createdAt ? format(new Date(u.createdAt), "dd MMM yyyy") : "";
               const targetRole = u.role?.toLowerCase() ?? "";
-              const canManagePrivilegedTarget = isCurrentUserRootSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
+              const canManagePrivilegedTarget = isCurrentUserSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
               const canDeleteTarget = !isSelf(u) && canManagePrivilegedTarget;
               return (
-                <div key={u.id} className="bg-white dark:bg-card rounded-xl border border-border shadow-sm p-4">
+                <div
+                  key={u.id}
+                  className="group cursor-pointer rounded-xl border border-border bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#F7F5EF] dark:bg-card dark:hover:bg-muted/40"
+                  onClick={() => openUserProfile(u.id)}
+                >
                   <div className="flex items-start gap-3">
                     <Avatar className="w-12 h-12 shadow-sm border border-black/5 dark:border-white/5 shrink-0">
                       {u.profileImageUrl ? (
@@ -437,15 +496,27 @@ export default function StoreUsers() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="font-semibold text-[#2C3E2D] dark:text-foreground truncate">
-                            {u.name ?? "—"}
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold text-[#2C3E2D] dark:text-foreground truncate">
+                              {u.name ?? "—"}
+                            </div>
+                            {navigatingUserId === u.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground break-all">{u.email}</div>
                         </div>
 
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted rounded-full">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-muted rounded-full"
+                              onClick={(event) => event.stopPropagation()}
+                            >
                               <MoreVertical className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -453,7 +524,8 @@ export default function StoreUsers() {
                             <DropdownMenuItem
                               disabled={!canManagePrivilegedTarget}
                               className="cursor-pointer flex items-center gap-2 py-2"
-                              onClick={() => {
+                              onClick={(event) => {
+                                event.stopPropagation();
                                 setEditingRoleUser(u);
                                 setEditingRole(normalizeEditableRole(u.role));
                               }}
@@ -461,10 +533,23 @@ export default function StoreUsers() {
                               <ShieldCheck className="w-4 h-4 text-primary" />
                               Edit Role
                             </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="cursor-pointer flex items-center gap-2 py-2"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openUserProfile(u.id);
+                              }}
+                            >
+                              <ShieldCheck className="w-4 h-4 text-primary" />
+                              Manage Access
+                            </DropdownMenuItem>
                             {canDeleteTarget && (
                               <DropdownMenuItem
                                 className="cursor-pointer flex items-center gap-2 py-2 text-destructive focus:text-destructive"
-                                onClick={() => setDeletingUser(u)}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setDeletingUser(u);
+                                }}
                               >
                                 <Trash2 className="w-4 h-4" /> Delete User
                               </DropdownMenuItem>
@@ -475,10 +560,13 @@ export default function StoreUsers() {
 
                       <div className="mt-3 flex items-center justify-between gap-3">
                         <Badge className={`h-6 px-2 flex items-center ${rb.className}`}>{rb.label}</Badge>
-                        <div className="flex items-center gap-2">
+                        <div
+                          className="flex items-center gap-2"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           <Switch
                             checked={u.emailNotifications}
-                            disabled={!canManagePrivilegedTarget}
+                            disabled={!canManagePrivilegedTarget || pendingPatchUserId === u.id}
                             onCheckedChange={(checked) => {
                               patchMutation.mutate({
                                 id: u.id,
@@ -486,6 +574,9 @@ export default function StoreUsers() {
                               });
                             }}
                           />
+                          {pendingPatchUserId === u.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                          ) : null}
                         </div>
                       </div>
 
@@ -602,15 +693,17 @@ export default function StoreUsers() {
                 variant="outline"
                 onClick={() => setIsAddOpen(false)}
                 className="rounded-full"
+                disabled={createMutation.isPending}
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white"
-                disabled={createMutation.isPending}
+                loading={createMutation.isPending}
+                loadingText="Creating..."
               >
-                {createMutation.isPending ? "Creating..." : "Add User"}
+                Add User
               </Button>
             </DialogFooter>
           </form>
@@ -667,11 +760,17 @@ export default function StoreUsers() {
                 variant="outline"
                 onClick={() => setEditingRoleUser(null)}
                 className="rounded-full"
+                disabled={patchMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white">
-                Save
+              <Button
+                type="submit"
+                className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white"
+                loading={patchMutation.isPending}
+                loadingText="Saving..."
+              >
+                Save Changes
               </Button>
             </DialogFooter>
           </form>
@@ -693,13 +792,15 @@ export default function StoreUsers() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-full" disabled={deleteMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               className="rounded-full bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               onClick={() => deletingUser && deleteMutation.mutate(deletingUser.id)}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Confirm"}
+              {deleteMutation.isPending || pendingDeleteUserId === deletingUser?.id ? "Deleting..." : "Confirm"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

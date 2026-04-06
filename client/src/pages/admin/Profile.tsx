@@ -89,17 +89,44 @@ interface ProfileOverview {
   stats: {
     ordersManaged: number;
     revenueProcessed: string;
-    productsListed: number;
+    productsManaged: number;
+    stockEntries: number;
     adminActions30d: number;
   };
   accessScope: string[];
   permissions: string[];
+  accessOverrides: string[];
   recentActivity: Array<{
     id: string;
     action: string;
     target: string;
     status: number;
     timestamp: string;
+  }>;
+  orderActivity: Array<{
+    id: string;
+    billNumber: string;
+    orderId: string | null;
+    source: string | null;
+    customer: {
+      name: string | null;
+      email: string | null;
+      phone: string | null;
+    };
+    items: Array<{ productName?: string; quantity?: number; size?: string; variantColor?: string }>;
+    totalAmount: string;
+    paymentMethod: string | null;
+    paymentVerified: string | null;
+    orderStatus: string | null;
+    orderCreatedAt: string | null;
+    orderUpdatedAt: string | null;
+    processedAt: string | null;
+    deliveryRequired: boolean;
+    deliveryProvider: string | null;
+    deliveryAddress: string | null;
+    deliveryLocation: string | null;
+    linkedOrderEmail: string | null;
+    linkedOrderFullName: string | null;
   }>;
   sessions: Array<{
     sid: string;
@@ -590,8 +617,8 @@ export default function AdminProfilePage() {
                 <p className="mt-2 text-3xl font-serif leading-none">{formatNpr(overview.stats.revenueProcessed)}</p>
               </div>
               <div className="p-4 sm:p-5 xl:border-r xl:border-border/70" data-testid="profile-stat-products">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Products Listed</p>
-                <p className="mt-2 text-3xl font-serif leading-none">{overview.stats.productsListed}</p>
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Products Managed</p>
+                <p className="mt-2 text-3xl font-serif leading-none">{overview.stats.productsManaged}</p>
               </div>
               <div className="p-4 sm:p-5" data-testid="profile-stat-actions">
                 <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Admin Actions (30d)</p>
@@ -885,6 +912,41 @@ export default function AdminProfilePage() {
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
+        <Card className={sectionCardClass}>
+          <CardHeader>
+            <CardTitle className="font-serif text-xl tracking-[0.02em]">Order Activity</CardTitle>
+            <CardDescription>Orders and bills processed from your admin account.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {overview.orderActivity.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No processed order activity found yet.</p>
+            ) : (
+              overview.orderActivity.map((entry) => (
+                <div key={entry.id} className="rounded-md border border-border/70 bg-muted/20 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">
+                      {entry.billNumber}
+                      {entry.orderId ? ` • ${entry.orderId}` : ""}
+                    </p>
+                    <Badge variant="outline" className="capitalize">
+                      {entry.orderStatus || entry.source || "processed"}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {entry.customer.name || entry.linkedOrderFullName || "Customer"} • {entry.customer.email || entry.linkedOrderEmail || "No email"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {entry.items.map((item) => `${item.productName || "Item"} x${item.quantity || 0}`).join(", ")}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Total {formatNpr(entry.totalAmount)} • Processed {entry.processedAt ? new Date(entry.processedAt).toLocaleString() : "-"}
+                  </p>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
         <Card className={sectionCardClass}>
           <CardHeader>
             <CardTitle className="font-serif text-xl tracking-[0.02em]">Module Permissions</CardTitle>

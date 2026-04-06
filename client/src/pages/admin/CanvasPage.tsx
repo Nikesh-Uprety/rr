@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { PageListSidebar } from "@/components/canvas/PageListSidebar";
 import { PageEditor } from "@/components/canvas/PageEditor";
 import { CreatePageDialog } from "@/components/canvas/CreatePageDialog";
@@ -37,9 +38,9 @@ import {
   OptimizedImage,
 } from "@/components/ui";
 import { STOREFRONT_FONT_OPTIONS, STOREFRONT_FONT_FAMILIES, type StorefrontFontPreset } from "@/lib/storefrontFonts";
-import type { CanvasPage, SiteBranding, ColorPreset } from "@/lib/adminApi";
+import type { CanvasPage, SiteBranding, ColorPreset, CanvasTemplate } from "@/lib/adminApi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getCanvasPages, updateCanvasPage, reorderCanvasPages, getBranding, updateBranding, getColorPresets, createColorPreset, updateColorPreset, activateColorPreset, deleteColorPreset, uploadProductImageFile } from "@/lib/adminApi";
+import { getCanvasPages, updateCanvasPage, reorderCanvasPages, getBranding, updateBranding, getColorPresets, createColorPreset, updateColorPreset, activateColorPreset, deleteColorPreset, uploadProductImageFile, getCanvasTemplates } from "@/lib/adminApi";
 import { useToast } from "@/hooks/use-toast";
 import {
   DndContext,
@@ -62,10 +63,59 @@ import { CSS } from "@dnd-kit/utilities";
 type ActiveTab = "pages" | "templates" | "theme" | "branding" | "navigation";
 
 export default function CanvasPage() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("pages");
+  const [location] = useLocation();
+  const readTabFromUrl = (): ActiveTab => {
+    if (typeof window === "undefined") return "pages";
+    const raw = new URLSearchParams(window.location.search).get("tab");
+    return raw === "pages" ||
+      raw === "templates" ||
+      raw === "theme" ||
+      raw === "branding" ||
+      raw === "navigation"
+      ? raw
+      : "pages";
+  };
+  const initialTab = useMemo<ActiveTab>(() => readTabFromUrl(), []);
+  const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab);
   const [selectedPageId, setSelectedPageId] = useState<number | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [selectedCreateTemplate, setSelectedCreateTemplate] = useState<CanvasTemplate | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const { data: templates = [], isLoading: templatesLoading } = useQuery({
+    queryKey: ["/api/admin/canvas/templates"],
+    queryFn: getCanvasTemplates,
+  });
+
+  useEffect(() => {
+    const syncFromUrl = () => {
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
+      setActiveTab(readTabFromUrl());
+
+      if (params.get("panel") === "list") {
+        setSelectedPageId(null);
+      }
+    };
+
+    syncFromUrl();
+
+    window.addEventListener("popstate", syncFromUrl);
+    window.addEventListener("canvas-customization-nav", syncFromUrl);
+
+    return () => {
+      window.removeEventListener("popstate", syncFromUrl);
+      window.removeEventListener("canvas-customization-nav", syncFromUrl);
+    };
+  }, [location]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", activeTab);
+    const nextUrl = `${window.location.pathname}?${params.toString()}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, [activeTab]);
 
   function handlePageSelect(id: number) {
     setSelectedPageId(id);
@@ -74,6 +124,7 @@ export default function CanvasPage() {
 
   function handlePageCreated(id: number) {
     setSelectedPageId(id);
+    setSelectedCreateTemplate(null);
   }
 
   function handleDeletePage(_id: number) {
@@ -327,17 +378,14 @@ export default function CanvasPage() {
 
       {/* Templates tab - placeholder */}
       {activeTab === "templates" && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-3">
-            <Palette className="h-10 w-10 mx-auto text-muted-foreground/30" />
-            <div>
-              <h3 className="text-lg font-semibold">Templates</h3>
-              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                The existing template editor is available in the Canvas tab. Template management coming soon.
-              </p>
-            </div>
-          </div>
-        </div>
+        <TemplatesPanel
+          templates={templates}
+          isLoading={templatesLoading}
+          onUseTemplate={(template) => {
+            setSelectedCreateTemplate(template);
+            setShowCreateDialog(true);
+          }}
+        />
       )}
 
       {/* Navigation tab - management */}
@@ -352,9 +400,134 @@ export default function CanvasPage() {
       {/* Create Page Dialog */}
       <CreatePageDialog
         open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (!open) setSelectedCreateTemplate(null);
+        }}
         onSuccess={handlePageCreated}
+        templateId={selectedCreateTemplate?.id ?? null}
+        templateName={selectedCreateTemplate?.name ?? null}
       />
+    </div>
+  );
+}
+
+function TemplatesPanel({
+  templates,
+  isLoading,
+  onUseTemplate,
+}: {
+  templates: CanvasTemplate[];
+  isLoading: boolean;
+  onUseTemplate: (template: CanvasTemplate) => void;
+}) {
+  const featuredTemplates = useMemo(
+    () =>
+      templates.filter(
+        (template) => template.slug === "maison-nocturne" || template.slug === "editorial-grid",
+      ),
+    [templates],
+  );
+
+  const orderedTemplates = useMemo(() => {
+    const order = ["maison-nocturne", "editorial-grid"];
+    return featuredTemplates.slice().sort((a, b) => order.indexOf(a.slug) - order.indexOf(b.slug));
+  }, [featuredTemplates]);
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 p-6">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Skeleton className="h-80 w-full rounded-[28px]" />
+          <Skeleton className="h-80 w-full rounded-[28px]" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold">Rare Atelier Templates</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Start new pages from the two default Rare Atelier layouts carried over from Canvas Beta.
+          </p>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          {orderedTemplates.map((template) => {
+            const isPremium = template.slug === "maison-nocturne";
+            return (
+              <div
+                key={template.id}
+                className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101012] text-white shadow-[0_24px_60px_rgba(0,0,0,0.28)]"
+              >
+                <div
+                  className={cn(
+                    "relative h-56 overflow-hidden",
+                    isPremium
+                      ? "bg-[radial-gradient(circle_at_top_left,rgba(201,168,76,0.24),transparent_34%),linear-gradient(135deg,#15110d_0%,#0b0b0d_100%)]"
+                      : "bg-[linear-gradient(135deg,#1d1c22_0%,#0e0e11_100%)]",
+                  )}
+                >
+                  <div className="absolute inset-0 opacity-80">
+                    <div className="absolute left-8 top-8">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#d4b460]">
+                        {isPremium ? "Premium" : "Free"}
+                      </p>
+                      <h3 className="mt-4 font-serif text-3xl text-white">{template.name}</h3>
+                      <p className="mt-2 max-w-xs text-sm text-white/60">
+                        {template.description ?? "Rare Atelier storefront template"}
+                      </p>
+                    </div>
+                    <div className="absolute bottom-8 right-8 grid w-40 gap-2">
+                      <div className="h-16 rounded-2xl border border-white/10 bg-white/[0.05]" />
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="h-20 rounded-2xl border border-white/10 bg-white/[0.05]" />
+                        <div className="h-20 rounded-2xl border border-white/10 bg-white/[0.08]" />
+                        <div className="h-20 rounded-2xl border border-white/10 bg-white/[0.05]" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 p-6">
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "border-white/10 bg-white/[0.04] uppercase tracking-[0.18em]",
+                        isPremium ? "text-[#d4b460]" : "text-white/70",
+                      )}
+                    >
+                      {isPremium ? "Rare Atelier Official" : "Rare Atelier Draft"}
+                    </Badge>
+                    {isPremium ? (
+                      <Badge className="bg-[#c9a84c] text-black hover:bg-[#c9a84c]">PREMIUM</Badge>
+                    ) : (
+                      <Badge variant="secondary">FREE</Badge>
+                    )}
+                  </div>
+
+                  <p className="text-sm text-white/68">
+                    {isPremium
+                      ? "Cinematic editorial layout with the polished Rare Atelier storefront direction."
+                      : "Draft-friendly magazine layout for experimenting with collections, copy, and section structure."}
+                  </p>
+
+                  <Button
+                    onClick={() => onUseTemplate(template)}
+                    className="w-full bg-[#c9a84c] text-black hover:bg-[#d8b865]"
+                  >
+                    Use Template For New Page
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

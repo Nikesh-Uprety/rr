@@ -12,9 +12,17 @@ interface CreatePageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: (pageId: number) => void;
+  templateId?: number | null;
+  templateName?: string | null;
 }
 
-export function CreatePageDialog({ open, onOpenChange, onSuccess }: CreatePageDialogProps) {
+export function CreatePageDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+  templateId = null,
+  templateName = null,
+}: CreatePageDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
@@ -28,7 +36,7 @@ export function CreatePageDialog({ open, onOpenChange, onSuccess }: CreatePageDi
   }
 
   const createMutation = useMutation({
-    mutationFn: (data: { title: string; slug: string }) => createCanvasPage(data),
+    mutationFn: (data: { title: string; slug: string; fromTemplateId?: number }) => createCanvasPage(data),
     onSuccess: (page) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/canvas/pages"] });
       toast({ title: "Page created", description: `"${page.title}" has been created.` });
@@ -47,7 +55,11 @@ export function CreatePageDialog({ open, onOpenChange, onSuccess }: CreatePageDi
       toast({ title: "Title required", description: "Please enter a page title.", variant: "destructive" });
       return;
     }
-    createMutation.mutate({ title: title.trim(), slug: slug || "/" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-") });
+    createMutation.mutate({
+      title: title.trim(),
+      slug: slug || "/" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+      ...(templateId ? { fromTemplateId: templateId } : {}),
+    });
   }
 
   return (
@@ -56,10 +68,12 @@ export function CreatePageDialog({ open, onOpenChange, onSuccess }: CreatePageDi
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
-            Create New Page
+            {templateId ? "Create Page From Template" : "Create New Page"}
           </DialogTitle>
           <DialogDescription>
-            Create a blank page to start building with sections.
+            {templateId
+              ? `Create a new page using ${templateName ?? "the selected template"} as the starting layout.`
+              : "Create a blank page to start building with sections."}
           </DialogDescription>
         </DialogHeader>
 
@@ -90,7 +104,11 @@ export function CreatePageDialog({ open, onOpenChange, onSuccess }: CreatePageDi
             Cancel
           </Button>
           <Button onClick={handleCreate} disabled={createMutation.isPending}>
-            {createMutation.isPending ? "Creating..." : "Create Blank Page"}
+            {createMutation.isPending
+              ? "Creating..."
+              : templateId
+                ? "Create From Template"
+                : "Create Blank Page"}
           </Button>
         </DialogFooter>
       </DialogContent>

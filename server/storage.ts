@@ -53,6 +53,7 @@ type ProductFilterInput = {
   includeInactive?: boolean;
   isNewArrival?: boolean;
   isNewCollection?: boolean;
+  status?: "active" | "draft" | "archived";
 };
 
 const buildProductConditions = (filters?: ProductFilterInput) => {
@@ -60,7 +61,7 @@ const buildProductConditions = (filters?: ProductFilterInput) => {
 
   if (filters?.category) {
     conditions.push(eq(products.category, filters.category));
-  } else {
+  } else if (filters?.status !== "archived") {
     conditions.push(
       or(
         isNull(products.category),
@@ -86,6 +87,30 @@ const buildProductConditions = (filters?: ProductFilterInput) => {
 
   if (!filters?.includeInactive && "isActive" in products) {
     conditions.push(eq(products.isActive, true));
+  }
+
+  if (filters?.status === "active") {
+    conditions.push(eq(products.isActive, true));
+    conditions.push(
+      or(
+        isNull(products.category),
+        ne(products.category, ARCHIVED_PRODUCT_CATEGORY),
+      )!,
+    );
+  }
+
+  if (filters?.status === "draft") {
+    conditions.push(eq(products.isActive, false));
+    conditions.push(
+      or(
+        isNull(products.category),
+        ne(products.category, ARCHIVED_PRODUCT_CATEGORY),
+      )!,
+    );
+  }
+
+  if (filters?.status === "archived") {
+    conditions.push(eq(products.category, ARCHIVED_PRODUCT_CATEGORY));
   }
 
   if (filters?.isNewArrival) {
@@ -239,6 +264,7 @@ export interface IStorage {
     includeInactive?: boolean;
     isNewArrival?: boolean;
     isNewCollection?: boolean;
+    status?: "active" | "draft" | "archived";
   }): Promise<Product[]>;
   getProductsCount(filters?: {
     category?: string;
@@ -246,11 +272,15 @@ export interface IStorage {
     includeInactive?: boolean;
     isNewArrival?: boolean;
     isNewCollection?: boolean;
+    status?: "active" | "draft" | "archived";
   }): Promise<number>;
   getProductStats(): Promise<{
     total: number;
     featuredCount: number;
     categoryCounts: Record<string, number>;
+    activeCount: number;
+    draftCount: number;
+    archivedCount: number;
   }>;
   getProductById(id: string): Promise<Product | null>;
   createProduct(
@@ -634,6 +664,9 @@ export class PgStorage implements IStorage {
     total: number;
     featuredCount: number;
     categoryCounts: Record<string, number>;
+    activeCount: number;
+    draftCount: number;
+    archivedCount: number;
   }> {
     const conditions = buildProductConditions({ includeInactive: true });
     const whereClause =
@@ -643,6 +676,9 @@ export class PgStorage implements IStorage {
       .select({
         total: sql<number>`count(*)`,
         featured: sql<number>`count(*) FILTER (WHERE ${products.homeFeatured} = true)`,
+        active: sql<number>`count(*) FILTER (WHERE ${products.isActive} = true AND (${products.category} IS NULL OR ${products.category} <> ${ARCHIVED_PRODUCT_CATEGORY}))`,
+        draft: sql<number>`count(*) FILTER (WHERE ${products.isActive} = false AND (${products.category} IS NULL OR ${products.category} <> ${ARCHIVED_PRODUCT_CATEGORY}))`,
+        archived: sql<number>`count(*) FILTER (WHERE ${products.category} = ${ARCHIVED_PRODUCT_CATEGORY})`,
       })
       .from(products)
       .where(whereClause);
@@ -666,6 +702,9 @@ export class PgStorage implements IStorage {
       total: Number(totals?.total ?? 0),
       featuredCount: Number(totals?.featured ?? 0),
       categoryCounts,
+      activeCount: Number(totals?.active ?? 0),
+      draftCount: Number(totals?.draft ?? 0),
+      archivedCount: Number(totals?.archived ?? 0),
     };
   }
 
@@ -3269,6 +3308,7 @@ export class MemStorage implements IStorage {
     page?: number;
     limit?: number;
     includeInactive?: boolean;
+    status?: "active" | "draft" | "archived";
   }): Promise<Product[]> {
     const page = _filters?.page && _filters.page > 0 ? _filters.page : 1;
     const limit = _filters?.limit && _filters.limit > 0 ? _filters.limit : 24;
@@ -3278,8 +3318,16 @@ export class MemStorage implements IStorage {
 
     if (_filters?.category) {
       results = results.filter((p) => p.category === _filters.category);
-    } else {
+    } else if (_filters?.status !== "archived") {
       results = results.filter((p) => p.category !== ARCHIVED_PRODUCT_CATEGORY);
+    }
+
+    if (_filters?.status === "active") {
+      results = results.filter((p) => p.category !== ARCHIVED_PRODUCT_CATEGORY && p.isActive !== false);
+    } else if (_filters?.status === "draft") {
+      results = results.filter((p) => p.category !== ARCHIVED_PRODUCT_CATEGORY && p.isActive === false);
+    } else if (_filters?.status === "archived") {
+      results = results.filter((p) => p.category === ARCHIVED_PRODUCT_CATEGORY);
     }
 
     if (_filters?.search) {
@@ -3302,6 +3350,7 @@ export class MemStorage implements IStorage {
     category?: string;
     search?: string;
     includeInactive?: boolean;
+    status?: "active" | "draft" | "archived";
   }): Promise<number> {
     const results = await this.getProducts({ ...filters, page: 1, limit: Number.MAX_SAFE_INTEGER });
     return results.length;
@@ -3311,12 +3360,21 @@ export class MemStorage implements IStorage {
     total: number;
     featuredCount: number;
     categoryCounts: Record<string, number>;
+    activeCount: number;
+    draftCount: number;
+    archivedCount: number;
   }> {
     const products = await this.getProducts({ page: 1, limit: Number.MAX_SAFE_INTEGER, includeInactive: true });
     const categoryCounts: Record<string, number> = {};
     let featuredCount = 0;
+    let activeCount = 0;
+    let draftCount = 0;
+    let archivedCount = 0;
     products.forEach((p) => {
       if (p.homeFeatured) featuredCount += 1;
+      if (p.category === ARCHIVED_PRODUCT_CATEGORY) archivedCount += 1;
+      else if (p.isActive === false) draftCount += 1;
+      else activeCount += 1;
       if (p.category) {
         const slug = p.category.toLowerCase();
         categoryCounts[slug] = (categoryCounts[slug] || 0) + 1;
@@ -3326,6 +3384,9 @@ export class MemStorage implements IStorage {
       total: products.length,
       featuredCount,
       categoryCounts,
+      activeCount,
+      draftCount,
+      archivedCount,
     };
   }
 

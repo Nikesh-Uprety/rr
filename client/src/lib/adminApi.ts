@@ -831,12 +831,14 @@ export async function fetchAdminProductsPage(filters?: {
   category?: string;
   page?: number;
   limit?: number;
+  status?: "active" | "draft" | "archived";
 }): Promise<{ data: ProductApi[]; total: number }> {
   const params = new URLSearchParams();
   if (filters?.search) params.set("search", filters.search);
   if (filters?.category) params.set("category", filters.category);
   if (filters?.page) params.set("page", String(filters.page));
   if (filters?.limit) params.set("limit", String(filters.limit));
+  if (filters?.status) params.set("status", filters.status);
 
   const url =
     "/api/admin/products" +
@@ -855,6 +857,9 @@ export interface AdminProductStats {
   total: number;
   featuredCount: number;
   categoryCounts: Record<string, number>;
+  activeCount: number;
+  draftCount: number;
+  archivedCount: number;
 }
 
 export async function fetchAdminProductStats(): Promise<AdminProductStats> {
@@ -1041,6 +1046,21 @@ export interface CanvasSection {
   updatedAt: string;
 }
 
+export interface CanvasTemplate {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  thumbnailUrl: string | null;
+  tier: string;
+  priceNpr: number;
+  isPurchased: boolean;
+  isActive?: boolean;
+  isCustom?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SiteBranding {
   id: number;
   logoUrl: string | null;
@@ -1122,16 +1142,26 @@ export async function reorderPageSections(pageId: number, orderedIds: number[]):
   await apiRequest("PATCH", `/api/admin/canvas/pages/${pageId}/sections/reorder`, { orderedIds });
 }
 
-export async function updatePageSection(id: number, data: Partial<CanvasSection>): Promise<CanvasSection> {
-  const res = await apiRequest("PATCH", `/api/admin/canvas/pages/0/sections/${id}`, data);
+export async function updatePageSection(pageId: number, id: number, data: Partial<CanvasSection>): Promise<CanvasSection> {
+  const res = await apiRequest("PATCH", `/api/admin/canvas/pages/${pageId}/sections/${id}`, data);
   return (await res.json()) as CanvasSection;
 }
 
-export async function deletePageSection(id: number): Promise<void> {
-  await apiRequest("DELETE", `/api/admin/canvas/pages/0/sections/${id}`);
+export async function deletePageSection(pageId: number, id: number): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/canvas/pages/${pageId}/sections/${id}`);
+}
+
+export async function duplicateCanvasSection(id: number): Promise<CanvasSection> {
+  const res = await apiRequest("POST", `/api/admin/canvas/sections/${id}/duplicate`);
+  return (await res.json()) as CanvasSection;
 }
 
 // ─── Canvas Templates (enhanced) ───────────────────────────────
+
+export async function getCanvasTemplates(): Promise<CanvasTemplate[]> {
+  const res = await apiRequest("GET", "/api/admin/canvas/templates");
+  return (await res.json()) as CanvasTemplate[];
+}
 
 export async function createCanvasTemplate(data: { name: string; slug: string; description?: string; tier?: string; fromPageId?: number }): Promise<any> {
   const res = await apiRequest("POST", "/api/admin/canvas/templates", data);

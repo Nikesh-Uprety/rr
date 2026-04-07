@@ -312,12 +312,25 @@ export default function Navbar() {
     clearMegaCloseTimer();
     megaCloseTimerRef.current = window.setTimeout(() => {
       setActiveMegaNavHref(null);
-    }, 120);
+    }, 180);
   };
 
   const openMega = (href: string) => {
     clearMegaCloseTimer();
     setActiveMegaNavHref(href);
+  };
+
+  const activeMegaMenu = activeMegaNavHref
+    ? megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent]
+    : null;
+  const megaPanelTheme = {
+    shellBg: theme === "dark" ? "rgba(6,6,6,0.96)" : "rgba(255,255,255,0.97)",
+    shellBorder: theme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)",
+    cardBg: theme === "dark" ? "rgba(255,255,255,0.04)" : "rgba(248,248,248,0.94)",
+    cardBorder: theme === "dark" ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.08)",
+    body: theme === "dark" ? "rgba(255,255,255,0.86)" : "rgba(0,0,0,0.74)",
+    muted: theme === "dark" ? "rgba(255,255,255,0.56)" : "rgba(0,0,0,0.52)",
+    strong: theme === "dark" ? "#ffffff" : "#111111",
   };
 
   const mobileMenu =
@@ -519,12 +532,10 @@ export default function Navbar() {
                   }}
                   onMouseEnter={(event) => {
                     setHoveredNavHref(item.href);
-                    event.currentTarget.style.opacity = "1";
                     openMega(item.href);
                   }}
-                  onMouseLeave={(event) => {
+                  onMouseLeave={() => {
                     setHoveredNavHref((current) => (current === item.href ? null : current));
-                    event.currentTarget.style.opacity = location === item.href ? "1" : "0.88";
                     queueMegaClose();
                   }}
                   aria-current={location === item.href ? "page" : undefined}
@@ -631,95 +642,130 @@ export default function Navbar() {
           </div>
         </div>
         <AnimatePresence>
-          {activeMegaNavHref && megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent] ? (
+          {activeMegaMenu ? (
             <motion.div
-              key={activeMegaNavHref}
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              className="hidden border-t lg:block"
+              className="hidden overflow-hidden border-t lg:block"
               onMouseEnter={clearMegaCloseTimer}
               onMouseLeave={queueMegaClose}
               style={{
-                background: theme === "dark" ? "rgba(8,8,8,0.9)" : "rgba(255,255,255,0.94)",
-                backdropFilter: "blur(16px) saturate(130%)",
-                WebkitBackdropFilter: "blur(16px) saturate(130%)",
-                borderColor: theme === "dark" ? "rgba(255,255,255,0.13)" : "rgba(0,0,0,0.08)",
+                background: megaPanelTheme.shellBg,
+                backdropFilter: "blur(18px) saturate(130%)",
+                WebkitBackdropFilter: "blur(18px) saturate(130%)",
+                borderColor: megaPanelTheme.shellBorder,
               }}
             >
-              <div className="mx-auto grid max-w-[1440px] grid-cols-12 gap-8 px-6 py-6 lg:px-8">
-                <div className="col-span-4">
-                  <p
-                    className="text-[10px] font-bold uppercase tracking-[0.2em]"
-                    style={{
-                      color: theme === "dark" ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.58)",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Home className="h-3.5 w-3.5" />
-                      {megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent].title}
-                    </span>
-                  </p>
-                  <p
-                    className="mt-3 text-sm leading-6"
-                    style={{ color: theme === "dark" ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.74)" }}
-                  >
-                    {megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent].subtitle}
-                  </p>
-                </div>
-                <div className="col-span-8 grid gap-3 sm:grid-cols-2">
-                  {megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent].links.map((entry) => {
-                    const Icon = entry.icon;
-                    return (
-                      <Link
-                        key={`${activeMegaNavHref}-${entry.href}-${entry.label}`}
-                        href={entry.href}
-                        onClick={() => setActiveMegaNavHref(null)}
-                        className="group rounded-xl border px-4 py-3 transition-all duration-200 hover:-translate-y-[2px]"
-                        style={{
-                          borderColor: theme === "dark" ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.1)",
-                          background: theme === "dark" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.72)",
-                        }}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
+              <div className="mx-auto max-w-[1440px] px-6 py-5 lg:px-8">
+                <div
+                  className="rounded-2xl border p-5 md:p-6"
+                  style={{
+                    background: megaPanelTheme.cardBg,
+                    borderColor: megaPanelTheme.cardBorder,
+                    boxShadow:
+                      theme === "dark"
+                        ? "0 20px 42px rgba(0,0,0,0.34)"
+                        : "0 22px 44px rgba(0,0,0,0.08)",
+                  }}
+                >
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={activeMegaNavHref}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
+                      className="grid grid-cols-12 gap-6"
+                    >
+                      <div className="col-span-4">
+                        <p
+                          className="text-[10px] font-bold uppercase tracking-[0.2em]"
+                          style={{ color: megaPanelTheme.muted, fontFamily: "var(--font-mono)" }}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <Home className="h-3.5 w-3.5" />
+                            {activeMegaMenu.title}
+                          </span>
+                        </p>
+                        <p className="mt-3 text-sm leading-6" style={{ color: megaPanelTheme.body }}>
+                          {activeMegaMenu.subtitle}
+                        </p>
+                        <div className="mt-5 flex flex-wrap gap-2">
+                          {activeMegaMenu.links.slice(0, 2).map((entry) => (
                             <span
-                              className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105"
+                              key={`${activeMegaNavHref}-chip-${entry.href}`}
+                              className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em]"
                               style={{
-                                background: theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
-                                color: theme === "dark" ? "#ffffff" : "#111111",
+                                borderColor: megaPanelTheme.cardBorder,
+                                color: megaPanelTheme.strong,
+                                fontFamily: "var(--font-mono)",
                               }}
                             >
-                              <Icon className="h-4 w-4" />
+                              <entry.icon className="h-3.5 w-3.5" />
+                              {entry.label}
                             </span>
-                            <span>
-                              <span
-                                className="block text-[11px] font-black uppercase tracking-[0.16em]"
+                          ))}
+                        </div>
+                      </div>
+                      <div className="col-span-8 grid gap-3 sm:grid-cols-2">
+                        {activeMegaMenu.links.map((entry, index) => {
+                          const Icon = entry.icon;
+                          return (
+                            <motion.div
+                              key={`${activeMegaNavHref}-${entry.href}-${entry.label}`}
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: index * 0.025, duration: 0.16 }}
+                            >
+                              <Link
+                                href={entry.href}
+                                onClick={() => setActiveMegaNavHref(null)}
+                                className="group block rounded-xl border px-4 py-3 transition-all duration-200 hover:-translate-y-[1px]"
                                 style={{
-                                  color: theme === "dark" ? "#ffffff" : "#111111",
-                                  fontFamily: "var(--font-mono)",
+                                  borderColor: megaPanelTheme.cardBorder,
+                                  background: theme === "dark" ? "rgba(255,255,255,0.02)" : "#ffffff",
                                 }}
                               >
-                                {entry.label}
-                              </span>
-                              <span
-                                className="mt-1 block text-xs"
-                                style={{ color: theme === "dark" ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)" }}
-                              >
-                                {entry.description}
-                              </span>
-                            </span>
-                          </div>
-                          <ArrowRight
-                            className="h-4 w-4 shrink-0 translate-x-0 opacity-60 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
-                            style={{ color: theme === "dark" ? "#ffffff" : "#111111" }}
-                          />
-                        </div>
-                      </Link>
-                    );
-                  })}
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-start gap-3">
+                                    <span
+                                      className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105"
+                                      style={{
+                                        background: theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+                                        color: megaPanelTheme.strong,
+                                      }}
+                                    >
+                                      <Icon className="h-4 w-4" />
+                                    </span>
+                                    <span>
+                                      <span
+                                        className="block text-[11px] font-black uppercase tracking-[0.16em]"
+                                        style={{
+                                          color: megaPanelTheme.strong,
+                                          fontFamily: "var(--font-mono)",
+                                        }}
+                                      >
+                                        {entry.label}
+                                      </span>
+                                      <span className="mt-1 block text-xs" style={{ color: megaPanelTheme.body }}>
+                                        {entry.description}
+                                      </span>
+                                    </span>
+                                  </div>
+                                  <ArrowRight
+                                    className="h-4 w-4 shrink-0 translate-x-0 opacity-60 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100"
+                                    style={{ color: megaPanelTheme.strong }}
+                                  />
+                                </div>
+                              </Link>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
               </div>
             </motion.div>

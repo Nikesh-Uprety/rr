@@ -21,6 +21,7 @@ import { fetchCategories, fetchPageConfig, fetchProducts } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Wifi, WifiOff } from "lucide-react";
 import SentryTest from "@/components/SentryTest";
+import { StorefrontBreadcrumbs } from "@/components/product/StorefrontBreadcrumbs";
 import {
   applyStorefrontFontPreset,
   isStorefrontFontPreset,
@@ -54,6 +55,7 @@ const loadAdminNotificationsPage = () => import("@/pages/admin/Notifications");
 const loadAdminDevFontPage = () => import("@/pages/admin/DevFont");
 const loadAdminLandingPageManagerPage = () => import("@/pages/admin/LandingPageManager");
 const loadAdminImagesPage = () => import("@/pages/admin/Images");
+const loadAdminBucketsPage = () => import("@/pages/admin/Buckets");
 const loadAdminStorefrontImagesPage = () => import("@/pages/admin/StorefrontImagePicker");
 const loadLoginPage = () => import("@/pages/auth/Login");
 const loadNotFoundPage = () => import("@/pages/not-found");
@@ -88,6 +90,7 @@ const AdminNotifications = lazy(loadAdminNotificationsPage);
 const AdminDevFontPage = lazy(loadAdminDevFontPage);
 const AdminLandingPageManager = lazy(loadAdminLandingPageManagerPage);
 const AdminImages = lazy(loadAdminImagesPage);
+const AdminBuckets = lazy(loadAdminBucketsPage);
 const AdminStorefrontImages = lazy(loadAdminStorefrontImagesPage);
 const Canvas = lazy(() => import("@/pages/admin/Canvas"));
 const CanvasPage = lazy(() => import("@/pages/admin/CanvasPage"));
@@ -121,6 +124,83 @@ function normalizePath(path: string): string {
   return path.split("?")[0].split("#")[0];
 }
 
+function isCommerceFlowPath(pathname: string): boolean {
+  return (
+    pathname === "/products" ||
+    pathname === "/shop" ||
+    pathname.startsWith("/product/") ||
+    pathname === "/cart" ||
+    pathname === "/checkout" ||
+    pathname === "/checkout/payment" ||
+    pathname.startsWith("/order-confirmation/") ||
+    pathname.startsWith("/checkout/success/")
+  );
+}
+
+function getCommerceBreadcrumb(pathname: string): {
+  items: Array<{ label: string; href?: string }>;
+  backHref?: string;
+  backLabel?: string;
+} | null {
+  // Products listing and product details already render in-page breadcrumbs
+  // near their page titles. We avoid duplicating a global breadcrumb there.
+  if (pathname === "/products" || pathname === "/shop" || pathname.startsWith("/product/")) {
+    return null;
+  }
+
+  if (pathname === "/cart") {
+    return {
+      items: [
+        { label: "Home", href: "/" },
+        { label: "Shop", href: "/products" },
+        { label: "Cart" },
+      ],
+      backHref: "/products",
+      backLabel: "Continue shopping",
+    };
+  }
+
+  if (pathname === "/checkout") {
+    return {
+      items: [
+        { label: "Home", href: "/" },
+        { label: "Shop", href: "/products" },
+        { label: "Cart", href: "/cart" },
+        { label: "Checkout" },
+      ],
+      backHref: "/cart",
+      backLabel: "Back to cart",
+    };
+  }
+
+  if (pathname === "/checkout/payment") {
+    return {
+      items: [
+        { label: "Home", href: "/" },
+        { label: "Shop", href: "/products" },
+        { label: "Checkout", href: "/checkout" },
+        { label: "Payment" },
+      ],
+      backHref: "/checkout?returning=1",
+      backLabel: "Back to checkout",
+    };
+  }
+
+  if (pathname.startsWith("/order-confirmation/") || pathname.startsWith("/checkout/success/")) {
+    return {
+      items: [
+        { label: "Home", href: "/" },
+        { label: "Shop", href: "/products" },
+        { label: "Order Confirmation" },
+      ],
+      backHref: "/products",
+      backLabel: "Back to shop",
+    };
+  }
+
+  return null;
+}
+
 function preloadRouteModule(path: string): Promise<unknown> {
   const cleanPath = normalizePath(path);
 
@@ -151,6 +231,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/admin/bills") return loadAdminBillsPage();
   if (cleanPath === "/admin/pos") return loadAdminPOSPage();
   if (cleanPath === "/admin/images") return loadAdminImagesPage();
+  if (cleanPath === "/admin/buckets") return loadAdminBucketsPage();
   if (cleanPath === "/admin/storefront-images") return loadAdminStorefrontImagesPage();
   if (cleanPath === "/admin/notifications") return loadAdminNotificationsPage();
   if (cleanPath === "/admin/dev-font") return loadAdminDevFontPage();
@@ -202,6 +283,12 @@ async function preloadRouteBeforeNavigate(path: string): Promise<void> {
 }
 
 function StorefrontLayout({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+  const pathname = normalizePath(location);
+  const isCommerceFlow = isCommerceFlowPath(pathname);
+  const [showNavbarOnScroll, setShowNavbarOnScroll] = useState(false);
+  const commerceBreadcrumb = getCommerceBreadcrumb(pathname);
+  const shouldShowNavbar = !isCommerceFlow || showNavbarOnScroll;
   const previewTemplateId = useMemo(() => {
     if (typeof window === "undefined") return null;
     const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
@@ -240,9 +327,37 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
     };
   }, [pageConfig?.fontPreset, previewFontPreset]);
 
+  useEffect(() => {
+    if (!isCommerceFlow) {
+      setShowNavbarOnScroll(true);
+      return;
+    }
+
+    const onScroll = () => {
+      setShowNavbarOnScroll(window.scrollY > 8);
+    };
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [isCommerceFlow, pathname]);
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Navbar />
+      {shouldShowNavbar ? <Navbar /> : null}
+      {isCommerceFlow && commerceBreadcrumb ? (
+        <div className="w-full border-b border-border/60 bg-background/95">
+          <div className="w-full px-3 py-3 sm:px-4 lg:px-6">
+            <StorefrontBreadcrumbs
+              items={commerceBreadcrumb.items}
+              backHref={commerceBreadcrumb.backHref}
+              backLabel={commerceBreadcrumb.backLabel}
+            />
+          </div>
+        </div>
+      ) : null}
       <main className="flex-1 flex flex-col">
         {children}
       </main>
@@ -406,6 +521,13 @@ function AppRoutes() {
         <ProtectedRoute requiredAdminPage="images">
           <AdminLayout>
             <AdminImages />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/buckets">
+        <ProtectedRoute requiredAdminPage="buckets">
+          <AdminLayout>
+            <AdminBuckets />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

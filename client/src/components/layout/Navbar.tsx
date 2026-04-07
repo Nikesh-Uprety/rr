@@ -1,5 +1,17 @@
 import { Link, useLocation } from "wouter";
-import { ShoppingBag, LayoutDashboard, Menu, X } from "lucide-react";
+import {
+  ShoppingBag,
+  LayoutDashboard,
+  Menu,
+  X,
+  Home,
+  Shirt,
+  Layers,
+  PhoneCall,
+  Sparkles,
+  ArrowRight,
+  Compass,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useThemeStore } from "@/store/theme";
 import { useCartStore } from "@/store/cart";
@@ -7,7 +19,6 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { fetchPageConfig } from "@/lib/api";
-import { getPublicPages } from "@/lib/adminApi";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SearchBar from "./SearchBar";
@@ -31,8 +42,10 @@ export default function Navbar() {
   const [hoveredNavHref, setHoveredNavHref] = useState<string | null>(null);
   const [hideAnnouncement, setHideAnnouncement] = useState(false);
   const [isNavHidden, setIsNavHidden] = useState(false);
+  const [activeMegaNavHref, setActiveMegaNavHref] = useState<string | null>(null);
   const announceRef = useRef<HTMLDivElement>(null);
   const lastScrollYRef = useRef(0);
+  const megaCloseTimerRef = useRef<number | null>(null);
   const previewTemplateId = useMemo(() => {
     if (typeof window === "undefined") return null;
     const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
@@ -99,6 +112,14 @@ export default function Navbar() {
   }, [isMobileMenuOpen]);
 
   useEffect(() => {
+    return () => {
+      if (megaCloseTimerRef.current) {
+        window.clearTimeout(megaCloseTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isStorefront) {
       setIsScrolled(false);
       setHideAnnouncement(false);
@@ -157,21 +178,51 @@ export default function Navbar() {
     { name: "Collection", href: "/new-collection" },
     { name: "Atelier", href: "/atelier" },
   ];
-
-  const { data: canvasPages } = useQuery({
-    queryKey: ["/api/public/pages"],
-    queryFn: getPublicPages,
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-
   const navLinks = useMemo(() => {
-    if (!canvasPages || canvasPages.length === 0) return baseNavLinks;
-    const canvasNavItems = canvasPages
-      .filter((p) => p.status === "published" && p.showInNav && p.slug !== "/")
-      .map((p) => ({ name: p.title, href: p.slug }));
-    return [...baseNavLinks, ...canvasNavItems];
-  }, [canvasPages]);
+    return baseNavLinks;
+  }, [baseNavLinks]);
+  const megaMenuContent = useMemo(
+    () => ({
+      "/": {
+        title: "Home",
+        subtitle: "Quickly jump to key storefront experiences from one clean overview.",
+        links: [
+          { label: "Shop Essentials", href: "/products", description: "Browse all products", icon: Shirt },
+          { label: "Featured Collection", href: "/new-collection", description: "Explore latest curated drops", icon: Layers },
+          { label: "Atelier Contact", href: "/atelier", description: "Talk to our team", icon: PhoneCall },
+          { label: "View Bag", href: "/cart", description: "Review selected items", icon: ShoppingBag },
+        ],
+      },
+      "/products": {
+        title: "Shop",
+        subtitle: "Filter by category, size, stock, and discover products faster.",
+        links: [
+          { label: "All Products", href: "/products", description: "Complete catalog", icon: Compass },
+          { label: "New Collection", href: "/new-collection", description: "Latest editorial set", icon: Sparkles },
+          { label: "Go To Cart", href: "/cart", description: "Continue checkout journey", icon: ShoppingBag },
+        ],
+      },
+      "/new-collection": {
+        title: "Collection",
+        subtitle: "Editorial narratives and focused product storytelling.",
+        links: [
+          { label: "Collection Story", href: "/new-collection", description: "View current collection", icon: Layers },
+          { label: "Shop Products", href: "/products", description: "Return to full catalog", icon: Shirt },
+          { label: "Contact Atelier", href: "/atelier", description: "Ask about fit and delivery", icon: PhoneCall },
+        ],
+      },
+      "/atelier": {
+        title: "Atelier",
+        subtitle: "Service, support, and direct communication with Rare Atelier.",
+        links: [
+          { label: "Contact Page", href: "/atelier", description: "Reach us directly", icon: PhoneCall },
+          { label: "Browse Shop", href: "/products", description: "Continue shopping", icon: Shirt },
+          { label: "New Collection", href: "/new-collection", description: "Discover latest drop", icon: Sparkles },
+        ],
+      },
+    }),
+    [],
+  );
 
   const getGlassChrome = (mode: "light" | "dark", options?: { active?: boolean }) => {
     if (options?.active === false) {
@@ -248,6 +299,25 @@ export default function Navbar() {
     iconBg: "rgba(17,17,17,0.04)",
     accent: "#111111",
     accentText: "#ffffff",
+  };
+
+  const clearMegaCloseTimer = () => {
+    if (megaCloseTimerRef.current) {
+      window.clearTimeout(megaCloseTimerRef.current);
+      megaCloseTimerRef.current = null;
+    }
+  };
+
+  const queueMegaClose = () => {
+    clearMegaCloseTimer();
+    megaCloseTimerRef.current = window.setTimeout(() => {
+      setActiveMegaNavHref(null);
+    }, 120);
+  };
+
+  const openMega = (href: string) => {
+    clearMegaCloseTimer();
+    setActiveMegaNavHref(href);
   };
 
   const mobileMenu =
@@ -416,6 +486,8 @@ export default function Navbar() {
       <header
         id="nav"
         className="fixed inset-x-0 z-[60]"
+        onMouseEnter={clearMegaCloseTimer}
+        onMouseLeave={queueMegaClose}
         style={{
           top: 0,
           transition:
@@ -448,10 +520,12 @@ export default function Navbar() {
                   onMouseEnter={(event) => {
                     setHoveredNavHref(item.href);
                     event.currentTarget.style.opacity = "1";
+                    openMega(item.href);
                   }}
                   onMouseLeave={(event) => {
                     setHoveredNavHref((current) => (current === item.href ? null : current));
                     event.currentTarget.style.opacity = location === item.href ? "1" : "0.88";
+                    queueMegaClose();
                   }}
                   aria-current={location === item.href ? "page" : undefined}
                 >
@@ -556,6 +630,101 @@ export default function Navbar() {
             </div>
           </div>
         </div>
+        <AnimatePresence>
+          {activeMegaNavHref && megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent] ? (
+            <motion.div
+              key={activeMegaNavHref}
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="hidden border-t lg:block"
+              onMouseEnter={clearMegaCloseTimer}
+              onMouseLeave={queueMegaClose}
+              style={{
+                background: theme === "dark" ? "rgba(8,8,8,0.9)" : "rgba(255,255,255,0.94)",
+                backdropFilter: "blur(16px) saturate(130%)",
+                WebkitBackdropFilter: "blur(16px) saturate(130%)",
+                borderColor: theme === "dark" ? "rgba(255,255,255,0.13)" : "rgba(0,0,0,0.08)",
+              }}
+            >
+              <div className="mx-auto grid max-w-[1440px] grid-cols-12 gap-8 px-6 py-6 lg:px-8">
+                <div className="col-span-4">
+                  <p
+                    className="text-[10px] font-bold uppercase tracking-[0.2em]"
+                    style={{
+                      color: theme === "dark" ? "rgba(255,255,255,0.65)" : "rgba(0,0,0,0.58)",
+                      fontFamily: "var(--font-mono)",
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Home className="h-3.5 w-3.5" />
+                      {megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent].title}
+                    </span>
+                  </p>
+                  <p
+                    className="mt-3 text-sm leading-6"
+                    style={{ color: theme === "dark" ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.74)" }}
+                  >
+                    {megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent].subtitle}
+                  </p>
+                </div>
+                <div className="col-span-8 grid gap-3 sm:grid-cols-2">
+                  {megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent].links.map((entry) => {
+                    const Icon = entry.icon;
+                    return (
+                      <Link
+                        key={`${activeMegaNavHref}-${entry.href}-${entry.label}`}
+                        href={entry.href}
+                        onClick={() => setActiveMegaNavHref(null)}
+                        className="group rounded-xl border px-4 py-3 transition-all duration-200 hover:-translate-y-[2px]"
+                        style={{
+                          borderColor: theme === "dark" ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.1)",
+                          background: theme === "dark" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.72)",
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3">
+                            <span
+                              className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105"
+                              style={{
+                                background: theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+                                color: theme === "dark" ? "#ffffff" : "#111111",
+                              }}
+                            >
+                              <Icon className="h-4 w-4" />
+                            </span>
+                            <span>
+                              <span
+                                className="block text-[11px] font-black uppercase tracking-[0.16em]"
+                                style={{
+                                  color: theme === "dark" ? "#ffffff" : "#111111",
+                                  fontFamily: "var(--font-mono)",
+                                }}
+                              >
+                                {entry.label}
+                              </span>
+                              <span
+                                className="mt-1 block text-xs"
+                                style={{ color: theme === "dark" ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)" }}
+                              >
+                                {entry.description}
+                              </span>
+                            </span>
+                          </div>
+                          <ArrowRight
+                            className="h-4 w-4 shrink-0 translate-x-0 opacity-60 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
+                            style={{ color: theme === "dark" ? "#ffffff" : "#111111" }}
+                          />
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </header>
       {mobileMenu}
     </>

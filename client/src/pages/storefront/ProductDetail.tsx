@@ -182,7 +182,9 @@ export default function ProductDetail() {
   const { toast } = useToast();
   const { theme } = useThemeStore();
   const addItem = useCartStore((state) => state.addItem);
+  const clearCart = useCartStore((state) => state.clearCart);
   const openCartSidebar = useCartStore((state) => state.openCartSidebar);
+  const closeCartSidebar = useCartStore((state) => state.closeCartSidebar);
 
   const productId = params?.id ?? "";
 
@@ -542,34 +544,38 @@ export default function ProductDetail() {
     ? Number(product.price) * (1 - Number(product.salePercentage) / 100)
     : Number(product.price);
 
+  const buildCartPayload = () => ({
+    id: product.id,
+    name: product.name,
+    price: effectiveUnitPrice,
+    originalPrice:
+      hasSale ? Number(product.price) : null,
+    salePercentage:
+      product.salePercentage !== null && product.salePercentage !== undefined
+        ? Number(product.salePercentage)
+        : null,
+    saleActive: hasSale,
+    stock: product.stock,
+    category: product.category ?? "",
+    sku: product.id,
+    images: allImages.filter(Boolean),
+    variants: (product.variants ?? []).map((variant) => ({
+      id: variant.id,
+      size: variant.size,
+      color: parseColorOption(variant.color ?? "Default").label,
+    })),
+  });
+
+  const buildVariantPayload = () => ({
+    id: selectedVariant?.id,
+    size: effectiveSize ?? "One Size",
+    color: parseColorOption(effectiveColor ?? "Default").label,
+  });
+
   const handleAddToCart = () => {
     addItem(
-      {
-        id: product.id,
-        name: product.name,
-        price: effectiveUnitPrice,
-        originalPrice:
-          hasSale ? Number(product.price) : null,
-        salePercentage:
-          product.salePercentage !== null && product.salePercentage !== undefined
-            ? Number(product.salePercentage)
-            : null,
-        saleActive: hasSale,
-        stock: product.stock,
-        category: product.category ?? "",
-        sku: product.id,
-        images: allImages.filter(Boolean),
-        variants: (product.variants ?? []).map((variant) => ({
-          id: variant.id,
-          size: variant.size,
-          color: parseColorOption(variant.color ?? "Default").label,
-        })),
-      },
-      {
-        id: selectedVariant?.id,
-        size: effectiveSize ?? "One Size",
-        color: parseColorOption(effectiveColor ?? "Default").label,
-      },
+      buildCartPayload(),
+      buildVariantPayload(),
       quantity,
     );
     const isMobileOrTablet = window.matchMedia("(max-width: 1024px)").matches;
@@ -578,7 +584,13 @@ export default function ProductDetail() {
   };
 
   const handleBuyNow = () => {
-    handleAddToCart();
+    closeCartSidebar();
+    clearCart();
+    addItem(
+      buildCartPayload(),
+      buildVariantPayload(),
+      quantity,
+    );
     setLocation("/checkout");
   };
 
@@ -697,7 +709,7 @@ export default function ProductDetail() {
   };
 
   return (
-    <div className="mt-10 w-full px-3 py-24 sm:px-6 lg:px-8 xl:px-10">
+    <div className="w-full px-3 pb-16 pt-4 sm:px-6 sm:pt-6 lg:px-8 xl:px-10">
       <style>{`
         @keyframes product-image-enter-down {
           0% { transform: translateY(-72px) scale(0.992); opacity: 0; filter: blur(5px); }
@@ -749,7 +761,7 @@ export default function ProductDetail() {
         structuredData={structuredData}
       />
 
-      <div className="mx-auto mb-8 max-w-[1600px]">
+      <div className="mb-6 w-full">
         <StorefrontBreadcrumbs
           items={[
             { label: "Home", href: "/" },

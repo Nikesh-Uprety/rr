@@ -14,7 +14,17 @@ import {
   simulateStripePaymentSuccess,
 } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
-import { Upload, CheckCircle2, Loader2, CreditCard, ExternalLink, AlertCircle, X, ZoomIn } from "lucide-react";
+import {
+  Upload,
+  CheckCircle2,
+  Loader2,
+  CreditCard,
+  ExternalLink,
+  AlertCircle,
+  X,
+  ZoomIn,
+  Download,
+} from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 function useSearchQuery() {
@@ -50,9 +60,13 @@ export default function PaymentProcess() {
   const [uploaded, setUploaded] = useState(false);
   const [redirectingToStripe, setRedirectingToStripe] = useState(false);
   const [simulatingPayment, setSimulatingPayment] = useState(false);
+  const [downloadingQr, setDownloadingQr] = useState(false);
   const [switchingPaymentMethod, setSwitchingPaymentMethod] = useState<string | null>(null);
   const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isLocalTesting =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
   const paymentQrQuery = useQuery({
     queryKey: ["storefront", "payment-qr"],
     queryFn: fetchPaymentQrConfig,
@@ -151,6 +165,27 @@ export default function PaymentProcess() {
 
   const handleStripeCheckout = async () => {
     if (!orderId) return;
+
+    if (isLocalTesting) {
+      setSimulatingPayment(true);
+      try {
+        const result = await simulateStripePaymentSuccess(orderId);
+        if (result.success) {
+          toast({ title: "Test payment completed. Redirecting to your order..." });
+          setTimeout(() => {
+            setLocation(`/order-confirmation/${orderId}`);
+          }, 1200);
+        } else {
+          toast({ title: result.error || "Test payment failed", variant: "destructive" });
+        }
+      } catch {
+        toast({ title: "Failed to simulate test payment", variant: "destructive" });
+      } finally {
+        setSimulatingPayment(false);
+      }
+      return;
+    }
+
     setRedirectingToStripe(true);
     try {
       const result = await createCheckoutSession(orderId);
@@ -163,26 +198,6 @@ export default function PaymentProcess() {
     } catch (err) {
       toast({ title: "Failed to connect to Stripe. Please try again.", variant: "destructive" });
       setRedirectingToStripe(false);
-    }
-  };
-
-  const handleSimulatePayment = async () => {
-    if (!orderId) return;
-    setSimulatingPayment(true);
-    try {
-      const result = await simulateStripePaymentSuccess(orderId);
-      if (result.success) {
-        toast({ title: "Payment simulated! Redirecting to order confirmation..." });
-        setTimeout(() => {
-          setLocation(`/order-confirmation/${orderId}`);
-        }, 1500);
-      } else {
-        toast({ title: result.error || "Simulation failed", variant: "destructive" });
-        setSimulatingPayment(false);
-      }
-    } catch (err) {
-      toast({ title: "Failed to simulate payment", variant: "destructive" });
-      setSimulatingPayment(false);
     }
   };
 
@@ -213,7 +228,7 @@ export default function PaymentProcess() {
 
   if (!orderId) {
     return (
-      <div className="container mx-auto px-4 py-32 text-center">
+      <div className="container mx-auto px-4 py-12 text-center sm:py-16">
         <p className="text-muted-foreground">Invalid payment link.</p>
         <Button asChild className="mt-6 rounded-none">
           <Link href="/cart">Back to Cart</Link>
@@ -232,7 +247,7 @@ export default function PaymentProcess() {
 
   if (!order) {
     return (
-      <div className="container mx-auto px-4 py-32 text-center">
+      <div className="container mx-auto px-4 py-12 text-center sm:py-16">
         <p className="text-muted-foreground">We could not load this order.</p>
         <Button asChild className="mt-6 rounded-none">
           <Link href="/cart">Back to Cart</Link>
@@ -243,18 +258,18 @@ export default function PaymentProcess() {
 
   if (method === "stripe") {
     return (
-      <div className="container mx-auto px-4 py-32 max-w-xl mt-10">
+      <div className="container mx-auto max-w-3xl px-4 pb-12 pt-4 sm:pb-16 sm:pt-6">
         <div className="mb-6 space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
             Change Payment Method
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {PAYMENT_METHOD_SWITCH_OPTIONS.filter((option) => option.id !== "stripe").map((option) => (
               <Button
                 key={option.id}
                 type="button"
                 variant="outline"
-                className="rounded-none text-xs uppercase tracking-widest"
+                className="h-11 rounded-none text-[11px] uppercase tracking-widest"
                 disabled={switchingPaymentMethod !== null}
                 onClick={() => handleChangePaymentMethod(option.id)}
               >
@@ -266,11 +281,11 @@ export default function PaymentProcess() {
         <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">
           Pay by Card
         </h1>
-        <p className="text-muted-foreground text-sm mb-8">
+        <p className="mb-8 text-sm text-muted-foreground">
           Order total: {formatPrice(Number(order.total))}
         </p>
 
-        <div className="bg-gradient-to-br from-slate-50 to-gray-50 border border-gray-200 p-8 mb-8">
+        <div className="mb-8 border border-gray-200 bg-gradient-to-br from-slate-50 to-gray-50 p-5 sm:p-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-14 h-9 flex items-center justify-center overflow-hidden">
               <img
@@ -285,7 +300,7 @@ export default function PaymentProcess() {
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 p-6 mb-4">
+          <div className="mb-4 border border-gray-200 bg-white p-5 sm:p-6">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Amount</span>
               <span className="text-lg font-black">{formatPrice(Number(order.total))}</span>
@@ -298,7 +313,9 @@ export default function PaymentProcess() {
           <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200">
             <AlertCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
             <p className="text-xs text-blue-700">
-              You will be redirected to Stripe&apos;s secure checkout page to enter your card details. After payment, you will be redirected back here.
+              {isLocalTesting
+                ? "Local testing mode: Stripe redirect is skipped and your payment will be marked successful instantly."
+                : "You will be redirected to Stripe&apos;s secure checkout page to enter your card details. After payment, you will be redirected back here."}
             </p>
           </div>
         </div>
@@ -306,54 +323,28 @@ export default function PaymentProcess() {
         <Button
           type="button"
           onClick={handleStripeCheckout}
-          disabled={redirectingToStripe}
+          disabled={redirectingToStripe || simulatingPayment}
           className="w-full h-14 bg-[#635bff] text-white rounded-none uppercase tracking-widest text-xs font-bold hover:bg-[#4b45c6] transition-colors"
         >
-          {redirectingToStripe ? (
+          {redirectingToStripe || simulatingPayment ? (
             <>
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              Redirecting to Stripe...
+              {isLocalTesting ? "Completing test payment..." : "Redirecting to Stripe..."}
             </>
           ) : (
             <>
               <CreditCard className="w-5 h-5 mr-2" />
-              Proceed to Secure Checkout
-              <ExternalLink className="w-4 h-4 ml-2" />
+              {isLocalTesting ? "Complete Test Payment" : "Proceed to Secure Checkout"}
+              {!isLocalTesting && <ExternalLink className="w-4 h-4 ml-2" />}
             </>
           )}
         </Button>
 
-        {process.env.NODE_ENV !== "production" && (
-          <div className="mt-4 p-4 border-2 border-dashed border-amber-300 bg-amber-50">
-            <p className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-2">
-              🔧 Dev Mode — Simulate Payment
-            </p>
-            <p className="text-xs text-amber-700 mb-3">
-              Skip the Stripe redirect and simulate a successful payment for local testing.
-            </p>
-            <Button
-              type="button"
-              onClick={handleSimulatePayment}
-              disabled={simulatingPayment}
-              className="w-full h-12 bg-amber-600 text-white rounded-none uppercase tracking-widest text-xs font-bold hover:bg-amber-700 transition-colors"
-            >
-              {simulatingPayment ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Simulating...
-                </>
-              ) : (
-                "Simulate Successful Payment"
-              )}
-            </Button>
-          </div>
-        )}
-
-        <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
-          <Button asChild variant="outline" className="rounded-none text-xs">
+        <div className="mt-8 grid gap-2 border-t border-gray-100 pt-6 sm:grid-cols-2">
+          <Button asChild variant="outline" className="h-11 rounded-none text-xs">
             <Link href="/checkout?returning=1">← Back to Checkout</Link>
           </Button>
-          <Button asChild variant="ghost" className="rounded-none text-xs text-muted-foreground">
+          <Button asChild variant="ghost" className="h-11 rounded-none text-xs text-muted-foreground">
             <Link href={`/order-confirmation/${orderId}`}>← Back to Order</Link>
           </Button>
         </div>
@@ -396,9 +387,47 @@ export default function PaymentProcess() {
       : normalizedMethod === "fonepay"
         ? FALLBACK_PAYMENT_QR.fonepay
         : FALLBACK_PAYMENT_QR.esewa);
+  const handleDownloadQr = async () => {
+    setDownloadingQr(true);
+    try {
+      const response = await fetch(resolvedQrImageSrc, { mode: "cors" });
+      if (!response.ok) {
+        throw new Error("Download request failed");
+      }
+      const blob = await response.blob();
+      const extension = blob.type.includes("jpeg")
+        ? "jpg"
+        : blob.type.includes("webp")
+          ? "webp"
+          : "png";
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `rare-${normalizedMethod}-qr.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+      toast({ title: `${paymentLabel} QR downloaded` });
+    } catch {
+      const fallbackLink = document.createElement("a");
+      fallbackLink.href = resolvedQrImageSrc;
+      fallbackLink.target = "_blank";
+      fallbackLink.rel = "noopener noreferrer";
+      fallbackLink.download = `rare-${normalizedMethod}-qr`;
+      document.body.appendChild(fallbackLink);
+      fallbackLink.click();
+      fallbackLink.remove();
+      toast({
+        title: "Opened QR image in a new tab. Save it from your browser if download did not start.",
+      });
+    } finally {
+      setDownloadingQr(false);
+    }
+  };
 
   return (
-    <div className="container mx-auto px-4 py-32 max-w-xl mt-10">
+    <div className="container mx-auto max-w-3xl px-4 pb-12 pt-4 sm:pb-16 sm:pt-6">
       <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">
         {title}
       </h1>
@@ -406,7 +435,7 @@ export default function PaymentProcess() {
         Order total: {formatPrice(Number(order.total))}
       </p>
 
-      <div className="bg-gray-50 border border-gray-200 p-8 flex flex-col items-center mb-8">
+      <div className="mb-8 flex flex-col items-center border border-gray-200 bg-gray-50 p-5 sm:p-8">
         {normalizedMethod === "bank" ? (
           <div className="w-full text-center space-y-4">
             <h3 className="font-bold text-lg uppercase tracking-widest text-black">Bank Details</h3>
@@ -438,7 +467,7 @@ export default function PaymentProcess() {
               </p>
             </div>
             <div
-              className="w-56 h-56 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 p-2 cursor-pointer group relative"
+              className="group relative h-52 w-52 cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-white p-2 sm:h-64 sm:w-64"
               onClick={() => setQrPreviewOpen(true)}
             >
               <img
@@ -454,6 +483,35 @@ export default function PaymentProcess() {
               <ZoomIn className="w-3 h-3" />
               Click to view full size
             </p>
+            <div className="mt-4 grid w-full max-w-md gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-none text-xs uppercase tracking-widest"
+                onClick={() => setQrPreviewOpen(true)}
+              >
+                <ZoomIn className="mr-2 h-4 w-4" />
+                View QR
+              </Button>
+              <Button
+                type="button"
+                className="h-11 rounded-none text-xs uppercase tracking-widest"
+                onClick={handleDownloadQr}
+                disabled={downloadingQr}
+              >
+                {downloadingQr ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Downloading...
+                  </>
+                ) : (
+                  <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download QR
+                  </>
+                )}
+              </Button>
+            </div>
             <p className="mt-1 text-xs text-muted-foreground text-center">
               {paymentLabel} • Nikesh Uprety • 9843010717
             </p>
@@ -512,14 +570,14 @@ export default function PaymentProcess() {
         )}
       </div>
 
-        <div className="mt-12 pt-8 border-t border-gray-100 flex gap-3">
-        <div className="flex-1 grid grid-cols-2 gap-2">
+      <div className="mt-12 grid gap-3 border-t border-gray-100 pt-8 sm:grid-cols-[1fr_auto]">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {PAYMENT_METHOD_SWITCH_OPTIONS.filter((option) => option.id !== method).map((option) => (
             <Button
               key={option.id}
               type="button"
               variant="outline"
-              className="rounded-none text-xs uppercase tracking-widest"
+              className="h-11 rounded-none text-[11px] uppercase tracking-widest"
               disabled={switchingPaymentMethod !== null}
               onClick={() => handleChangePaymentMethod(option.id)}
             >
@@ -527,7 +585,7 @@ export default function PaymentProcess() {
             </Button>
           ))}
         </div>
-        <Button asChild variant="outline" className="rounded-none">
+        <Button asChild variant="outline" className="h-11 rounded-none">
           <Link href="/checkout?returning=1">← Back to Checkout</Link>
         </Button>
       </div>
@@ -548,7 +606,7 @@ export default function PaymentProcess() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.8, opacity: 0 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-              className="relative max-w-2xl max-h-[85vh] w-full"
+              className="relative w-full max-w-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -558,23 +616,14 @@ export default function PaymentProcess() {
               >
                 <X className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
               </button>
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl p-6 flex flex-col items-center">
-                <p className="text-sm font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-4">
-                  {paymentLabel} QR Code
-                </p>
-                <div className="w-full max-w-md aspect-square bg-white rounded-xl overflow-hidden flex items-center justify-center p-4">
+              <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl">
+                <div className="aspect-square w-full bg-white">
                   <img
                     src={resolvedQrImageSrc}
                     alt={`${paymentLabel} QR Code Full Size`}
                     className="w-full h-full object-contain"
                   />
                 </div>
-                <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400 text-center">
-                  {paymentLabel} • Nikesh Uprety • 9843010717
-                </p>
-                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-                  Scan this QR code to complete your payment
-                </p>
               </div>
             </motion.div>
           </motion.div>

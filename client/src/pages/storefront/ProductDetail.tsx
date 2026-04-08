@@ -4,12 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
 import { useThemeStore } from "@/store/theme";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronLeft, ChevronRight, FileText, Minus, Plus, ShieldCheck, Truck, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, FileText, Minus, Plus, ShieldCheck, Truck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { fetchProductById, fetchProducts, type ProductApi, type ProductSizeChart } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
-import { StorefrontBreadcrumbs } from "@/components/product/StorefrontBreadcrumbs";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 const SizeFitGuide = lazy(() => import("@/components/product/SizeFitGuide"));
 
@@ -21,10 +20,6 @@ function parseJsonArray(s: string | null | undefined): string[] {
   } catch {
     return [];
   }
-}
-
-function getDominantWheelDelta(deltaY: number, deltaX: number): number {
-  return Math.abs(deltaY) >= Math.abs(deltaX) ? deltaY : deltaX;
 }
 
 const COLOR_NAME_SWATCHES: Record<string, string> = {
@@ -95,13 +90,6 @@ function parseColorOption(value: string): { label: string; swatch: string | null
 
 function normalizeColorLabel(value: string | null | undefined): string {
   return parseColorOption(value ?? "").label.trim().toLowerCase();
-}
-
-function getMotionDirection(
-  nextIndex: number,
-  currentIndex: number,
-): "down" | "up" {
-  return nextIndex >= currentIndex ? "down" : "up";
 }
 
 const SHIRT_SIZE_CHART: ProductSizeChart = {
@@ -182,7 +170,9 @@ export default function ProductDetail() {
   const { toast } = useToast();
   const { theme } = useThemeStore();
   const addItem = useCartStore((state) => state.addItem);
+  const clearCart = useCartStore((state) => state.clearCart);
   const openCartSidebar = useCartStore((state) => state.openCartSidebar);
+  const closeCartSidebar = useCartStore((state) => state.closeCartSidebar);
 
   const productId = params?.id ?? "";
 
@@ -210,29 +200,19 @@ export default function ProductDetail() {
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
-  const [imageMotionTick, setImageMotionTick] = useState(0);
-  const [imageMotionDirection, setImageMotionDirection] = useState<"down" | "up">("down");
-  const [imageMotionDurationMs, setImageMotionDurationMs] = useState(300);
-  const [previousImageIndex, setPreviousImageIndex] = useState<number | null>(null);
-  const [mainImageScrollUnlocked, setMainImageScrollUnlocked] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
   const [isTinyPreviewMode, setIsTinyPreviewMode] = useState(false);
   const [isPreviewRailExpanded, setIsPreviewRailExpanded] = useState(true);
   const [isMobileOrTablet, setIsMobileOrTablet] = useState(false);
-  const [galleryJumpAnimation, setGalleryJumpAnimation] = useState<{
-    index: number;
-    tick: number;
-    direction: "down" | "up";
-  } | null>(null);
+  const [desktopReelProgress, setDesktopReelProgress] = useState(0);
   const galleryCloseTimeoutRef = useRef<number | null>(null);
-  const imageTransitionTimeoutRef = useRef<number | null>(null);
-  const galleryJumpTimeoutRef = useRef<number | null>(null);
   const didSwipeRef = useRef(false);
-  const pageWheelLockRef = useRef(false);
-  const mainImageViewportRef = useRef<HTMLDivElement | null>(null);
+  const productStageRef = useRef<HTMLDivElement | null>(null);
   const galleryScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const gallerySectionRefs = useRef<Array<HTMLElement | null>>([]);
+  const desktopReelProgressRef = useRef(0);
+  const desktopWheelFrameRef = useRef<number | null>(null);
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
   const colorOptions = useMemo(
@@ -289,6 +269,10 @@ export default function ProductDetail() {
   }, [allImages.length, selectedImageIndex]);
 
   useEffect(() => {
+    desktopReelProgressRef.current = desktopReelProgress;
+  }, [desktopReelProgress]);
+
+  useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 379px)");
     const syncPreviewRailMode = () => {
       const isTiny = mediaQuery.matches;
@@ -316,11 +300,8 @@ export default function ProductDetail() {
 
   useEffect(() => {
     setSelectedImageIndex(0);
-    setImageMotionTick(0);
-    setPreviousImageIndex(null);
-    // Never hard-lock the page scroll. Desktop gets "scroll on image to change"
-    // (scoped to the image viewport). Mobile/tablet uses swipe + thumbnails.
-    setMainImageScrollUnlocked(true);
+    setDesktopReelProgress(0);
+    desktopReelProgressRef.current = 0;
   }, [product?.id, allImages.length, isMobileOrTablet]);
 
   useEffect(() => {
@@ -330,17 +311,16 @@ export default function ProductDetail() {
         setIsGalleryVisible(false);
       }
       if (event.key === "ArrowRight") {
-        goToImage(selectedImageIndex + 1, { direction: "down" });
+        goToImage(selectedImageIndex + 1);
       }
       if (event.key === "ArrowLeft") {
-        goToImage(selectedImageIndex - 1, { direction: "up" });
+        goToImage(selectedImageIndex - 1);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [allImages.length, isGalleryOpen, selectedImageIndex]);
 
-  const shouldLockMainPageScroll = false;
   const isDarkMode = theme === "dark";
 
   useEffect(() => {
@@ -361,7 +341,7 @@ export default function ProductDetail() {
       document.body.style.overscrollBehaviorY = previousBodyOverscroll;
       document.documentElement.style.overscrollBehaviorY = previousHtmlOverscroll;
     };
-  }, [isGalleryOpen, shouldLockMainPageScroll]);
+  }, [isGalleryOpen]);
 
   useEffect(() => {
     if (!isGalleryOpen) return;
@@ -380,17 +360,6 @@ export default function ProductDetail() {
       }
     };
   }, [isGalleryOpen, isGalleryVisible]);
-
-  useEffect(() => {
-    return () => {
-      if (imageTransitionTimeoutRef.current) {
-        window.clearTimeout(imageTransitionTimeoutRef.current);
-      }
-      if (galleryJumpTimeoutRef.current) {
-        window.clearTimeout(galleryJumpTimeoutRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!isGalleryOpen) return;
@@ -443,37 +412,80 @@ export default function ProductDetail() {
   }, [isGalleryOpen, selectedImageIndex]);
 
   useEffect(() => {
-    if (isMobileOrTablet) return;
-    if (isGalleryOpen || allImages.length <= 1) return;
-    const el = mainImageViewportRef.current;
-    if (!el) return;
+    if (isMobileOrTablet || isGalleryOpen) return;
+    if (allImages.length <= 1) {
+      setDesktopReelProgress(0);
+      return;
+    }
+
+    const maxProgress = allImages.length - 1;
+    const progressStep = 0.0018;
+
+    const flushReelProgress = () => {
+      desktopWheelFrameRef.current = null;
+      setDesktopReelProgress(desktopReelProgressRef.current);
+    };
 
     const onWheel = (event: WheelEvent) => {
-      // Only hijack scroll when the user is on the image viewport.
+      const stage = productStageRef.current;
+      if (!stage) return;
+
+      const rect = stage.getBoundingClientRect();
+      const isStageInFocus =
+        rect.top <= 24 &&
+        rect.bottom >= window.innerHeight * 0.72;
+
+      if (!isStageInFocus) return;
+
+      const movingDown = event.deltaY > 0;
+      const movingUp = event.deltaY < 0;
+      const current = desktopReelProgressRef.current;
+      const atStart = current <= 0.001;
+      const atEnd = current >= maxProgress - 0.001;
+
+      const shouldLockScroll =
+        (movingDown && !atEnd) ||
+        (movingUp && !atStart);
+
+      if (!shouldLockScroll) return;
+
       event.preventDefault();
-      event.stopPropagation();
 
-      const delta = getDominantWheelDelta(event.deltaY, event.deltaX);
-      if (Math.abs(delta) < 8) return;
+      const next = Math.min(maxProgress, Math.max(0, current + event.deltaY * progressStep));
+      desktopReelProgressRef.current = next;
 
-      if (pageWheelLockRef.current) return;
-      pageWheelLockRef.current = true;
-      window.setTimeout(() => {
-        pageWheelLockRef.current = false;
-      }, 130);
-
-      if (delta > 0) {
-        goToImage(selectedImageIndex + 1, { direction: "down", distance: 1 });
-        return;
+      if (desktopWheelFrameRef.current === null) {
+        desktopWheelFrameRef.current = window.requestAnimationFrame(flushReelProgress);
       }
-      goToImage(selectedImageIndex - 1, { direction: "up", distance: 1 });
     };
 
-    el.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("wheel", onWheel, { passive: false });
+
     return () => {
-      el.removeEventListener("wheel", onWheel);
+      if (desktopWheelFrameRef.current !== null) {
+        window.cancelAnimationFrame(desktopWheelFrameRef.current);
+        desktopWheelFrameRef.current = null;
+      }
+      window.removeEventListener("wheel", onWheel);
     };
-  }, [allImages.length, isGalleryOpen, isMobileOrTablet, selectedImageIndex]);
+  }, [allImages.length, isGalleryOpen, isMobileOrTablet]);
+
+  const desktopReelMaxProgress = Math.max(allImages.length - 1, 0);
+  const clampedDesktopReelProgress = Math.min(Math.max(desktopReelProgress, 0), desktopReelMaxProgress);
+  const desktopReelBaseIndex = Math.floor(clampedDesktopReelProgress);
+  const desktopReelNextIndex = Math.min(desktopReelBaseIndex + 1, Math.max(allImages.length - 1, 0));
+  const desktopReelTransition =
+    desktopReelBaseIndex === desktopReelNextIndex ? 0 : clampedDesktopReelProgress - desktopReelBaseIndex;
+  const activeDesktopPreviewIndex =
+    desktopReelTransition >= 0.5 ? desktopReelNextIndex : desktopReelBaseIndex;
+  const desktopReelGap = 4;
+
+  useEffect(() => {
+    if (isMobileOrTablet || isGalleryOpen) return;
+    if (selectedImageIndex !== activeDesktopPreviewIndex) {
+      setSelectedImageIndex(activeDesktopPreviewIndex);
+    }
+  }, [activeDesktopPreviewIndex, isGalleryOpen, isMobileOrTablet, selectedImageIndex]);
 
   const effectiveColor = selectedColor ?? (colors[0] ?? null);
   const effectiveSize = selectedSize;
@@ -542,34 +554,38 @@ export default function ProductDetail() {
     ? Number(product.price) * (1 - Number(product.salePercentage) / 100)
     : Number(product.price);
 
+  const buildCartPayload = () => ({
+    id: product.id,
+    name: product.name,
+    price: effectiveUnitPrice,
+    originalPrice:
+      hasSale ? Number(product.price) : null,
+    salePercentage:
+      product.salePercentage !== null && product.salePercentage !== undefined
+        ? Number(product.salePercentage)
+        : null,
+    saleActive: hasSale,
+    stock: product.stock,
+    category: product.category ?? "",
+    sku: product.id,
+    images: allImages.filter(Boolean),
+    variants: (product.variants ?? []).map((variant) => ({
+      id: variant.id,
+      size: variant.size,
+      color: parseColorOption(variant.color ?? "Default").label,
+    })),
+  });
+
+  const buildVariantPayload = () => ({
+    id: selectedVariant?.id,
+    size: effectiveSize ?? "One Size",
+    color: parseColorOption(effectiveColor ?? "Default").label,
+  });
+
   const handleAddToCart = () => {
     addItem(
-      {
-        id: product.id,
-        name: product.name,
-        price: effectiveUnitPrice,
-        originalPrice:
-          hasSale ? Number(product.price) : null,
-        salePercentage:
-          product.salePercentage !== null && product.salePercentage !== undefined
-            ? Number(product.salePercentage)
-            : null,
-        saleActive: hasSale,
-        stock: product.stock,
-        category: product.category ?? "",
-        sku: product.id,
-        images: allImages.filter(Boolean),
-        variants: (product.variants ?? []).map((variant) => ({
-          id: variant.id,
-          size: variant.size,
-          color: parseColorOption(variant.color ?? "Default").label,
-        })),
-      },
-      {
-        id: selectedVariant?.id,
-        size: effectiveSize ?? "One Size",
-        color: parseColorOption(effectiveColor ?? "Default").label,
-      },
+      buildCartPayload(),
+      buildVariantPayload(),
       quantity,
     );
     const isMobileOrTablet = window.matchMedia("(max-width: 1024px)").matches;
@@ -578,40 +594,21 @@ export default function ProductDetail() {
   };
 
   const handleBuyNow = () => {
-    handleAddToCart();
+    closeCartSidebar();
+    clearCart();
+    addItem(
+      buildCartPayload(),
+      buildVariantPayload(),
+      quantity,
+    );
     setLocation("/checkout");
   };
 
-  const goToImage = (
-    index: number,
-    options?: { direction?: "down" | "up"; distance?: number },
-  ) => {
+  const goToImage = (index: number) => {
     if (!allImages.length) return;
-    const currentIndex = selectedImageIndex;
     const next = (index + allImages.length) % allImages.length;
-    if (next === currentIndex) return;
-    const inferredDirection =
-      options?.direction ??
-      (next === 0 && currentIndex === allImages.length - 1
-        ? "down"
-        : next === allImages.length - 1 && currentIndex === 0
-          ? "up"
-          : next > currentIndex
-            ? "down"
-            : "up");
-    const inferredDistance = Math.max(1, options?.distance ?? Math.abs(next - currentIndex));
-    const motionDuration = Math.max(190, 340 - Math.min(inferredDistance - 1, 5) * 28);
-    if (imageTransitionTimeoutRef.current) {
-      window.clearTimeout(imageTransitionTimeoutRef.current);
-    }
-    setPreviousImageIndex(currentIndex);
-    setImageMotionDirection(inferredDirection);
-    setImageMotionDurationMs(motionDuration);
-    setImageMotionTick((prev) => prev + 1);
+    if (next === selectedImageIndex) return;
     setSelectedImageIndex(next);
-    imageTransitionTimeoutRef.current = window.setTimeout(() => {
-      setPreviousImageIndex(null);
-    }, motionDuration + 30);
   };
 
   const goToImageInModal = (targetIndex: number) => {
@@ -619,21 +616,7 @@ export default function ProductDetail() {
     const next = (targetIndex + allImages.length) % allImages.length;
     const targetSection = gallerySectionRefs.current[next];
     if (!targetSection) return;
-
-    const direction: "down" | "up" = next >= selectedImageIndex ? "down" : "up";
     setSelectedImageIndex(next);
-    setGalleryJumpAnimation((previous) => ({
-      index: next,
-      tick: (previous?.tick ?? 0) + 1,
-      direction,
-    }));
-
-    if (galleryJumpTimeoutRef.current) {
-      window.clearTimeout(galleryJumpTimeoutRef.current);
-    }
-    galleryJumpTimeoutRef.current = window.setTimeout(() => {
-      setGalleryJumpAnimation(null);
-    }, 240);
 
     const container = galleryScrollContainerRef.current;
     if (!container) {
@@ -649,20 +632,22 @@ export default function ProductDetail() {
   };
 
   const goToNextImage = () => {
-    goToImage(selectedImageIndex + 1, { direction: "down", distance: 1 });
+    goToImage(selectedImageIndex + 1);
   };
 
   const goToPreviousImage = () => {
-    goToImage(selectedImageIndex - 1, { direction: "up", distance: 1 });
+    goToImage(selectedImageIndex - 1);
   };
 
   const previewImage = (index: number) => {
     if (index === selectedImageIndex || index < 0 || index >= allImages.length) return;
-    setPreviousImageIndex(selectedImageIndex);
-    setImageMotionDirection(getMotionDirection(index, selectedImageIndex));
-    setImageMotionDurationMs(260);
+    if (!isMobileOrTablet && allImages.length > 1) {
+      desktopReelProgressRef.current = index;
+      setSelectedImageIndex(index);
+      setDesktopReelProgress(index);
+      return;
+    }
     setSelectedImageIndex(index);
-    setImageMotionTick((tick) => tick + 1);
   };
 
   const openGallery = (index?: number) => {
@@ -696,46 +681,10 @@ export default function ProductDetail() {
     }
   };
 
+  const compactBreadcrumbProductLabel = product.name.toUpperCase();
+
   return (
-    <div className="mt-10 w-full px-3 py-24 sm:px-6 lg:px-8 xl:px-10">
-      <style>{`
-        @keyframes product-image-enter-down {
-          0% { transform: translateY(-72px) scale(0.992); opacity: 0; filter: blur(5px); }
-          100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
-        }
-        @keyframes product-image-enter-up {
-          0% { transform: translateY(72px) scale(0.992); opacity: 0; filter: blur(5px); }
-          100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
-        }
-        @keyframes product-image-exit-down {
-          0% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
-          100% { transform: translateY(72px) scale(1.006); opacity: 0; filter: blur(4px); }
-        }
-        @keyframes product-image-exit-up {
-          0% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
-          100% { transform: translateY(-72px) scale(1.006); opacity: 0; filter: blur(4px); }
-        }
-        @keyframes accordion-fade-down {
-          0% { opacity: 0; transform: translateY(-6px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes modal-image-enter-down {
-          0% { transform: translateY(-40px); }
-          100% { transform: translateY(0); }
-        }
-        @keyframes modal-image-enter-up {
-          0% { transform: translateY(40px); }
-          100% { transform: translateY(0); }
-        }
-        @keyframes gallery-jump-enter-down {
-          0% { transform: translateY(-28px); opacity: 0.92; }
-          100% { transform: translateY(0); opacity: 1; }
-        }
-        @keyframes gallery-jump-enter-up {
-          0% { transform: translateY(28px); opacity: 0.92; }
-          100% { transform: translateY(0); opacity: 1; }
-        }
-      `}</style>
+    <div className="relative w-full px-3 pb-16 pt-0 sm:px-6 lg:px-8 xl:px-10">
       <StorefrontSeo
         title={`${product.name} | Rare Atelier`}
         description={
@@ -749,19 +698,39 @@ export default function ProductDetail() {
         structuredData={structuredData}
       />
 
-      <div className="mx-auto mb-8 max-w-[1600px]">
-        <StorefrontBreadcrumbs
-          items={[
-            { label: "Home", href: "/" },
-            { label: "Shop", href: backToShopHref },
-            { label: product.name },
-          ]}
-          backHref={backToShopHref}
-        />
+      <div className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2 sm:top-4">
+        <Link href="/" className="pointer-events-auto inline-flex items-center justify-center" aria-label="Go to homepage">
+          <img
+            src="/images/logo.webp"
+            alt="Rare Atelier"
+            className="h-14 w-auto object-contain mix-blend-difference sm:h-16 lg:h-20"
+            style={{ filter: "brightness(0) invert(1)" }}
+          />
+        </Link>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.9fr)_minmax(300px,1fr)] lg:gap-8 xl:gap-10">
-        <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
+      <div className="pointer-events-none absolute left-3 top-4 z-40 max-w-[calc(100vw-8.5rem)] sm:left-6 sm:top-5 lg:left-8 xl:left-10">
+        <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 overflow-hidden rounded-full border border-black/10 bg-white/88 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-black shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-black/62 dark:text-white">
+          <Link href="/" className="shrink-0 transition-opacity hover:opacity-65">
+            Home
+          </Link>
+          <span className="opacity-45">{">"}</span>
+          <Link href={backToShopHref} className="shrink-0 transition-opacity hover:opacity-65">
+            Shop
+          </Link>
+          <span className="opacity-45">{">"}</span>
+          <span className="min-w-0 max-w-[12ch] truncate sm:max-w-[18ch] lg:max-w-[26ch]">
+            {compactBreadcrumbProductLabel}
+          </span>
+        </div>
+      </div>
+
+      <div
+        ref={productStageRef}
+        className="relative lg:min-h-screen"
+      >
+        <div className="grid gap-8 lg:h-screen lg:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.9fr)_minmax(300px,1fr)] lg:items-start lg:gap-8 xl:gap-10">
+        <aside className="space-y-5 lg:py-24">
           <h1
             style={{
               fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
@@ -825,7 +794,7 @@ export default function ProductDetail() {
                   <ChevronDown className="h-4 w-4 text-muted-foreground transition-all duration-300 group-open:rotate-180 group-open:text-foreground" />
                 </div>
               </summary>
-              <div className="pt-3 pb-1 text-[15px] leading-7 text-foreground/90 [animation:accordion-fade-down_190ms_ease-out]">
+              <div className="pt-3 pb-1 text-[15px] leading-7 text-foreground/90">
                 {product.description || "This piece is crafted in limited runs with a clean, tailored streetwear silhouette."}
               </div>
             </details>
@@ -842,7 +811,7 @@ export default function ProductDetail() {
                   <ChevronDown className="h-4 w-4 text-muted-foreground transition-all duration-300 group-open:rotate-180 group-open:text-foreground" />
                 </div>
               </summary>
-              <ul className="space-y-2 pt-3 pb-1 text-[14px] leading-7 text-muted-foreground [animation:accordion-fade-down_190ms_ease-out]">
+              <ul className="space-y-2 pt-3 pb-1 text-[14px] leading-7 text-muted-foreground">
                 <li className="flex items-start gap-2">
                   <span className="mt-[9px] h-1.5 w-1.5 rounded-full bg-foreground/50" />
                   <span>Limited-run production with refined finishing.</span>
@@ -870,7 +839,7 @@ export default function ProductDetail() {
                   <ChevronDown className="h-4 w-4 text-muted-foreground transition-all duration-300 group-open:rotate-180 group-open:text-foreground" />
                 </div>
               </summary>
-              <div className="space-y-2 pt-3 pb-1 text-[14px] leading-7 text-muted-foreground [animation:accordion-fade-down_190ms_ease-out]">
+              <div className="space-y-2 pt-3 pb-1 text-[14px] leading-7 text-muted-foreground">
                 <p>Shipping across Nepal in 2-5 business days.</p>
                 <p>Easy exchange support for size issues when stock is available.</p>
               </div>
@@ -878,11 +847,10 @@ export default function ProductDetail() {
           </div>
         </aside>
 
-        <section className="space-y-4 lg:min-w-0">
-          <div className="flex min-w-0 flex-col gap-4">
+        <section className="space-y-4 lg:min-w-0 lg:py-0">
+          <div className="relative min-w-0">
             <div
-              ref={mainImageViewportRef}
-              className="relative h-[72vh] min-h-[500px] overflow-hidden rounded-sm border border-border bg-black/5 sm:h-[76vh] lg:h-[86vh] dark:bg-black/40"
+              className="relative h-[72vh] min-h-[520px] overflow-hidden rounded-sm border border-border/60 bg-black/5 sm:h-[76vh] lg:h-screen dark:border-white/10 dark:bg-black/35"
               onClick={() => {
                 if (didSwipeRef.current) {
                   didSwipeRef.current = false;
@@ -908,7 +876,7 @@ export default function ProductDetail() {
               }}
             >
               {product.stock === 0 ? (
-                <div className="absolute left-3 top-3 z-20 bg-black/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white lg:left-4 lg:top-4 lg:px-4 lg:py-2">
+                <div className="absolute left-3 top-16 z-20 bg-black/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white lg:left-4 lg:top-20 lg:px-4 lg:py-2">
                   Out of Stock
                 </div>
               ) : null}
@@ -916,108 +884,106 @@ export default function ProductDetail() {
               {!isMobileOrTablet && allImages.length > 1 ? (
                 <div className="absolute bottom-3 right-3 z-30 flex items-center gap-2 rounded-sm border border-white/20 bg-black/35 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white/90 backdrop-blur-sm">
                   <span>
-                    {String(selectedImageIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
+                    {String(activeDesktopPreviewIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
                   </span>
                   <span className="h-3 w-px bg-white/25" />
-                  <span className="text-white/80">Scroll to view</span>
+                  <span className="text-white/80">Scroll to move through images</span>
                 </div>
               ) : null}
 
-              {allImages.length > 1 ? (
-                !isMobileOrTablet ? (
-                  <div
-                    className={`scrollbar-hide absolute left-2 top-1/2 z-40 -translate-y-1/2 overflow-y-auto rounded-md border border-white/30 bg-black/20 backdrop-blur-sm transition-all duration-200 sm:left-3 ${
-                      isTinyPreviewMode && !isPreviewRailExpanded
-                        ? "max-h-[36%] w-[26px] p-1"
-                        : "flex max-h-[72%] w-[54px] flex-col gap-1.5 p-1.5 sm:w-[70px] sm:gap-2 sm:p-2"
-                    }`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                    }}
-                  >
-                    {isTinyPreviewMode && !isPreviewRailExpanded ? (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setIsPreviewRailExpanded(true);
-                        }}
-                        className="flex h-9 w-full items-center justify-center rounded-sm border border-white/40 bg-black/45 text-[10px] font-black text-white"
-                        aria-label="Expand image preview rail"
-                      >
-                        ••
-                      </button>
-                    ) : (
-                      <>
-                        {isTinyPreviewMode ? (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setIsPreviewRailExpanded(false);
-                            }}
-                            className="mb-1 flex h-6 w-full items-center justify-center rounded-sm border border-white/35 bg-black/45 text-[10px] font-black text-white/90"
-                            aria-label="Collapse image preview rail"
-                          >
-                            −
-                          </button>
-                        ) : null}
-                        {allImages.map((url, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              previewImage(i);
-                            }}
-                            className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border transition-all ${
-                              selectedImageIndex === i
-                                ? "border-white opacity-100"
-                                : "border-white/30 opacity-70 hover:opacity-100"
-                            }`}
-                          >
-                            <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
-                          </button>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                ) : null
-              ) : null}
-
-              {previousImageIndex !== null && previousImageIndex !== selectedImageIndex ? (
-                <img
-                  key={`main-prev-${previousImageIndex}-${imageMotionTick}`}
-                  src={allImages[previousImageIndex] || ""}
-                  alt={`${product.name} - previous view`}
-                  loading="lazy"
-                  className="absolute inset-0 z-10 h-full w-full select-none object-cover object-center"
-                  style={{
-                    animation:
-                      imageMotionTick > 0
-                        ? imageMotionDirection === "down"
-                          ? `product-image-exit-down ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1) forwards`
-                          : `product-image-exit-up ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1) forwards`
-                        : "none",
+              {allImages.length > 1 && !isMobileOrTablet ? (
+                <div
+                  className={`scrollbar-hide absolute left-2 top-1/2 z-40 -translate-y-1/2 overflow-y-auto rounded-md border border-white/30 bg-black/20 backdrop-blur-sm transition-all duration-200 sm:left-3 ${
+                    isTinyPreviewMode && !isPreviewRailExpanded
+                      ? "max-h-[36%] w-[26px] p-1"
+                      : "flex max-h-[72%] w-[54px] flex-col gap-1.5 p-1.5 sm:w-[70px] sm:gap-2 sm:p-2"
+                  }`}
+                  onClick={(event) => {
+                    event.stopPropagation();
                   }}
-                />
+                >
+                  {isTinyPreviewMode && !isPreviewRailExpanded ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setIsPreviewRailExpanded(true);
+                      }}
+                      className="flex h-9 w-full items-center justify-center rounded-sm border border-white/40 bg-black/45 text-[10px] font-black text-white"
+                      aria-label="Expand image preview rail"
+                    >
+                      ••
+                    </button>
+                  ) : (
+                    <>
+                      {isTinyPreviewMode ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setIsPreviewRailExpanded(false);
+                          }}
+                          className="mb-1 flex h-6 w-full items-center justify-center rounded-sm border border-white/35 bg-black/45 text-[10px] font-black text-white/90"
+                          aria-label="Collapse image preview rail"
+                        >
+                          −
+                        </button>
+                      ) : null}
+                      {allImages.map((url, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            previewImage(i);
+                          }}
+                          className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border transition-all ${
+                            activeDesktopPreviewIndex === i
+                              ? "border-white opacity-100"
+                              : "border-white/30 opacity-70 hover:opacity-100"
+                          }`}
+                        >
+                          <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
               ) : null}
 
-              <img
-                key={`main-current-${selectedImageIndex}-${imageMotionTick}`}
-                src={allImages[selectedImageIndex] || ""}
-                alt={`${product.name} - view ${selectedImageIndex + 1}`}
-                loading={selectedImageIndex === 0 ? "eager" : "lazy"}
-                className="absolute inset-0 z-20 h-full w-full select-none object-cover object-center"
-                style={{
-                  animation:
-                    imageMotionTick > 0
-                      ? imageMotionDirection === "down"
-                        ? `product-image-enter-down ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
-                        : `product-image-enter-up ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
-                      : "none",
-                }}
-              />
+              {isMobileOrTablet || allImages.length <= 1 ? (
+                <img
+                  src={allImages[selectedImageIndex] || ""}
+                  alt={`${product.name} - view ${selectedImageIndex + 1}`}
+                  loading={selectedImageIndex === 0 ? "eager" : "lazy"}
+                  className="absolute inset-0 z-20 h-full w-full select-none object-cover object-top"
+                />
+              ) : (
+                <div className="absolute inset-0">
+                  <img
+                    src={allImages[desktopReelBaseIndex] || ""}
+                    alt={`${product.name} - view ${desktopReelBaseIndex + 1}`}
+                    loading={desktopReelBaseIndex === 0 ? "eager" : "lazy"}
+                    className="absolute inset-0 z-20 h-full w-full select-none object-cover object-top"
+                    style={{
+                      transform: `translate3d(0, ${desktopReelTransition * -(100 + desktopReelGap)}%, 0)`,
+                      transition: "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
+                    }}
+                  />
+                  {desktopReelNextIndex !== desktopReelBaseIndex ? (
+                    <img
+                      src={allImages[desktopReelNextIndex] || ""}
+                      alt={`${product.name} - view ${desktopReelNextIndex + 1}`}
+                      loading="lazy"
+                      className="absolute inset-0 z-30 h-full w-full select-none object-cover object-top"
+                      style={{
+                        transform: `translate3d(0, ${(1 - desktopReelTransition) * (100 + desktopReelGap)}%, 0)`,
+                        transition: "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
+                      }}
+                    />
+                  ) : null}
+                </div>
+              )}
             </div>
 
             {isMobileOrTablet && allImages.length > 1 ? (
@@ -1036,19 +1002,29 @@ export default function ProductDetail() {
                       }`}
                       aria-label={`View image ${i + 1}`}
                     >
-                      <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover object-top" />
                     </button>
                   ))}
                 </div>
                 <p className="mt-2 text-center text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                  Swipe image or tap thumbnails
+                  Tap a preview or swipe the image
                 </p>
               </div>
             ) : null}
           </div>
         </section>
 
-        <aside className="space-y-6 lg:sticky lg:top-28 lg:self-start">
+        <aside className="space-y-6 lg:py-24">
+          <div className="flex justify-end">
+            <Link
+              href={backToShopHref}
+              className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition-all hover:-translate-y-0.5 hover:border-neutral-900 hover:text-neutral-900 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-200 dark:hover:border-neutral-100 dark:hover:text-neutral-100"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              <span>Back to shop</span>
+            </Link>
+          </div>
+
           {colorOptions.length > 0 ? (
             <div>
               <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Color</p>
@@ -1228,6 +1204,7 @@ export default function ProductDetail() {
             </Button>
           </div>
         </aside>
+        </div>
       </div>
 
       <Suspense fallback={null}>
@@ -1297,28 +1274,17 @@ export default function ProductDetail() {
             isGalleryVisible ? "opacity-100" : "opacity-0"
           }`}
           style={{ background: isDarkMode ? "#050505" : "#ffffff" }}
-        >
-          <button
-            type="button"
-            className="absolute right-5 top-5 z-50 flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur transition-colors"
-            style={{
-              borderColor: isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(17,17,17,0.12)",
-              background: isDarkMode ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.92)",
-              color: isDarkMode ? "#ffffff" : "#111111",
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
               closeGallery();
-            }}
-            aria-label="Close gallery"
-          >
-            <X className="w-5 h-5" />
-          </button>
-
+            }
+          }}
+        >
           <div
             className={`relative flex h-full w-full items-stretch justify-center transition-transform duration-200 ${
               isGalleryVisible ? "scale-100" : "scale-[0.985]"
             }`}
+            onClick={(event) => event.stopPropagation()}
           >
             <div
               className="pointer-events-none absolute left-5 top-5 z-40 text-[10px] font-bold uppercase tracking-[0.2em]"
@@ -1385,20 +1351,6 @@ export default function ProductDetail() {
                       data-index={index}
                       className="relative min-h-screen px-0 pb-5 sm:pb-6 lg:pb-8"
                     >
-                      <div className="absolute right-3 top-3 z-10 flex justify-end px-3 sm:px-4 lg:px-6">
-                        <button
-                          type="button"
-                          onClick={() => closeGallery()}
-                          className="rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] shadow-sm backdrop-blur"
-                          style={{
-                            borderColor: isDarkMode ? "rgba(255,255,255,0.12)" : "rgba(17,17,17,0.12)",
-                            background: isDarkMode ? "rgba(0,0,0,0.42)" : "rgba(255,255,255,0.92)",
-                            color: isDarkMode ? "#ffffff" : "#111111",
-                          }}
-                        >
-                          Close Viewer
-                        </button>
-                      </div>
                       <div className="flex min-h-[calc(100vh-5.5rem)] items-start justify-center px-0">
                         <img
                           src={url || ""}
@@ -1406,16 +1358,7 @@ export default function ProductDetail() {
                           loading={index === selectedImageIndex ? "eager" : "lazy"}
                           decoding="async"
                           className="h-auto w-full max-w-none object-contain"
-                          style={{
-                            imageRendering: "auto",
-                            animation:
-                              galleryJumpAnimation &&
-                              galleryJumpAnimation.index === index
-                                ? galleryJumpAnimation.direction === "down"
-                                  ? "gallery-jump-enter-down 220ms cubic-bezier(0.22, 1, 0.36, 1)"
-                                  : "gallery-jump-enter-up 220ms cubic-bezier(0.22, 1, 0.36, 1)"
-                                : "none",
-                          }}
+                          style={{ imageRendering: "auto" }}
                         />
                       </div>
                     </section>

@@ -123,13 +123,13 @@ export default function AddProductWizard({
   }
 
   // Image upload state
-  const [uploadMode, setUploadMode] = useState<"cloud" | "local">("cloud");
+  const [uploadMode, setUploadMode] = useState<"cloudinary" | "tigris" | "local">("cloudinary");
   const [imageCategory, setImageCategory] = useState("product");
   const [mainUploading, setMainUploading] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [mainUploadProgress, setMainUploadProgress] = useState(0);
   const [galleryUploadProgress, setGalleryUploadProgress] = useState(0);
-  const [galleryUploadMode, setGalleryUploadMode] = useState<"cloud" | "local">("cloud");
+  const [galleryUploadMode, setGalleryUploadMode] = useState<"cloudinary" | "tigris" | "local">("cloudinary");
   const [galleryImageCategory, setGalleryImageCategory] = useState("product");
 
   // Attributes from DB
@@ -165,6 +165,15 @@ export default function AddProductWizard({
       addForm.setValue("sizeOptions", [...DEFAULT_SIZES], { shouldValidate: false, shouldDirty: false });
     }
   }, []);
+
+  useEffect(() => {
+    if (!categories.length) return;
+    const current = addForm.getValues("category");
+    const exists = categories.some((c) => c.slug === current);
+    if (!current || !exists) {
+      addForm.setValue("category", categories[0].slug, { shouldValidate: true, shouldDirty: false });
+    }
+  }, [categories, addForm]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -289,8 +298,18 @@ export default function AddProductWizard({
     { num: 3, label: "Media", icon: ImageIcon },
   ];
 
-  // Cloud upload handler
-  const handleCloudUpload = async (file: File, target: "main" | "gallery") => {
+  const getProviderLabel = (provider: "cloudinary" | "tigris" | "local") => {
+    if (provider === "cloudinary") return "Cloudinary";
+    if (provider === "tigris") return "Tigris";
+    return "Local";
+  };
+
+  // Remote provider upload handler (Cloudinary/Tigris)
+  const handleRemoteUpload = async (
+    provider: "cloudinary" | "tigris",
+    file: File,
+    target: "main" | "gallery",
+  ) => {
     if (target === "main") {
       setMainUploading(true);
       setMainUploadProgress(0);
@@ -302,7 +321,7 @@ export default function AddProductWizard({
       const result = await uploadAdminImage({
         file,
         category: target === "main" ? imageCategory : galleryImageCategory,
-        provider: "cloudinary",
+        provider,
         onProgress: (value) => {
           if (target === "main") {
             setMainUploadProgress(value);
@@ -311,6 +330,9 @@ export default function AddProductWizard({
           }
         },
       });
+      if (!result.url) {
+        throw new Error("Upload did not return a valid URL");
+      }
       if (target === "main") {
         addForm.setValue("imageUrl", result.url, { shouldValidate: true, shouldDirty: true });
       } else {
@@ -318,9 +340,9 @@ export default function AddProductWizard({
         const current = currentText.split(/\n/).map((u: string) => u.trim()).filter(Boolean);
         addForm.setValue("galleryUrlsText", [...current, result.url].join("\n"), { shouldValidate: true, shouldDirty: true });
       }
-      toast({ title: "Image uploaded to cloud" });
+      toast({ title: `Image uploaded to ${getProviderLabel(provider)}` });
     } catch {
-      toast({ title: "Cloud upload failed", variant: "destructive" });
+      toast({ title: `${getProviderLabel(provider)} upload failed`, variant: "destructive" });
     } finally {
       if (target === "main") {
         setMainUploadProgress(100);
@@ -421,7 +443,7 @@ export default function AddProductWizard({
   };
 
   const renderLivePreview = (variant: "details" | "attributes" | "media") => (
-    <div className="xl:sticky xl:top-[9.5rem] space-y-6">
+    <div className="xl:sticky xl:top-[9.5rem] xl:max-h-[calc(100vh-12rem)] xl:overflow-y-auto xl:pr-1 space-y-6 pb-2">
       <div className="rounded-[32px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
         <div className="mb-5 flex items-center justify-between">
           <div>
@@ -540,11 +562,11 @@ export default function AddProductWizard({
               <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Stock by Size</p>
               <Badge className="rounded-full bg-[#81a074]/10 text-[#223227] hover:bg-[#81a074]/10 dark:bg-[#81a074]/20 dark:text-white text-[10px]">{totalStock} total</Badge>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2.5 pb-1">
               {sizeStockData.map((item: { size: string; stock: number; pct: number }) => (
-                <div key={item.size} className="flex items-center gap-3">
+                <div key={item.size} className="flex min-h-6 items-center gap-3">
                   <span className="text-[11px] font-bold text-[#223227] dark:text-white w-6 text-center">{item.size}</span>
-                  <div className="flex-1 h-5 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+                  <div className="flex-1 h-6 bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500 ease-out"
                       style={{
@@ -691,13 +713,18 @@ export default function AddProductWizard({
                         <FormItem>
                           <FormLabel>Category</FormLabel>
                           <div className="flex gap-2">
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || categories[0]?.slug || ""}>
                               <FormControl>
                                 <SelectTrigger className="flex-1">
                                   <SelectValue placeholder="Select category" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
+                                {!categories.length ? (
+                                  <SelectItem value="__no_category_available" disabled>
+                                    No categories yet
+                                  </SelectItem>
+                                ) : null}
                                 {categories.map((c) => (
                                   <SelectItem key={c.id} value={c.slug}>{c.name}</SelectItem>
                                 ))}
@@ -1142,15 +1169,27 @@ export default function AddProductWizard({
                     <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border">
                       <button
                         type="button"
-                        onClick={() => setUploadMode("cloud")}
+                        onClick={() => setUploadMode("cloudinary")}
                         className={cn(
                           "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
-                          uploadMode === "cloud"
+                          uploadMode === "cloudinary"
                             ? "bg-primary text-primary-foreground"
                             : "bg-background text-muted-foreground hover:text-foreground"
                         )}
                       >
-                        <Cloud className="w-4 h-4" /> Cloud
+                        <Cloud className="w-4 h-4" /> Cloudinary
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUploadMode("tigris")}
+                        className={cn(
+                          "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                          uploadMode === "tigris"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-background text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <Cloud className="w-4 h-4" /> Tigris
                       </button>
                       <button
                         type="button"
@@ -1167,7 +1206,7 @@ export default function AddProductWizard({
                     </div>
 
                     {/* Category selector for cloud */}
-                    {uploadMode === "cloud" && (
+                    {uploadMode !== "local" && (
                       <div className="flex items-center gap-2">
                         <Label className="text-xs font-bold uppercase tracking-wider">Category</Label>
                         <Select value={imageCategory} onValueChange={setImageCategory}>
@@ -1219,7 +1258,7 @@ export default function AddProductWizard({
                         onClick={() => imageInputRef.current?.click()}
                         loading={mainUploading}
                       >
-                        <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload {uploadMode === "cloud" ? "to Cloud" : "Local"}
+                        <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload to {getProviderLabel(uploadMode)}
                       </Button>
                     </div>
                     {mainUploading && (
@@ -1235,10 +1274,10 @@ export default function AddProductWizard({
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        if (uploadMode === "cloud") {
-                          await handleCloudUpload(file, "main");
-                        } else {
+                        if (uploadMode === "local") {
                           await handleLocalUpload(file, "main");
+                        } else {
+                          await handleRemoteUpload(uploadMode, file, "main");
                         }
                         e.target.value = "";
                       }}
@@ -1254,15 +1293,27 @@ export default function AddProductWizard({
                     <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border">
                       <button
                         type="button"
-                        onClick={() => setGalleryUploadMode("cloud")}
+                        onClick={() => setGalleryUploadMode("cloudinary")}
                         className={cn(
                           "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
-                          galleryUploadMode === "cloud"
+                          galleryUploadMode === "cloudinary"
                             ? "bg-primary text-primary-foreground"
                             : "bg-background text-muted-foreground hover:text-foreground"
                         )}
                       >
-                        <Cloud className="w-4 h-4" /> Cloud
+                        <Cloud className="w-4 h-4" /> Cloudinary
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGalleryUploadMode("tigris")}
+                        className={cn(
+                          "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                          galleryUploadMode === "tigris"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-background text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <Cloud className="w-4 h-4" /> Tigris
                       </button>
                       <button
                         type="button"
@@ -1279,7 +1330,7 @@ export default function AddProductWizard({
                     </div>
 
                     {/* Category selector for gallery cloud */}
-                    {galleryUploadMode === "cloud" && (
+                    {galleryUploadMode !== "local" && (
                       <div className="flex items-center gap-2">
                         <Label className="text-xs font-bold uppercase tracking-wider">Category</Label>
                         <Select value={galleryImageCategory} onValueChange={setGalleryImageCategory}>
@@ -1313,7 +1364,7 @@ export default function AddProductWizard({
                         onClick={() => galleryInputRef.current?.click()}
                         loading={galleryUploading}
                       >
-                        <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload {galleryUploadMode === "cloud" ? "to Cloud" : "Local"}
+                        <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload to {getProviderLabel(galleryUploadMode)}
                       </Button>
                     </div>
                     {galleryUploading && (
@@ -1331,10 +1382,10 @@ export default function AddProductWizard({
                         const files = Array.from(e.target.files ?? []);
                         if (!files.length) return;
                         for (const file of files) {
-                          if (galleryUploadMode === "cloud") {
-                            await handleCloudUpload(file, "gallery");
-                          } else {
+                          if (galleryUploadMode === "local") {
                             await handleLocalUpload(file, "gallery");
+                          } else {
+                            await handleRemoteUpload(galleryUploadMode, file, "gallery");
                           }
                         }
                         e.target.value = "";

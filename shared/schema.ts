@@ -302,7 +302,7 @@ export type NewPlatform = typeof platforms.$inferInsert;
 // ── Media Assets (image library) ─────────────────────────
 export const mediaAssets = pgTable("media_assets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  url: text("url").notNull(),
+  url: text("url"),
   provider: text("provider").notNull(), // cloudinary | local
   category: text("category").notNull(), // product | model | website | landing_page | collection_page
   publicId: text("public_id"), // for cloudinary deletes
@@ -310,6 +310,9 @@ export const mediaAssets = pgTable("media_assets", {
   bytes: integer("bytes"),
   width: integer("width"),
   height: integer("height"),
+  folderPath: text("folder_path"),
+  assetType: text("asset_type").notNull().default("file"), // file | folder
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -461,7 +464,7 @@ export const promoCodes = pgTable("promo_codes", {
   active: boolean("active").notNull().default(true),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   // Null means applies to all products
-  applicableProductIds: integer("applicable_product_ids").array(),
+  applicableProductIds: text("applicable_product_ids").array(),
   // e.g. '1day' | '1week' | 'custom'
   durationPreset: varchar("duration_preset"),
   createdAt: timestamp("created_at", { withTimezone: true })

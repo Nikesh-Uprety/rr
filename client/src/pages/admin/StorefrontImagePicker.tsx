@@ -73,7 +73,7 @@ export default function StorefrontImagePicker() {
 
   const imagesQuery = useQuery<StorefrontLibraryEntry[]>({
     queryKey: ["admin", "storefront-image-library"],
-    queryFn: async () => {
+    queryFn: async (): Promise<StorefrontLibraryEntry[]> => {
       const [localImages, cloudinaryImages] = await Promise.all([
         apiRequest("GET", "/api/admin/storefront-image-library")
           .then((res) => res.json())
@@ -85,14 +85,16 @@ export default function StorefrontImagePicker() {
             provider: "local" as const,
           }))),
         fetchAdminImages({ provider: "cloudinary", limit: 120 }).then((assets) =>
-          assets.map((asset: AdminImageAsset) => ({
-            key: `cloudinary:${asset.id}`,
-            id: asset.id,
-            filename: asset.filename || asset.publicId || `cloudinary-${asset.id.slice(0, 8)}`,
-            url: asset.url,
-            provider: "cloudinary" as const,
-            category: asset.category,
-          })),
+          assets
+            .filter((asset: AdminImageAsset): asset is AdminImageAsset & { url: string } => Boolean(asset.url))
+            .map((asset) => ({
+              key: `cloudinary:${asset.id}`,
+              id: asset.id,
+              filename: asset.filename || asset.publicId || `cloudinary-${asset.id.slice(0, 8)}`,
+              url: asset.url,
+              provider: "cloudinary" as const,
+              category: asset.category,
+            })),
         ),
       ]);
 
@@ -149,7 +151,7 @@ export default function StorefrontImagePicker() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const items = imagesQuery.data ?? [];
+    const items: StorefrontLibraryEntry[] = imagesQuery.data ?? [];
     const providerScoped = providerFilter === "all"
       ? items
       : items.filter((img) => img.provider === providerFilter);

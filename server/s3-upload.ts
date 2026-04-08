@@ -10,6 +10,7 @@ export interface S3Config {
   bucket: string;
   accessKeyId: string;
   secretAccessKey: string;
+  publicBaseUrl?: string;
 }
 
 export class S3Uploader {
@@ -65,8 +66,8 @@ export class S3Uploader {
   }
 
   getPublicUrl(fileName: string): string {
-    const endpoint = this.config.endpoint.replace(/\/+$/, "");
-    return `${endpoint}/${this.config.bucket}/${fileName}`;
+    const base = (this.config.publicBaseUrl || this.config.endpoint).replace(/\/+$/, "");
+    return `${base}/${this.config.bucket}/${fileName}`;
   }
 }
 
@@ -75,6 +76,14 @@ function readFirst(...values: Array<string | undefined>): string | undefined {
 }
 
 export function resolveS3ConfigFromEnv(): S3Config {
+  const publicBaseUrl =
+    readFirst(
+      process.env.TIGRIS_STORAGE_PUBLIC_URL,
+      process.env.TIGRIS_PUBLIC_BASE_URL,
+      process.env.S3_PUBLIC_BASE_URL,
+      process.env.AWS_S3_PUBLIC_URL,
+    );
+
   const endpoint =
     readFirst(
       process.env.TIGRIS_STORAGE_ENDPOINT,
@@ -125,6 +134,7 @@ export function resolveS3ConfigFromEnv(): S3Config {
     bucket,
     accessKeyId,
     secretAccessKey,
+    publicBaseUrl,
   };
 
   if (!config.bucket || !config.accessKeyId || !config.secretAccessKey) {

@@ -41,10 +41,12 @@ export function MediaLibrary({
   mode = "single",
   category,
 }: MediaLibraryProps) {
+  type ProviderFilter = "all" | "cloudinary" | "tigris" | "local";
   const [mounted, setMounted] = React.useState(false);
   const [offset, setOffset] = React.useState(0);
   const [accumulated, setAccumulated] = React.useState<AdminImageAsset[]>([]);
   const [hasMore, setHasMore] = React.useState(true);
+  const [providerFilter, setProviderFilter] = React.useState<ProviderFilter>("all");
 
   const pageSize = 120;
 
@@ -71,16 +73,17 @@ export function MediaLibrary({
   }, [open]);
 
   const { data: pageAssets = [], isLoading, isFetching, isError } = useQuery<AdminImageAsset[]>({
-    queryKey: ["admin", "images", { category: category ?? "all", limit: pageSize, offset }],
+    queryKey: ["admin", "images", { category: category ?? "all", provider: providerFilter, limit: pageSize, offset }],
     queryFn: async () => {
       try {
         const assets = await fetchAdminImages({
           ...(category && category !== "all" ? { category } : {}),
+          ...(providerFilter !== "all" ? { provider: providerFilter } : {}),
           limit: pageSize,
           offset,
         });
 
-        if (assets.length === 0 && offset === 0) {
+        if (assets.length === 0 && offset === 0 && (providerFilter === "all" || providerFilter === "local")) {
           const local = await fetchAdminStorefrontImageLibrary();
           return local.map((item) => ({
             id: item.relPath,
@@ -98,7 +101,7 @@ export function MediaLibrary({
 
         return assets;
       } catch {
-        if (offset === 0) {
+        if (offset === 0 && (providerFilter === "all" || providerFilter === "local")) {
           const local = await fetchAdminStorefrontImageLibrary();
           return local.map((item) => ({
             id: item.relPath,
@@ -124,7 +127,7 @@ export function MediaLibrary({
     setOffset(0);
     setAccumulated([]);
     setHasMore(true);
-  }, [open, category]);
+  }, [open, category, providerFilter]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -132,10 +135,10 @@ export function MediaLibrary({
       setAccumulated(pageAssets);
     } else if (pageAssets.length > 0) {
       setAccumulated((prev) => {
-        const seen = new Set(prev.map((a) => a.url));
+        const seen = new Set(prev.map((a) => a.id));
         const next = [...prev];
         for (const a of pageAssets) {
-          if (!seen.has(a.url)) next.push(a);
+          if (!seen.has(a.id)) next.push(a);
         }
         return next;
       });
@@ -143,9 +146,19 @@ export function MediaLibrary({
     if (pageAssets.length < pageSize) setHasMore(false);
   }, [pageAssets, offset, open]);
 
-  const images = accumulated
-    .map((a) => a.url)
-    .filter((u): u is string => typeof u === "string" && u.length > 0);
+  const images = React.useMemo(
+    () =>
+      accumulated
+        .filter((asset): asset is AdminImageAsset & { url: string } => typeof asset.url === "string" && asset.url.length > 0)
+        .map((asset) => ({
+          id: asset.id,
+          url: asset.url,
+          filename: asset.filename ?? asset.url.split("/").pop() ?? "image",
+          category: asset.category || "uncategorized",
+          provider: asset.provider || "unknown",
+        })),
+    [accumulated],
+  );
 
   const selectedSet = React.useMemo(() => {
     const set = new Set<string>();
@@ -208,6 +221,19 @@ export function MediaLibrary({
           <p className="text-sm text-muted-foreground mt-1">
             Select an image from previously uploaded assets.
           </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(["all", "cloudinary", "tigris", "local"] as const).map((provider) => (
+              <Button
+                key={provider}
+                type="button"
+                variant={providerFilter === provider ? "default" : "outline"}
+                className="h-8 rounded-full px-3 text-[10px] uppercase tracking-[0.18em]"
+                onClick={() => setProviderFilter(provider)}
+              >
+                {provider}
+              </Button>
+            ))}
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 flex flex-col overflow-hidden">
@@ -239,22 +265,22 @@ export function MediaLibrary({
           ) : (
             <ScrollArea className="h-[min(50vh,420px)] pr-3">
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-2">
-                {images.map((url) => {
-                  const isSelected = effectiveSelected.has(url);
+                {images.map((img) => {
+                  const isSelected = effectiveSelected.has(img.url);
                   return (
                     <button
-                      key={url}
+                      key={img.id}
                       type="button"
                       onClick={() => {
                         if (mode === "single") {
-                          onSelect(url);
+                          onSelect(img.url);
                           onOpenChange(false);
                           return;
                         }
                         setLocalSelectedSet((prev) => {
                           const next = new Set(prev);
-                          if (next.has(url)) next.delete(url);
-                          else next.add(url);
+                          if (next.has(img.url)) next.delete(img.url);
+                          else next.add(img.url);
                           return next;
                         });
                       }}
@@ -264,7 +290,7 @@ export function MediaLibrary({
                       )}
                     >
                       <img
-                        src={url}
+                        src={img.url}
                         alt=""
                         className={cn(
                           "h-full w-full object-cover transition-transform duration-300 group-hover:scale-105",
@@ -281,7 +307,10 @@ export function MediaLibrary({
                       )}
                       <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                         <p className="text-[10px] text-white truncate text-left">
-                          {url.split("/").pop()}
+                          {img.filename}
+                        </p>
+                        <p className="mt-0.5 text-[9px] uppercase tracking-[0.14em] text-white/85 text-left">
+                          {img.provider} · {img.category}
                         </p>
                       </div>
                     </button>

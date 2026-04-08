@@ -16,6 +16,7 @@ export const ADMIN_PAGE_KEYS = [
   "pos",
   "promo-codes",
   "images",
+  "buckets",
   "storefront-images",
   "landing-page",
 ] as const;
@@ -41,6 +42,7 @@ const ADMIN_PAGE_ACCESS: Record<AdminPanelRole, readonly AdminPageKey[]> = {
     "bills",
     "pos",
     "promo-codes",
+    "buckets",
   ],
   staff: [
     "dashboard",
@@ -53,6 +55,7 @@ const ADMIN_PAGE_ACCESS: Record<AdminPanelRole, readonly AdminPageKey[]> = {
     "bills",
     "pos",
     "promo-codes",
+    "buckets",
   ],
   csr: [
     "dashboard",

@@ -263,7 +263,7 @@ export default function Cart() {
           canonicalPath="/cart"
           noIndex
         />
-        <div className="container mx-auto mt-10 max-w-7xl px-4 py-32">
+        <div className="container mx-auto max-w-7xl px-4 pb-16 pt-4 sm:pt-6">
           <div className="flex items-center justify-center py-20">
             <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400">Loading bag</p>
           </div>
@@ -281,7 +281,7 @@ export default function Cart() {
           canonicalPath="/cart"
           noIndex
         />
-        <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
+        <div className="container mx-auto max-w-7xl px-4 pb-16 pt-4 sm:pt-6">
           <div className="max-w-lg mx-auto text-center py-20">
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
@@ -308,7 +308,7 @@ export default function Cart() {
         canonicalPath="/cart"
         noIndex
       />
-      <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
+      <div className="container mx-auto max-w-7xl px-4 pb-16 pt-4 sm:pt-6">
       <h1 className="text-4xl font-black uppercase tracking-tighter mb-16 italic underline decoration-zinc-100 dark:decoration-white/5 underline-offset-[20px]">Your Bag</h1>
 
       <div className="flex flex-col lg:flex-row gap-20">

@@ -68,7 +68,7 @@ export default function Products() {
   const [colorFilter, setColorFilter] = useState(initialState.colorFilter);
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [page, setPage] = useState(initialState.page);
-  const PAGE_SIZE = 12;
+  const PAGE_SIZE = 10;
   const hasInitializedFilters = useRef(false);
 
   const shopPath = useMemo(() => {
@@ -244,7 +244,7 @@ export default function Products() {
   const isOverflowSelected = overflowCategories.some((cat) => cat.slug === category);
 
   return (
-    <div className="container mx-auto px-4 py-16 mt-16">
+    <div className="w-full pb-16 pt-4 pl-3 pr-1 sm:pt-6 sm:pl-4 sm:pr-2 lg:pl-6 lg:pr-2 xl:pl-7 xl:pr-2 2xl:pl-8 2xl:pr-2">
       <StorefrontSeo
         title={
           category !== "all"
@@ -269,34 +269,33 @@ export default function Products() {
         }}
       />
 
-      <div className="mb-8">
-        <StorefrontBreadcrumbs
-          items={[
-            { label: "Home", href: "/" },
-            { label: "Shop" },
-          ]}
-        />
-      </div>
+      <div className="w-full">
+        <div className="mb-6">
+          <StorefrontBreadcrumbs
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Shop" },
+            ]}
+          />
+        </div>
 
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-black uppercase tracking-tight text-neutral-900 dark:text-neutral-100">
-          All Products
-        </h1>
-      </div>
+        <div className="mb-8 border-b border-border/70 pb-5 text-center">
+          <h1 className="text-3xl font-black uppercase tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-4xl">
+            All Products
+          </h1>
+          <p
+            style={{ fontFamily: "Roboto, sans-serif" }}
+            className="mt-2 text-[10px] font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-300"
+          >
+            Showing {filteredProducts.length} results
+          </p>
+        </div>
 
-      <div>
-        <div className="text-neutral-900 dark:text-neutral-100 min-h-[400px]">
+        <div className="min-h-[400px] text-neutral-900 dark:text-neutral-100">
           <div className="mb-10 space-y-5">
-            <p
-              style={{ fontFamily: "Roboto, sans-serif" }}
-              className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-400"
-            >
-              Showing {filteredProducts.length} results
-            </p>
-
             <div className="flex flex-col gap-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center">
               <div className="w-full overflow-x-auto scrollbar-hide md:col-start-2 md:w-auto md:max-w-full md:justify-self-center">
-                <div className="flex w-max min-w-full items-center gap-6 md:min-w-0 md:justify-center">
+                <div className="flex w-max min-w-full items-center gap-4 md:min-w-0 md:flex-wrap md:justify-center md:gap-5">
                   <button
                     onClick={() => setCategory("all")}
                     style={{ fontFamily: "Roboto, sans-serif" }}
@@ -371,19 +370,19 @@ export default function Products() {
                     <button
                       type="button"
                       style={{ fontFamily: "Roboto, sans-serif" }}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-[#1f3150]/45 bg-gradient-to-r from-[#1b2d49] via-[#000000] to-[#2a476f] px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f3f7ff] shadow-[0_10px_28px_rgba(22,40,73,0.34)] transition-all hover:brightness-105 dark:border-[#95afd9]/35 dark:from-[#18263e] dark:via-[#000000] dark:to-[#274264] dark:text-[#edf3ff]"
+                      className="inline-flex h-10 items-center gap-2 rounded-full border border-neutral-300 bg-white px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-900 shadow-sm transition-all hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
                     >
                       <ArrowDownWideNarrow className="h-3.5 w-3.5" />
                       <span>{SORT_LABELS[sortBy] ? `Sort: ${SORT_LABELS[sortBy]}` : "Sort By"}</span>
                       {activeFilterCount > 0 ? (
-                        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-[#f3f6ff] px-1.5 text-[9px] font-black tracking-normal text-[#1d3150]">
+                        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-neutral-100 px-1.5 text-[9px] font-black tracking-normal text-neutral-800 dark:bg-neutral-700 dark:text-neutral-100">
                           {activeFilterCount}
                         </span>
                       ) : null}
                       <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isSortMenuOpen ? "rotate-180" : ""}`} />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[18rem] rounded-xl border border-cyan-500/20 bg-white/95 p-3 shadow-[0_12px_32px_rgba(15,23,42,0.14)] backdrop-blur-sm dark:border-cyan-300/15 dark:bg-neutral-900/95 dark:shadow-[0_12px_32px_rgba(0,0,0,0.35)]">
+                  <DropdownMenuContent align="end" className="w-[18rem] rounded-xl border border-neutral-200 bg-white/95 p-3 shadow-[0_12px_32px_rgba(15,23,42,0.1)] backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/95 dark:shadow-[0_12px_32px_rgba(0,0,0,0.3)]">
                     <DropdownMenuLabel className="px-0 text-[10px] font-bold uppercase tracking-[0.22em] text-neutral-700 dark:text-neutral-200">
                       <span className="inline-flex items-center gap-1.5">
                         <Sparkles className="h-3.5 w-3.5 text-cyan-500" />
@@ -519,7 +518,7 @@ export default function Products() {
           ) : (
             <div>
               {filteredProducts.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 md:gap-3 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5">
                   {filteredProducts.map((product) => {
                     const hoverImage = getHoverImage(product);
                     const mainImage = product.imageUrl ?? hoverImage ?? "";
@@ -529,7 +528,8 @@ export default function Products() {
                           href={`/product/${product.id}?from=${encodeURIComponent(shopPath)}`}
                           className="group block"
                         >
-                        <div className="aspect-[3/4] overflow-hidden bg-white/[0.02] dark:bg-white/[0.04] mb-4 relative rounded-xl border border-black/[0.06] dark:border-white/[0.08]">
+                        <div className="mb-2">
+                          <div className="relative aspect-[3/5] overflow-hidden rounded-md border border-white/80 bg-zinc-50 dark:border-white/20 dark:bg-zinc-900/70">
                           <button
                             type="button"
                               onClick={(e) => {
@@ -564,6 +564,7 @@ export default function Products() {
                             alt={product.name}
                             className="absolute inset-0 h-full w-full object-cover opacity-0 group-hover:opacity-100 transition-none"
                           />
+                          </div>
                         </div>
                         <div className="space-y-1">
                           <h3
@@ -609,13 +610,15 @@ export default function Products() {
                 </div>
               )}
 
-              {/* Pagination */}
               {totalProducts > PAGE_SIZE && (
                 <div className="mt-12 flex items-center justify-center gap-2">
                   <button
-                    onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setPage((p) => Math.max(1, p - 1));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={page === 1}
-                    className="h-10 w-10 flex items-center justify-center rounded-full border border-border/60 text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
@@ -629,8 +632,11 @@ export default function Products() {
                     return (
                       <button
                         key={pageNum}
-                        onClick={() => { setPage(pageNum); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                        className={`h-10 w-10 flex items-center justify-center rounded-full text-sm font-medium transition-colors ${
+                        onClick={() => {
+                          setPage(pageNum);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-colors ${
                           pageNum === page
                             ? "bg-[#2C3E2D] text-white dark:bg-[#4ADE80] dark:text-[#1A251B]"
                             : "border border-border/60 text-foreground hover:bg-muted"
@@ -641,14 +647,18 @@ export default function Products() {
                     );
                   })}
                   <button
-                    onClick={() => { setPage((p) => Math.min(Math.ceil(totalProducts / PAGE_SIZE), p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setPage((p) => Math.min(Math.ceil(totalProducts / PAGE_SIZE), p + 1));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={page >= Math.ceil(totalProducts / PAGE_SIZE)}
-                    className="h-10 w-10 flex items-center justify-center rounded-full border border-border/60 text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
               )}
+
             </div>
           )}
         </div>

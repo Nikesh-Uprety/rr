@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Sparkles,
   Monitor,
+  Tablet,
   Smartphone,
   ArrowRightLeft,
   Trash2,
@@ -261,9 +262,10 @@ export default function Canvas() {
   const [activeTab, setActiveTab] = useState("templates");
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
+  const [pendingSelectionSectionId, setPendingSelectionSectionId] = useState<number | null>(null);
   const [draggedSectionId, setDraggedSectionId] = useState<number | null>(null);
   const [previewFontPreset, setPreviewFontPreset] = useState<StorefrontFontPreset>("inter");
-  const [previewViewport, setPreviewViewport] = useState<"desktop" | "mobile">("desktop");
+  const [previewViewport, setPreviewViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [draggedHeroSlideIndex, setDraggedHeroSlideIndex] = useState<number | null>(null);
   const [draggedCampaignImageIndex, setDraggedCampaignImageIndex] = useState<number | null>(null);
   const [openSectionGroups, setOpenSectionGroups] = useState<Record<string, boolean>>({
@@ -279,6 +281,7 @@ export default function Canvas() {
   const [savingSectionId, setSavingSectionId] = useState<number | null>(null);
   const [bootedPreviewViewports, setBootedPreviewViewports] = useState({
     desktop: false,
+    tablet: false,
     mobile: false,
   });
   const [previewLoaderVisible, setPreviewLoaderVisible] = useState(true);
@@ -439,8 +442,13 @@ export default function Canvas() {
       });
       return res.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (newSection: CanvasSection) => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "canvas", "sections", effectiveTemplateId] });
+      if (newSection?.id) {
+        setPendingSelectionSectionId(newSection.id);
+        setSelectedSectionId(newSection.id);
+      }
+      setActiveTab("sections");
       toast({
         title: "Section added",
         variant: "success",
@@ -483,9 +491,14 @@ export default function Canvas() {
       const res = await apiRequest("POST", `/api/admin/canvas/sections/${sectionId}/duplicate`);
       return res.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (duplicate: CanvasSection) => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "canvas", "sections", effectiveTemplateId] });
       await queryClient.invalidateQueries({ queryKey: ["page-config"] });
+      if (duplicate?.id) {
+        setPendingSelectionSectionId(duplicate.id);
+        setSelectedSectionId(duplicate.id);
+      }
+      setActiveTab("sections");
       toast({
         title: "Section duplicated",
         variant: "success",
@@ -541,6 +554,16 @@ export default function Canvas() {
     },
     onSuccess: async (asset) => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "canvas", "media-library"] });
+      if (!asset.url) {
+        toast({
+          title: "Upload finished without URL",
+          description: "The asset was uploaded but could not be inserted into the section.",
+          variant: "destructive",
+        });
+        setShowUploadProgress(false);
+        setUploadProgress(0);
+        return;
+      }
       applyPickedImage(asset.url);
       setUploadProgress(100);
       setTimeout(() => setShowUploadProgress(false), 700);
@@ -970,12 +993,21 @@ export default function Canvas() {
   useEffect(() => {
     if (!sortedSections.length) {
       setSelectedSectionId(null);
+      setPendingSelectionSectionId(null);
+      return;
+    }
+    if (pendingSelectionSectionId) {
+      const pendingExists = sortedSections.some((section) => section.id === pendingSelectionSectionId);
+      if (pendingExists) {
+        setSelectedSectionId(pendingSelectionSectionId);
+        setPendingSelectionSectionId(null);
+      }
       return;
     }
     if (!selectedSectionId || !sortedSections.some((section) => section.id === selectedSectionId)) {
       setSelectedSectionId(sortedSections[0].id);
     }
-  }, [selectedSectionId, sortedSections]);
+  }, [pendingSelectionSectionId, selectedSectionId, sortedSections]);
 
   useEffect(() => {
     if (!settings?.fontPreset) return;
@@ -1138,15 +1170,23 @@ export default function Canvas() {
           width: "106.383%",
           height: "calc(812px / 0.94)",
         }
-      : {
-          transform: "scale(0.88)",
-          width: "113.6364%",
-          height: "calc(1080px / 0.88)",
-        };
+      : previewViewport === "tablet"
+        ? {
+            transform: "scale(0.9)",
+            width: "111.1112%",
+            height: "calc(1024px / 0.9)",
+          }
+        : {
+            transform: "scale(0.88)",
+            width: "113.6364%",
+            height: "calc(1080px / 0.88)",
+          };
 
   const previewViewportShellClass =
     previewViewport === "mobile"
       ? "mx-auto w-[min(100%,390px)] rounded-[2.6rem] border border-black/10 bg-[#0b0b0d] p-3 shadow-[0_24px_64px_rgba(15,23,42,0.22)] dark:border-white/[0.10] dark:bg-black dark:shadow-[0_28px_72px_rgba(0,0,0,0.58)]"
+      : previewViewport === "tablet"
+        ? "mx-auto w-[min(100%,820px)] rounded-[2.2rem] border border-black/10 bg-[#111214] p-3 shadow-[0_24px_64px_rgba(15,23,42,0.18)] dark:border-white/[0.10] dark:bg-black dark:shadow-[0_28px_72px_rgba(0,0,0,0.58)]"
       : "h-[760px] overflow-hidden rounded-3xl border border-border/40 bg-white xl:h-[860px] 2xl:h-[920px] dark:border-white/[0.06] dark:bg-neutral-950";
 
   const previewCardTitle =
@@ -2262,6 +2302,17 @@ export default function Canvas() {
                           </Button>
                           <Button
                             type="button"
+                            variant={previewViewport === "tablet" ? "default" : "ghost"}
+                            size="sm"
+                            className="rounded-lg"
+                            onClick={() => setPreviewViewport("tablet")}
+                          >
+                            <Tablet className="mr-2 h-4 w-4" />
+                            Tablet
+                            <span className="ml-2 text-[11px] font-medium opacity-75">768px</span>
+                          </Button>
+                          <Button
+                            type="button"
                             variant={previewViewport === "mobile" ? "default" : "ghost"}
                             size="sm"
                             className="rounded-lg"
@@ -2347,6 +2398,8 @@ export default function Canvas() {
                               "relative overflow-hidden",
                               previewViewport === "mobile"
                                 ? "h-[760px] rounded-[2rem] bg-white dark:bg-neutral-950"
+                                : previewViewport === "tablet"
+                                  ? "h-[920px] rounded-[1.8rem] bg-white dark:bg-neutral-950"
                                 : "h-full",
                             )}
                           >
@@ -2403,6 +2456,56 @@ export default function Canvas() {
                                   </div>
                                 </div>
                               </>
+                            ) : previewViewport === "tablet" ? (
+                              <div className="relative h-full overflow-hidden rounded-[1.45rem] border border-black/10 bg-white dark:border-white/[0.08] dark:bg-neutral-950">
+                                <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center py-3">
+                                  <div className="h-1.5 w-20 rounded-full bg-black/10 dark:bg-white/15" />
+                                </div>
+                                <div className="relative origin-top-left" style={previewFrameStyle}>
+                                  {previewLoaderVisible ? (
+                                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#050505] text-white">
+                                      <div className="loader-content">
+                                        <div className="loader-logo whitespace-nowrap" aria-hidden="true">
+                                          RARE ATELIER
+                                        </div>
+                                        <div className="loader-bar-container">
+                                          <div
+                                            id="loader-progress"
+                                            style={{ width: `${previewBootProgress}%` }}
+                                          />
+                                        </div>
+                                        <div className="loader-status">Loading</div>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {renderablePreviewTemplates.map((template) => (
+                                    <iframe
+                                      key={`${template.id}-${previewKey}-${previewViewport}`}
+                                      src={buildPreviewUrl(template.id)}
+                                      title={`Canvas preview — ${template.name}`}
+                                      loading="eager"
+                                      onLoad={() => {
+                                        if (template.id === previewTemplateId) {
+                                          setPreviewBootProgress(100);
+                                          window.setTimeout(() => {
+                                            setBootedPreviewViewports((current) => ({
+                                              ...current,
+                                              [previewViewport]: true,
+                                            }));
+                                            setPreviewLoaderVisible(false);
+                                          }, 140);
+                                        }
+                                      }}
+                                      className={cn(
+                                        "absolute inset-0 h-full w-full border-0 transition-opacity duration-150",
+                                        template.id === previewTemplateId
+                                          ? "opacity-100"
+                                          : "pointer-events-none opacity-0",
+                                      )}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
                             ) : (
                               <div className="relative h-full origin-top-left" style={previewFrameStyle}>
                                 {previewLoaderVisible ? (
@@ -3927,16 +4030,16 @@ export default function Canvas() {
               </div>
             ) : mediaOptions.length ? (
               <div className="grid max-h-[60vh] gap-4 overflow-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
-                {mediaOptions.map((asset) => (
+                {mediaOptions.filter((asset) => Boolean(asset.url)).map((asset) => (
                   <button
                     key={asset.id}
                     type="button"
-                    onClick={() => applyPickedImage(asset.url)}
+                    onClick={() => applyPickedImage(asset.url!)}
                     className="overflow-hidden rounded-2xl border border-border/60 bg-card text-left transition-all hover:border-sky-400 hover:shadow-sm"
                   >
                     <div className="aspect-[4/3] overflow-hidden bg-muted/20">
                       <img
-                        src={asset.url}
+                        src={asset.url!}
                         alt={asset.filename ?? asset.publicId ?? "Library image"}
                         className="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.03]"
                       />

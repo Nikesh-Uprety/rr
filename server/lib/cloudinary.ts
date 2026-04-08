@@ -99,6 +99,10 @@ export async function uploadToCloudinary(
 export async function uploadMediaToCloudinary(
   buffer: Buffer,
   category: string,
+  options?: {
+    qualityMode?: "medium" | "high";
+    folderPath?: string | null;
+  },
 ): Promise<{ url: string; publicId: string }> {
   const maxWidths: Record<string, number> = {
     product: 2000,
@@ -109,17 +113,26 @@ export async function uploadMediaToCloudinary(
   };
 
   const width = maxWidths[category] ?? 2000;
+  const quality =
+    options?.qualityMode === "medium"
+      ? "auto:good"
+      : "auto:best";
+  const normalizedFolder =
+    options?.folderPath
+      ? options.folderPath.replace(/^\/+|\/+$/g, "")
+      : "";
+  const folderSuffix = normalizedFolder ? `/${normalizedFolder}` : "";
 
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder: `rare-np/media/${category}`,
+        folder: `rare-np/media/${category}${folderSuffix}`,
         format: "webp",
         transformation: [
           {
             width,
             crop: "limit",
-            quality: "auto:best",
+            quality,
             dpr: "auto",
             fetch_format: "auto",
           },

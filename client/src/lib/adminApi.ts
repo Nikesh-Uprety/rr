@@ -166,7 +166,7 @@ export async function deletePlatform(key: string): Promise<void> {
 
 export interface AdminImageAsset {
   id: string;
-  url: string;
+  url: string | null;
   provider: string;
   category: string;
   publicId: string | null;
@@ -174,6 +174,9 @@ export interface AdminImageAsset {
   bytes: number | null;
   width: number | null;
   height: number | null;
+  folderPath?: string | null;
+  assetType?: string | null;
+  expiresAt?: string | null;
   createdAt: string;
 }
 
@@ -201,6 +204,11 @@ export async function fetchAdminImages(params?: {
   category?: string;
   provider?: "local" | "cloudinary" | "tigris" | string;
   search?: string;
+  folderPath?: string | null;
+  assetType?: string;
+  expired?: boolean;
+  sortBy?: "createdAt" | "name" | "size";
+  sortDir?: "asc" | "desc";
   limit?: number;
   offset?: number;
 }): Promise<AdminImageAsset[]> {
@@ -208,6 +216,11 @@ export async function fetchAdminImages(params?: {
   if (params?.category) qs.set("category", params.category);
   if (params?.provider) qs.set("provider", params.provider);
   if (params?.search) qs.set("search", params.search);
+  if (params?.folderPath) qs.set("folderPath", params.folderPath);
+  if (params?.assetType) qs.set("assetType", params.assetType);
+  if (params?.expired !== undefined) qs.set("expired", String(params.expired));
+  if (params?.sortBy) qs.set("sortBy", params.sortBy);
+  if (params?.sortDir) qs.set("sortDir", params.sortDir);
   if (params?.limit) qs.set("limit", String(params.limit));
   if (params?.offset) qs.set("offset", String(params.offset));
   const res = await apiRequest("GET", `/api/admin/images?${qs.toString()}`);
@@ -219,6 +232,11 @@ export async function fetchAdminImagesPage(params?: {
   category?: string;
   provider?: "local" | "cloudinary" | "tigris" | string;
   search?: string;
+  folderPath?: string | null;
+  assetType?: string;
+  expired?: boolean;
+  sortBy?: "createdAt" | "name" | "size";
+  sortDir?: "asc" | "desc";
   limit?: number;
   offset?: number;
 }): Promise<{ data: AdminImageAsset[]; total: number }> {
@@ -226,6 +244,11 @@ export async function fetchAdminImagesPage(params?: {
   if (params?.category) qs.set("category", params.category);
   if (params?.provider) qs.set("provider", params.provider);
   if (params?.search) qs.set("search", params.search);
+  if (params?.folderPath) qs.set("folderPath", params.folderPath);
+  if (params?.assetType) qs.set("assetType", params.assetType);
+  if (params?.expired !== undefined) qs.set("expired", String(params.expired));
+  if (params?.sortBy) qs.set("sortBy", params.sortBy);
+  if (params?.sortDir) qs.set("sortDir", params.sortDir);
   if (params?.limit) qs.set("limit", String(params.limit));
   if (params?.offset) qs.set("offset", String(params.offset));
   const res = await apiRequest("GET", `/api/admin/images?${qs.toString()}`);
@@ -353,12 +376,18 @@ export async function uploadAdminImage(input: {
   file: File;
   category: string;
   provider: "local" | "cloudinary" | "tigris";
+  folderPath?: string | null;
+  expiresAt?: string | null;
+  qualityMode?: "medium" | "high";
   onProgress?: UploadProgressHandler;
 }): Promise<AdminImageAsset> {
   const form = new FormData();
   form.append("images", input.file);
   form.append("category", input.category);
   form.append("provider", input.provider);
+  if (input.folderPath) form.append("folderPath", input.folderPath);
+  if (input.expiresAt) form.append("expiresAt", input.expiresAt);
+  if (input.qualityMode) form.append("qualityMode", input.qualityMode);
 
   const json = await uploadWithProgress<
     { success?: boolean; data?: AdminImageAsset | AdminImageAsset[]; error?: string; message?: string }
@@ -376,6 +405,47 @@ export async function uploadAdminImage(input: {
 
 export async function deleteAdminImage(id: string): Promise<void> {
   const res = await apiRequest("DELETE", `/api/admin/images/${encodeURIComponent(id)}`);
+  const json = (await res.json()) as { success: boolean; error?: string };
+  if (!json.success) throw new Error(json.error || "Delete failed");
+}
+
+export async function updateAdminImageMeta(input: {
+  id: string;
+  folderPath?: string | null;
+  expiresAt?: string | null;
+}): Promise<AdminImageAsset> {
+  const res = await apiRequest("PATCH", `/api/admin/images/${encodeURIComponent(input.id)}`, {
+    folderPath: input.folderPath ?? null,
+    expiresAt: input.expiresAt ?? null,
+  });
+  const json = (await res.json()) as { success: boolean; data: AdminImageAsset };
+  return json.data;
+}
+
+export async function fetchAdminFolders(params?: {
+  category?: string;
+  provider?: string;
+}): Promise<Array<{ path: string; count: number }>> {
+  const qs = new URLSearchParams();
+  if (params?.category) qs.set("category", params.category);
+  if (params?.provider) qs.set("provider", params.provider);
+  const res = await apiRequest("GET", `/api/admin/folders?${qs.toString()}`);
+  const json = (await res.json()) as { success: boolean; data: Array<{ path: string; count: number }> };
+  return json.data ?? [];
+}
+
+export async function createAdminFolder(input: {
+  folderPath: string;
+  category: string;
+  provider?: string;
+}): Promise<AdminImageAsset> {
+  const res = await apiRequest("POST", "/api/admin/folders", input);
+  const json = (await res.json()) as { success: boolean; data: AdminImageAsset };
+  return json.data;
+}
+
+export async function deleteAdminFolder(id: string): Promise<void> {
+  const res = await apiRequest("DELETE", `/api/admin/folders/${encodeURIComponent(id)}`);
   const json = (await res.json()) as { success: boolean; error?: string };
   if (!json.success) throw new Error(json.error || "Delete failed");
 }
@@ -461,8 +531,14 @@ export async function updateAdminProduct(
   return json.data;
 }
 
-export async function deleteAdminProduct(id: string): Promise<void> {
-  await apiRequest("DELETE", `/api/admin/products/${id}`);
+export async function deleteAdminProduct(
+  id: string,
+  options?: { permanent?: boolean },
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (options?.permanent) params.set("permanent", "true");
+  const url = `/api/admin/products/${id}${params.toString() ? `?${params.toString()}` : ""}`;
+  await apiRequest("DELETE", url);
 }
 
 export async function toggleProductActive(id: string): Promise<ProductApi> {
@@ -974,7 +1050,7 @@ export interface PromoCode {
   usedCount: number;
   active: boolean;
   expiresAt: string | null;
-  applicableProductIds: number[] | null;
+  applicableProductIds: string[] | null;
   durationPreset: string | null;
   createdAt: string;
 }
@@ -990,7 +1066,7 @@ export async function createAdminPromoCode(data: {
   discountPct: number;
   maxUses: number;
   expiresAt?: string | null;
-  applicableProductIds?: number[] | null;
+  applicableProductIds?: string[] | null;
   durationPreset?: string | null;
 }): Promise<PromoCode> {
   const res = await apiRequest("POST", "/api/admin/promo-codes", data);

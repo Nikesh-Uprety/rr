@@ -325,9 +325,9 @@ function NikeshDesignFeatured({
   const hint = config?.hint ?? "Drag to explore →";
 
   return (
-    <section className="products-wrap py-12 sm:py-20" style={{ background: "var(--bg2)" }}>
+    <section className="products-wrap py-10 sm:py-14" style={{ background: "var(--bg2)" }}>
       <div className="w-full px-2 sm:px-3 lg:px-4 xl:px-6">
-        <div className="products-head reveal mb-8 flex flex-col gap-3 md:mb-12 md:flex-row md:items-end md:justify-between">
+        <div className="products-head reveal mb-7 flex flex-col gap-2.5 md:mb-10 md:flex-row md:items-end md:justify-between">
           <div>
             <p
               className="text-[10px] uppercase tracking-[0.28em] text-[var(--gold)]"
@@ -348,8 +348,8 @@ function NikeshDesignFeatured({
           </div>
         </div>
 
-        <div className="products-scroll overflow-x-auto pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:overflow-visible md:pb-0">
-          <div className="grid min-w-full grid-cols-2 gap-3 px-1 md:flex md:min-w-max md:gap-5">
+        <div className="products-scroll relative left-1/2 w-screen -translate-x-1/2 overflow-x-auto pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:overflow-visible md:pb-0">
+          <div className="grid min-w-full grid-cols-2 gap-3 px-3 sm:px-4 md:flex md:min-w-max md:gap-5 md:px-6 lg:px-8 xl:px-10">
             {products.slice(0, 6).map((product: any, index: number) => {
               const colors = (() => {
                 try {
@@ -372,8 +372,8 @@ function NikeshDesignFeatured({
                   className="group p-card block w-full md:w-[clamp(320px,33vw,500px)] md:shrink-0"
                   style={{ scrollSnapAlign: "start" }}
                 >
-                  <div className="relative overflow-hidden border border-[var(--border)] bg-black/20">
-                    <div className="aspect-[3/4] overflow-hidden">
+                  <div className="relative overflow-hidden rounded-[1.15rem] border border-white/85 bg-white p-1.5 shadow-[0_20px_44px_-28px_rgba(15,23,42,0.34)] dark:border-white/14 dark:bg-[#121212]">
+                    <div className="aspect-[3/4] overflow-hidden rounded-[0.95rem] border border-white/15 bg-black/20">
                       <img
                         src={product.imageUrl ?? ""}
                         alt={product.name}
@@ -408,7 +408,7 @@ function NikeshDesignFeatured({
                       </div>
                     </div>
                   </div>
-                  <div className="pt-4">
+                  <div className="pt-3.5">
                     <h3 className="text-lg italic" style={{ fontFamily: "var(--font-display)", color: "var(--fg)" }}>
                       {product.name}
                     </h3>
@@ -435,7 +435,7 @@ function NikeshDesignFeatured({
         </div>
 
         <p
-          className="mt-6 flex items-center justify-end gap-3 text-[10px] uppercase tracking-[0.2em] text-[var(--fg-dim)]"
+          className="mt-5 flex items-center justify-end gap-3 pr-2 text-[10px] uppercase tracking-[0.2em] text-[var(--fg-dim)]"
           style={{ fontFamily: "var(--font-mono)" }}
         >
           {hint}
@@ -479,9 +479,9 @@ export default function FeaturedCollection({
   }
 
   return (
-    <section className="py-12 sm:py-20">
+    <section className="py-10 sm:py-14">
       <div className="w-full px-2 sm:px-3 lg:px-4 xl:px-6">
-        <div className="mb-8 flex items-end justify-between md:mb-16">
+        <div className="mb-7 flex items-end justify-between md:mb-10">
         <div>
           <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2">
             Editor's Choice
@@ -498,7 +498,7 @@ export default function FeaturedCollection({
 
         {/* Lookbook Carousel - Clickable images with gallery */}
         <div
-          className="group/carousel relative mb-10 aspect-[4/5] overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-900 sm:aspect-[16/10] md:mb-16 md:aspect-[2/1] xl:aspect-[21/9] cursor-grab active:cursor-grabbing select-none"
+          className="group/carousel relative left-1/2 mb-8 aspect-[4/5] w-screen -translate-x-1/2 overflow-hidden bg-neutral-100 dark:bg-neutral-900 sm:aspect-[16/10] md:mb-10 md:aspect-[2/1] xl:aspect-[21/9] cursor-grab active:cursor-grabbing select-none"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -569,7 +569,7 @@ export default function FeaturedCollection({
         </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-8">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-6">
           {products.map((product, i) => (
             <FeaturedProductCard key={product.id} product={product} index={i} />
           ))}

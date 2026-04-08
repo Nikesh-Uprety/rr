@@ -389,6 +389,7 @@ export default function AdminLayout({
             {sidebarNavItems.map((item) => {
               const isActive = pathname === item.href;
               const inventoryBadge = item.href === "/admin/inventory";
+              const navBadge = item.badge;
               return (
                 <Link
                   key={item.href}
@@ -402,6 +403,11 @@ export default function AdminLayout({
                 >
                   <item.icon className="h-4 w-4" />
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {navBadge ? (
+                    <span className="ml-auto inline-flex rounded-full border border-amber-700/50 bg-amber-500 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-black dark:border-amber-300/70 dark:bg-amber-300 dark:text-black">
+                      {navBadge}
+                    </span>
+                  ) : null}
                   {inventoryBadge ? (
                     <span className="ml-auto inline-flex rounded-full border border-emerald-700/50 bg-emerald-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-emerald-500/70 dark:bg-emerald-500">
                       NEW
@@ -489,6 +495,7 @@ export default function AdminLayout({
               {sidebarNavItems.map((item) => {
                 const isActive = pathname === item.href;
                 const isInventoryItem = item.href === "/admin/inventory";
+                const navBadge = item.badge;
                 const count = getUnreadCountByType(item.type);
                 const isCollapsedActive = !isVisuallyExpanded && isActive;
                 return (
@@ -535,6 +542,11 @@ export default function AdminLayout({
                         >
                           <span>{item.label}</span>
                         </span>
+                        {navBadge && isVisuallyExpanded ? (
+                          <span className="inline-flex rounded-full border border-amber-700/50 bg-amber-500 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-black dark:border-amber-300/70 dark:bg-amber-300 dark:text-black">
+                            {navBadge}
+                          </span>
+                        ) : null}
                         {isInventoryItem && isVisuallyExpanded ? (
                           <span className="ml-auto inline-flex rounded-full border border-emerald-700/50 bg-emerald-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-emerald-500/70 dark:bg-emerald-500">
                             NEW

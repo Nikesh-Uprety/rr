@@ -75,10 +75,8 @@ export class S3StorageService implements StorageService {
 
   async uploadFile(file: Buffer, fileName: string, contentType?: string): Promise<string> {
     try {
-      const url = await this.s3Uploader.uploadFile(file, fileName, contentType);
-      // Return URL without full endpoint for API responses
-      const endpoint = this.config.endpoint.replace('https://', '').replace('.storageapi.dev', '');
-      return `https://${endpoint}/${this.config.bucket}/${fileName}`;
+      await this.s3Uploader.uploadFile(file, fileName, contentType);
+      return this.s3Uploader.getPublicUrl(fileName);
     } catch (error) {
       console.error('S3 upload error:', error);
       throw error;
@@ -95,8 +93,7 @@ export class S3StorageService implements StorageService {
   }
 
   getPublicUrl(fileName: string): string {
-    const endpoint = this.config.endpoint.replace(/\/+$/, "");
-    return `${endpoint}/${this.config.bucket}/${fileName}`;
+    return this.s3Uploader.getPublicUrl(fileName);
   }
 }
 

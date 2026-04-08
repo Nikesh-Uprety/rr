@@ -7,6 +7,7 @@ import {
   Megaphone,
   MessageSquare,
   Package,
+  Folder,
   Receipt,
   Settings,
   Shirt,
@@ -30,6 +31,7 @@ export interface AdminNavItem {
   label: string;
   type: string;
   icon: LucideIcon;
+  badge?: string;
 }
 
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
@@ -47,7 +49,8 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { page: "messages", href: "/admin/messages", icon: MessageSquare, label: "Customer Care", type: "contact" },
   { page: "promo-codes", href: "/admin/promo-codes", icon: Tags, label: "Promo Codes", type: "promo" },
   { page: "marketing", href: "/admin/marketing", icon: Megaphone, label: "Marketing", type: "marketing" },
-  { page: "images", href: "/admin/images", icon: Images, label: "Images", type: "media" },
+  { page: "buckets", href: "/admin/buckets", icon: Folder, label: "Buckets", type: "media", badge: "BETA" },
+  { page: "images", href: "/admin/images", icon: Images, label: "Images", type: "media", badge: "BETA" },
   {
     page: "storefront-images",
     href: "/admin/storefront-images",
@@ -72,6 +75,7 @@ const ADMIN_ROUTE_BY_PAGE: Record<AdminPageKey, string> = {
   bills: "/admin/bills",
   pos: "/admin/pos",
   "promo-codes": "/admin/promo-codes",
+  buckets: "/admin/buckets",
   images: "/admin/images",
   "storefront-images": "/admin/storefront-images",
   "landing-page": "/admin/canvas",
@@ -89,6 +93,7 @@ const ADMIN_DEFAULT_PAGE_ORDER: AdminPageKey[] = [
   "analytics",
   "store-users",
   "messages",
+  "buckets",
   "images",
   "storefront-images",
   "landing-page",

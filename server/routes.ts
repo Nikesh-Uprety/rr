@@ -24,7 +24,7 @@ import {
 
 
 
-import { and, desc, eq, gte, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import {
     bills,
@@ -969,8 +969,9 @@ ${Array.from(uniqueEntries.entries())
   app.use("/api/admin/pos/session", requireAdminPageAccess("pos"));
   app.use("/api/admin/logs", requireAdminPageAccess("logs"));
   app.use("/api/admin/promo-codes", requireAdminPageAccess("promo-codes"));
-  app.use("/api/admin/images", requireAdminPageAccess("images"));
-  app.use("/api/admin/media", requireAdminPageAccess("images"));
+  app.use("/api/admin/images", requireAdminPageAccess(["images", "buckets"]));
+  app.use("/api/admin/media", requireAdminPageAccess(["images", "buckets"]));
+  app.use("/api/admin/folders", requireAdminPageAccess("buckets"));
   app.use("/api/admin/storefront-image-library", requireAdminPageAccess("storefront-images"));
 
   // GET /api/public/bills/:billNumber — public bill view (no auth required)
@@ -2255,6 +2256,46 @@ ${Array.from(uniqueEntries.entries())
     }
   });
 
+  app.get("/api/public/media", async (req: Request, res: Response) => {
+    try {
+      const category = typeof req.query.category === "string" ? req.query.category : "";
+      if (!category) {
+        return res.status(400).json({ success: false, error: "Missing category" });
+      }
+      const provider = typeof req.query.provider === "string" ? req.query.provider : null;
+      const limitParam = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 0;
+      const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 12) : 6;
+      const now = new Date();
+
+      const filters = [
+        eq(mediaAssets.category, category),
+        eq(mediaAssets.assetType, "file"),
+        or(isNull(mediaAssets.expiresAt), gte(mediaAssets.expiresAt, now)),
+        sql`${mediaAssets.url} is not null`,
+      ];
+      if (provider) {
+        filters.push(eq(mediaAssets.provider, provider));
+      }
+
+      const assets = await db
+        .select({
+          id: mediaAssets.id,
+          url: mediaAssets.url,
+          filename: mediaAssets.filename,
+          createdAt: mediaAssets.createdAt,
+        })
+        .from(mediaAssets)
+        .where(and(...filters))
+        .orderBy(desc(mediaAssets.createdAt))
+        .limit(limit);
+
+      return res.json({ success: true, data: assets });
+    } catch (err) {
+      console.error("Error in GET /api/public/media", err);
+      return res.status(500).json({ success: false, error: "Failed to load media" });
+    }
+  });
+
   app.get("/api/public/sitemap.xml", async (_req: Request, res: Response) => {
     try {
       const baseUrl = process.env.SITE_URL || "https://rare-np-production.up.railway.app";
@@ -2771,14 +2812,14 @@ ${Array.from(uniqueEntries.entries())
         const now = new Date();
         const cartProductIds = new Set(
           items
-            .map((it: any) => Number(it.productId))
-            .filter((n: number) => Number.isFinite(n)),
+            .map((it: any) => String(it.productId))
+            .filter((id: string) => id.length > 0),
         );
 
         const matchesApplicableProducts =
           promo?.applicableProductIds == null
             ? true
-          : promo.applicableProductIds.some((pid: number) =>
+          : promo.applicableProductIds.some((pid: string) =>
                 cartProductIds.has(pid),
               );
         if (
@@ -3630,6 +3671,13 @@ ${Array.from(uniqueEntries.entries())
           .from(siteAssets)
           .where(eq(siteAssets.section, section));
 
+        if (!asset.url) {
+          return res.status(500).json({
+            success: false,
+            error: "Failed to resolve uploaded image URL",
+          });
+        }
+
         const [created] = await db
           .insert(siteAssets)
           .values({
@@ -4320,13 +4368,22 @@ ${Array.from(uniqueEntries.entries())
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        await storage.deleteProduct(req.params.id as string);
-        return res.json({ success: true });
+        const permanent = getQueryParam(req.query.permanent) === "true";
+        await storage.deleteProduct(req.params.id as string, { permanent });
+        return res.json({
+          success: true,
+          action: permanent ? "deleted" : "archived",
+        });
       } catch (err) {
         console.error("Error in DELETE /api/admin/products/:id", err);
         return res
           .status(500)
-          .json({ success: false, error: "Failed to delete product" });
+          .json({
+            success: false,
+            error: getQueryParam(req.query.permanent) === "true"
+              ? "Failed to permanently delete product"
+              : "Failed to archive product",
+          });
       }
     },
   );
@@ -4342,11 +4399,36 @@ ${Array.from(uniqueEntries.entries())
 
         const [product] = await db.select().from(products).where(eq(products.id, id)).limit(1);
         if (!product) return res.status(404).json({ success: false, error: "Product not found" });
+
+        const archivedPrefix = "__archived__::";
+        const isArchived =
+          product.category === "__archived__" ||
+          (typeof product.category === "string" && product.category.startsWith(archivedPrefix));
+
         if (!product.isActive && Number(product.stock ?? 0) <= 0) {
           return res.status(400).json({
             success: false,
             error: "Cannot activate a product with zero stock",
           });
+        }
+
+        if (isArchived) {
+          const restoredCategory =
+            typeof product.category === "string" && product.category.startsWith(archivedPrefix)
+              ? product.category.slice(archivedPrefix.length).trim() || null
+              : null;
+
+          const [updated] = await db
+            .update(products)
+            .set({
+              category: restoredCategory,
+              isActive: true,
+              updatedAt: new Date(),
+            })
+            .where(eq(products.id, id))
+            .returning();
+
+          return res.json({ success: true, data: updated });
         }
 
         const [updated] = await db
@@ -8188,7 +8270,7 @@ ${Array.from(uniqueEntries.entries())
     type: z.string().optional(),
     maxUses: z.coerce.number().int().min(1).optional(),
     active: z.boolean().optional(),
-    applicableProductIds: z.array(z.coerce.number().int()).optional().nullable(),
+    applicableProductIds: z.array(z.string().min(1)).optional().nullable(),
     expiresAt: z.string().optional().nullable(),
     durationPreset: z.string().optional().nullable(), // 'none' | '1day' | '1week' | 'custom'
   });
@@ -8401,11 +8483,11 @@ ${Array.from(uniqueEntries.entries())
       if (promo.applicableProductIds) {
         const cartProductIds = new Set(
           req.body.items
-            .map((it: any) => Number(it.productId))
-            .filter((n: number) => Number.isFinite(n)),
+            .map((it: any) => String(it.productId))
+            .filter((id: string) => id.length > 0),
         );
 
-        const matches = promo.applicableProductIds.some((pid: number) =>
+        const matches = promo.applicableProductIds.some((pid: string) =>
           cartProductIds.has(pid),
         );
 
@@ -8452,6 +8534,7 @@ ${Array.from(uniqueEntries.entries())
 
       const latestByCategory = new Map<string, string>();
       for (const row of rows) {
+        if (!row.url) continue;
         if (!latestByCategory.has(row.category)) {
           latestByCategory.set(row.category, row.url);
         }
@@ -8500,6 +8583,7 @@ ${Array.from(uniqueEntries.entries())
         { id: string; url: string; createdAt: Date | null }
       >();
       for (const row of rows) {
+        if (!row.url) continue;
         if (!latestByCategory.has(row.category)) {
           latestByCategory.set(row.category, {
             id: row.id,
@@ -8561,6 +8645,10 @@ ${Array.from(uniqueEntries.entries())
         }
 
         const category = PAYMENT_QR_CATEGORIES[provider];
+        if (!source.url) {
+          return res.status(400).json({ success: false, error: "Selected image has no URL" });
+        }
+
         const [created] = await db
           .insert(mediaAssets)
           .values({
@@ -8593,8 +8681,18 @@ ${Array.from(uniqueEntries.entries())
       const category = getQueryParam(req.query.category);
       const provider = getQueryParam(req.query.provider);
       const search = getQueryParam(req.query.search);
+      const folderPathParam = getQueryParam(req.query.folderPath);
+      const assetTypeParam = getQueryParam(req.query.assetType);
+      const expiredParam = getQueryParam(req.query.expired);
+      const sortBy = getQueryParam(req.query.sortBy) ?? "createdAt";
+      const sortDir = (getQueryParam(req.query.sortDir) ?? "desc").toLowerCase() === "asc" ? "asc" : "desc";
       const limit = Math.min(200, Math.max(1, Number(getQueryParam(req.query.limit) ?? "60") || 60));
       const offset = Math.max(0, Number(getQueryParam(req.query.offset) ?? "0") || 0);
+      const normalizedFolderPath =
+        folderPathParam && folderPathParam !== "root" && folderPathParam !== "/"
+          ? folderPathParam.replace(/^\/+|\/+$/g, "")
+          : null;
+      const assetType = assetTypeParam && assetTypeParam.trim().length > 0 ? assetTypeParam : "file";
 
       const categoryCondition =
         category === PAYMENT_QR_CATEGORIES.all
@@ -8611,6 +8709,10 @@ ${Array.from(uniqueEntries.entries())
       const conditions = [
         categoryCondition,
         provider ? eq(mediaAssets.provider, provider) : sql`true`,
+        assetType ? eq(mediaAssets.assetType, assetType) : sql`true`,
+        normalizedFolderPath === null
+          ? sql`true`
+          : eq(mediaAssets.folderPath, normalizedFolderPath),
       ];
 
       if (search) {
@@ -8625,6 +8727,12 @@ ${Array.from(uniqueEntries.entries())
         }
       }
 
+      if (expiredParam === "true") {
+        conditions.push(sql`${mediaAssets.expiresAt} IS NOT NULL AND ${mediaAssets.expiresAt} < ${new Date()}`);
+      } else if (expiredParam === "false") {
+        conditions.push(sql`${mediaAssets.expiresAt} IS NULL OR ${mediaAssets.expiresAt} >= ${new Date()}`);
+      }
+
       const where = and(...conditions);
 
       const [countRow] = await db
@@ -8632,11 +8740,18 @@ ${Array.from(uniqueEntries.entries())
         .from(mediaAssets)
         .where(where);
 
+      const sortColumn =
+        sortBy === "name"
+          ? sql`lower(${mediaAssets.filename})`
+          : sortBy === "size"
+            ? mediaAssets.bytes
+            : mediaAssets.createdAt;
+
       const rows = await db
         .select()
         .from(mediaAssets)
         .where(where)
-        .orderBy(desc(mediaAssets.createdAt))
+        .orderBy(sortDir === "asc" ? asc(sortColumn) : desc(sortColumn))
         .limit(limit)
         .offset(offset);
 
@@ -8663,6 +8778,144 @@ ${Array.from(uniqueEntries.entries())
       });
     } catch (err) {
       handleApiError(res, err, "GET /api/admin/storefront-image-library");
+    }
+  });
+
+  app.get("/api/admin/folders", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const category = getQueryParam(req.query.category);
+      const provider = getQueryParam(req.query.provider);
+
+      const baseConditions = [
+        category ? eq(mediaAssets.category, category) : sql`true`,
+        provider ? eq(mediaAssets.provider, provider) : sql`true`,
+      ];
+
+      const fileRows = await db
+        .select({
+          path: mediaAssets.folderPath,
+          count: sql<number>`count(*)`,
+        })
+        .from(mediaAssets)
+        .where(and(eq(mediaAssets.assetType, "file"), isNotNull(mediaAssets.folderPath), ...baseConditions))
+        .groupBy(mediaAssets.folderPath);
+
+      const folderRows = await db
+        .select({
+          path: mediaAssets.folderPath,
+        })
+        .from(mediaAssets)
+        .where(and(eq(mediaAssets.assetType, "folder"), isNotNull(mediaAssets.folderPath), ...baseConditions));
+
+      const map = new Map<string, number>();
+      for (const row of fileRows) {
+        if (row.path) map.set(row.path, Number(row.count ?? 0));
+      }
+      for (const row of folderRows) {
+        if (row.path && !map.has(row.path)) map.set(row.path, 0);
+      }
+
+      const data = Array.from(map.entries())
+        .map(([path, count]) => ({ path, count }))
+        .sort((a, b) => a.path.localeCompare(b.path));
+
+      return res.json({ success: true, data });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/admin/folders");
+    }
+  });
+
+  app.post(
+    "/api/admin/folders",
+    requireAdmin,
+    validateRequest(
+      z.object({
+        folderPath: z.string().min(1),
+        category: z.string().min(1),
+        provider: z.string().optional(),
+      }),
+    ),
+    async (req: Request, res: Response) => {
+      try {
+        const { folderPath, category, provider } = req.body as {
+          folderPath: string;
+          category: string;
+          provider?: string;
+        };
+        const normalized = folderPath.replace(/^\/+|\/+$/g, "");
+
+        const [existing] = await db
+          .select()
+          .from(mediaAssets)
+          .where(
+            and(
+              eq(mediaAssets.assetType, "folder"),
+              eq(mediaAssets.folderPath, normalized),
+              eq(mediaAssets.category, category),
+            ),
+          )
+          .limit(1);
+        if (existing) return res.json({ success: true, data: existing });
+
+        const [created] = await db
+          .insert(mediaAssets)
+          .values({
+            url: null,
+            provider: provider ?? "folder",
+            category,
+            publicId: null,
+            filename: normalized.split("/").pop() ?? normalized,
+            bytes: null,
+            width: null,
+            height: null,
+            folderPath: normalized,
+            assetType: "folder",
+            expiresAt: null,
+          })
+          .returning();
+
+        return res.json({ success: true, data: created });
+      } catch (err) {
+        handleApiError(res, err, "POST /api/admin/folders");
+      }
+    },
+  );
+
+  app.delete("/api/admin/folders/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = getQueryParam(req.params.id);
+      if (!id) return sendError(res, "Invalid id", undefined, 400);
+
+      const [folder] = await db
+        .select()
+        .from(mediaAssets)
+        .where(eq(mediaAssets.id, id))
+        .limit(1);
+
+      if (!folder || folder.assetType !== "folder") {
+        return res.status(404).json({ success: false, error: "Folder not found" });
+      }
+
+      const folderPath = folder.folderPath ?? "";
+      const prefix = `${folderPath}/%`;
+      const [countRow] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(mediaAssets)
+        .where(
+          and(
+            eq(mediaAssets.assetType, "file"),
+            or(eq(mediaAssets.folderPath, folderPath), ilike(mediaAssets.folderPath, prefix)),
+          ),
+        );
+
+      if (Number(countRow?.count ?? 0) > 0) {
+        return res.status(409).json({ success: false, error: "Folder not empty" });
+      }
+
+      await db.delete(mediaAssets).where(eq(mediaAssets.id, id));
+      return res.json({ success: true });
+    } catch (err) {
+      handleApiError(res, err, "DELETE /api/admin/folders/:id");
     }
   });
 
@@ -8702,6 +8955,11 @@ ${Array.from(uniqueEntries.entries())
       try {
         const category = String((req.body as any)?.category || "product");
         const provider = String((req.body as any)?.provider || "local");
+        const folderPathRaw = String((req.body as any)?.folderPath || "");
+        const expiresAtRaw = (req.body as any)?.expiresAt;
+        const qualityMode = String((req.body as any)?.qualityMode || "").toLowerCase();
+        const normalizedFolderPath = folderPathRaw ? folderPathRaw.replace(/^\/+|\/+$/g, "") : null;
+        const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : null;
 
         const files = (req as any).files as Express.Multer.File[] | undefined;
         if (!files || files.length === 0) {
@@ -8718,11 +8976,24 @@ ${Array.from(uniqueEntries.entries())
               category,
               cleanedName
             );
-            results.push(asset);
+            const [row] = await db
+              .update(mediaAssets)
+              .set({
+                folderPath: normalizedFolderPath,
+                assetType: "file",
+                expiresAt,
+              })
+              .where(eq(mediaAssets.id, asset.id))
+              .returning();
+            results.push(row ?? asset);
           } else if (provider === "tigris") {
-            const fileName = `media/${category}/${Date.now()}_${cleanedName.replace(/\.[^.]+$/, "")}.webp`;
+            const folderPrefix = normalizedFolderPath ? `${normalizedFolderPath}/` : "";
+            const fileName = `media/${category}/${folderPrefix}${Date.now()}_${cleanedName.replace(/\.[^.]+$/, "")}.webp`;
             const webpBuffer = await sharp(file.buffer)
-              .webp({ quality: 85, effort: 4 })
+              .webp({
+                quality: qualityMode === "high" ? 92 : 85,
+                effort: 4,
+              })
               .toBuffer();
             const uploadedUrl = await storageService.uploadFile(
               webpBuffer,
@@ -8738,11 +9009,17 @@ ${Array.from(uniqueEntries.entries())
                 publicId: fileName,
                 filename: cleanedName,
                 bytes: webpBuffer.byteLength,
+                folderPath: normalizedFolderPath,
+                assetType: "file",
+                expiresAt,
               })
               .returning();
             results.push(row);
           } else {
-            const uploaded = await uploadMediaToCloudinary(file.buffer, category);
+            const uploaded = await uploadMediaToCloudinary(file.buffer, category, {
+              qualityMode: qualityMode === "medium" ? "medium" : "high",
+              folderPath: normalizedFolderPath,
+            });
             const [row] = await db
               .insert(mediaAssets)
               .values({
@@ -8752,6 +9029,9 @@ ${Array.from(uniqueEntries.entries())
                 publicId: uploaded.publicId,
                 filename: cleanedName,
                 bytes: file.size ?? null,
+                folderPath: normalizedFolderPath,
+                assetType: "file",
+                expiresAt,
               })
               .returning();
             results.push(row);
@@ -8790,16 +9070,21 @@ ${Array.from(uniqueEntries.entries())
       const [asset] = await db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).limit(1);
       if (!asset) return res.status(404).json({ success: false, error: "Not found" });
 
+      if (asset.assetType === "folder") {
+        await db.delete(mediaAssets).where(eq(mediaAssets.id, id));
+        return res.json({ success: true });
+      }
+
       if (asset.provider === "cloudinary" && asset.publicId) {
         await deleteFromCloudinary(asset.publicId);
       } else if (asset.provider === "local") {
-        await deleteLocalImage(asset.url);
+        if (asset.url) await deleteLocalImage(asset.url);
       } else if (asset.provider === "tigris") {
         const key =
           asset.publicId ||
           (() => {
             try {
-              const u = new URL(asset.url);
+              const u = new URL(asset.url ?? "");
               return u.pathname.split("/").slice(2).join("/");
             } catch {
               return "";
@@ -8816,6 +9101,47 @@ ${Array.from(uniqueEntries.entries())
       handleApiError(res, err, "DELETE /api/admin/images/:id");
     }
   });
+
+  app.patch(
+    "/api/admin/images/:id",
+    requireAdmin,
+    validateRequest(
+      z.object({
+        folderPath: z.string().optional().nullable(),
+        expiresAt: z.string().optional().nullable(),
+      }),
+    ),
+    async (req: Request, res: Response) => {
+      try {
+        const id = getQueryParam(req.params.id);
+        if (!id) return sendError(res, "Invalid id", undefined, 400);
+
+        const { folderPath, expiresAt } = req.body as {
+          folderPath?: string | null;
+          expiresAt?: string | null;
+        };
+
+        const normalizedFolderPath =
+          folderPath === null || folderPath === undefined || folderPath === ""
+            ? null
+            : folderPath.replace(/^\/+|\/+$/g, "");
+        const resolvedExpiresAt = expiresAt ? new Date(expiresAt) : null;
+
+        const [updated] = await db
+          .update(mediaAssets)
+          .set({
+            folderPath: normalizedFolderPath,
+            expiresAt: resolvedExpiresAt,
+          })
+          .where(eq(mediaAssets.id, id))
+          .returning();
+
+        return res.json({ success: true, data: updated });
+      } catch (err) {
+        handleApiError(res, err, "PATCH /api/admin/images/:id");
+      }
+    },
+  );
 
   app.get("/api/admin/media", requireAdmin, async (_req, res) => {
     try {

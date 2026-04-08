@@ -27,7 +27,7 @@ const DEFAULT_FAQ_ITEMS: FaqItem[] = [
   {
     title: "Can I modify or cancel my order?",
     content:
-      "Yes, before shipping. Once an order is processed and dispatched, edits and cancellations are no longer available.",
+      "Yes, eligible recent orders can be cancelled from your customer-side recent order actions before shipping. Once an order has been processed for dispatch or already shipped, modification and cancellation are no longer available.",
   },
   {
     title: "What payment methods do you accept?",
@@ -85,14 +85,14 @@ export default function FaqSection({ config }: FaqSectionProps) {
   const items = getFaqItems(config);
 
   return (
-    <section className="border-t border-border/60 bg-background py-20 md:py-24" data-testid="home-faq-section">
+    <section className="border-t border-border/60 bg-background py-14 md:py-18" data-testid="home-faq-section">
       <div className="container mx-auto max-w-5xl px-4">
-        <div className="mb-10 text-center">
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.32em] text-muted-foreground">
+        <div className="mb-8 text-center">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.32em] text-muted-foreground">
             Support
           </p>
           <h2 className="text-3xl font-black uppercase tracking-tight md:text-4xl">{heading}</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-sm text-muted-foreground">{subheading}</p>
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground">{subheading}</p>
         </div>
 
         <Accordion type="single" collapsible className="w-full rounded-2xl border border-border bg-card/70 p-2">
@@ -117,4 +117,3 @@ export default function FaqSection({ config }: FaqSectionProps) {
     </section>
   );
 }
-

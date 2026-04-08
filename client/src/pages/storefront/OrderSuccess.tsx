@@ -196,7 +196,7 @@ export default function OrderSuccess() {
   };
 
   return (
-    <div className="order-confirmation-page container mx-auto px-4 pt-6 pb-10 lg:pt-10 lg:pb-16 max-w-5xl">
+    <div className="order-confirmation-page container mx-auto max-w-5xl px-4 pb-10 pt-4 sm:pt-6 lg:pb-16">
       <StorefrontSeo
         title="Order Confirmed | Rare Atelier"
         description={`Your order ${order.id.slice(0, 8)}… has been confirmed. View your bill and delivery details.`}

@@ -46,6 +46,39 @@ import { meiliClient, PRODUCT_INDEX } from "./lib/meilisearch";
 import { broadcastNotification } from "./websocket";
 
 const ARCHIVED_PRODUCT_CATEGORY = "__archived__";
+const ARCHIVED_PRODUCT_CATEGORY_PREFIX = `${ARCHIVED_PRODUCT_CATEGORY}::`;
+
+const isArchivedCategoryValue = (category: string | null | undefined): boolean =>
+  category === ARCHIVED_PRODUCT_CATEGORY ||
+  (typeof category === "string" && category.startsWith(ARCHIVED_PRODUCT_CATEGORY_PREFIX));
+
+const archiveCategoryValue = (category: string | null | undefined): string =>
+  category && category.trim().length > 0
+    ? `${ARCHIVED_PRODUCT_CATEGORY_PREFIX}${category.trim()}`
+    : ARCHIVED_PRODUCT_CATEGORY;
+
+const restoreArchivedCategoryValue = (category: string | null | undefined): string | null => {
+  if (!category) return null;
+  if (category.startsWith(ARCHIVED_PRODUCT_CATEGORY_PREFIX)) {
+    const restored = category.slice(ARCHIVED_PRODUCT_CATEGORY_PREFIX.length).trim();
+    return restored.length > 0 ? restored : null;
+  }
+  if (category === ARCHIVED_PRODUCT_CATEGORY) return null;
+  return category;
+};
+
+const archivedCategoryCondition = sql<boolean>`
+  ${products.category} = ${ARCHIVED_PRODUCT_CATEGORY}
+  OR ${products.category} LIKE ${`${ARCHIVED_PRODUCT_CATEGORY_PREFIX}%`}
+`;
+
+const notArchivedCategoryCondition = sql<boolean>`
+  ${products.category} IS NULL
+  OR (
+    ${products.category} <> ${ARCHIVED_PRODUCT_CATEGORY}
+    AND ${products.category} NOT LIKE ${`${ARCHIVED_PRODUCT_CATEGORY_PREFIX}%`}
+  )
+`;
 
 type ProductFilterInput = {
   category?: string;
@@ -62,12 +95,7 @@ const buildProductConditions = (filters?: ProductFilterInput) => {
   if (filters?.category) {
     conditions.push(eq(products.category, filters.category));
   } else if (filters?.status !== "archived") {
-    conditions.push(
-      or(
-        isNull(products.category),
-        ne(products.category, ARCHIVED_PRODUCT_CATEGORY),
-      )!,
-    );
+    conditions.push(notArchivedCategoryCondition);
   }
 
   if (filters?.search) {
@@ -91,26 +119,16 @@ const buildProductConditions = (filters?: ProductFilterInput) => {
 
   if (filters?.status === "active") {
     conditions.push(eq(products.isActive, true));
-    conditions.push(
-      or(
-        isNull(products.category),
-        ne(products.category, ARCHIVED_PRODUCT_CATEGORY),
-      )!,
-    );
+    conditions.push(notArchivedCategoryCondition);
   }
 
   if (filters?.status === "draft") {
     conditions.push(eq(products.isActive, false));
-    conditions.push(
-      or(
-        isNull(products.category),
-        ne(products.category, ARCHIVED_PRODUCT_CATEGORY),
-      )!,
-    );
+    conditions.push(notArchivedCategoryCondition);
   }
 
   if (filters?.status === "archived") {
-    conditions.push(eq(products.category, ARCHIVED_PRODUCT_CATEGORY));
+    conditions.push(archivedCategoryCondition);
   }
 
   if (filters?.isNewArrival) {
@@ -290,7 +308,7 @@ export interface IStorage {
     id: string,
     data: Partial<Omit<Product, "id">>,
   ): Promise<Product>;
-  deleteProduct(id: string): Promise<void>;
+  deleteProduct(id: string, options?: { permanent?: boolean }): Promise<void>;
 
   // Orders
   getOrders(filters?: {
@@ -668,20 +686,15 @@ export class PgStorage implements IStorage {
     draftCount: number;
     archivedCount: number;
   }> {
-    const conditions = buildProductConditions({ includeInactive: true });
-    const whereClause =
-      conditions.length > 0 ? and(...conditions) : undefined;
-
     const [totals] = await db
       .select({
         total: sql<number>`count(*)`,
         featured: sql<number>`count(*) FILTER (WHERE ${products.homeFeatured} = true)`,
-        active: sql<number>`count(*) FILTER (WHERE ${products.isActive} = true AND (${products.category} IS NULL OR ${products.category} <> ${ARCHIVED_PRODUCT_CATEGORY}))`,
-        draft: sql<number>`count(*) FILTER (WHERE ${products.isActive} = false AND (${products.category} IS NULL OR ${products.category} <> ${ARCHIVED_PRODUCT_CATEGORY}))`,
-        archived: sql<number>`count(*) FILTER (WHERE ${products.category} = ${ARCHIVED_PRODUCT_CATEGORY})`,
+        active: sql<number>`count(*) FILTER (WHERE ${products.isActive} = true AND (${notArchivedCategoryCondition}))`,
+        draft: sql<number>`count(*) FILTER (WHERE ${products.isActive} = false AND (${notArchivedCategoryCondition}))`,
+        archived: sql<number>`count(*) FILTER (WHERE (${archivedCategoryCondition}))`,
       })
-      .from(products)
-      .where(whereClause);
+      .from(products);
 
     const categoryRows = await db
       .select({
@@ -689,7 +702,6 @@ export class PgStorage implements IStorage {
         count: sql<number>`count(*)`,
       })
       .from(products)
-      .where(whereClause)
       .groupBy(products.category);
 
     const categoryCounts: Record<string, number> = {};
@@ -901,7 +913,43 @@ export class PgStorage implements IStorage {
     return row;
   }
 
-  async deleteProduct(id: string): Promise<void> {
+  async deleteProduct(id: string, options?: { permanent?: boolean }): Promise<void> {
+    const permanent = options?.permanent === true;
+
+    const [existing] = await db
+      .select({
+        id: products.id,
+        name: products.name,
+        category: products.category,
+      })
+      .from(products)
+      .where(eq(products.id, id))
+      .limit(1);
+
+    if (!existing) return;
+
+    if (!permanent) {
+      if (isArchivedCategoryValue(existing.category)) return;
+
+      await db
+        .update(products)
+        .set({
+          category: archiveCategoryValue(existing.category),
+          isActive: false,
+          saleActive: false,
+          homeFeatured: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, id));
+
+      if (meiliClient) {
+        meiliClient.index(PRODUCT_INDEX).deleteDocument(id).catch(err =>
+          console.warn("[MeiliSearch] Delete failed for archived product:", err)
+        );
+      }
+      return;
+    }
+
     try {
       await db.delete(products).where(eq(products.id, id));
       return;
@@ -914,20 +962,8 @@ export class PgStorage implements IStorage {
         throw err;
       }
 
-      const [existing] = await db
-        .select({
-          id: products.id,
-          name: products.name,
-          category: products.category,
-        })
-        .from(products)
-        .where(eq(products.id, id))
-        .limit(1);
-
-      if (!existing) return;
-
-      if (existing.category === ARCHIVED_PRODUCT_CATEGORY) {
-        return;
+      if (permanent) {
+        throw err;
       }
 
       const suffix = `${id.slice(0, 8)}-${Date.now().toString(36)}`;
@@ -936,10 +972,11 @@ export class PgStorage implements IStorage {
         .update(products)
         .set({
           name: `${existing.name} [archived-${suffix}]`,
-          category: ARCHIVED_PRODUCT_CATEGORY,
+          category: archiveCategoryValue(existing.category),
           stock: 0,
           saleActive: false,
           homeFeatured: false,
+          isActive: false,
           updatedAt: new Date(),
         })
         .where(eq(products.id, id));
@@ -3319,15 +3356,15 @@ export class MemStorage implements IStorage {
     if (_filters?.category) {
       results = results.filter((p) => p.category === _filters.category);
     } else if (_filters?.status !== "archived") {
-      results = results.filter((p) => p.category !== ARCHIVED_PRODUCT_CATEGORY);
+      results = results.filter((p) => !isArchivedCategoryValue(p.category));
     }
 
     if (_filters?.status === "active") {
-      results = results.filter((p) => p.category !== ARCHIVED_PRODUCT_CATEGORY && p.isActive !== false);
+      results = results.filter((p) => !isArchivedCategoryValue(p.category) && p.isActive !== false);
     } else if (_filters?.status === "draft") {
-      results = results.filter((p) => p.category !== ARCHIVED_PRODUCT_CATEGORY && p.isActive === false);
+      results = results.filter((p) => !isArchivedCategoryValue(p.category) && p.isActive === false);
     } else if (_filters?.status === "archived") {
-      results = results.filter((p) => p.category === ARCHIVED_PRODUCT_CATEGORY);
+      results = results.filter((p) => isArchivedCategoryValue(p.category));
     }
 
     if (_filters?.search) {
@@ -3364,7 +3401,7 @@ export class MemStorage implements IStorage {
     draftCount: number;
     archivedCount: number;
   }> {
-    const products = await this.getProducts({ page: 1, limit: Number.MAX_SAFE_INTEGER, includeInactive: true });
+    const products = this._products.slice();
     const categoryCounts: Record<string, number> = {};
     let featuredCount = 0;
     let activeCount = 0;
@@ -3372,7 +3409,7 @@ export class MemStorage implements IStorage {
     let archivedCount = 0;
     products.forEach((p) => {
       if (p.homeFeatured) featuredCount += 1;
-      if (p.category === ARCHIVED_PRODUCT_CATEGORY) archivedCount += 1;
+      if (isArchivedCategoryValue(p.category)) archivedCount += 1;
       else if (p.isActive === false) draftCount += 1;
       else activeCount += 1;
       if (p.category) {
@@ -3469,8 +3506,22 @@ export class MemStorage implements IStorage {
     return product;
   }
 
-  async deleteProduct(id: string): Promise<void> {
-    this._products = this._products.filter((p) => p.id !== id);
+  async deleteProduct(id: string, options?: { permanent?: boolean }): Promise<void> {
+    const product = await this.getProductById(id);
+    if (!product) return;
+
+    if (options?.permanent) {
+      this._products = this._products.filter((p) => p.id !== id);
+      return;
+    }
+
+    if (isArchivedCategoryValue(product.category)) return;
+
+    product.category = archiveCategoryValue(product.category);
+    product.isActive = false;
+    product.saleActive = false;
+    product.homeFeatured = false;
+    product.updatedAt = new Date();
   }
 
   async getCategories(): Promise<Category[]> {
@@ -4250,16 +4301,18 @@ export class MemStorage implements IStorage {
 
   async createMediaAsset(data: NewMediaAsset): Promise<MediaAsset> {
     const asset: MediaAsset = {
-      ...data,
       id: crypto.randomUUID(),
-      url: data.url,
-      provider: data.provider,
       category: data.category,
+      url: data.url ?? null,
+      provider: data.provider,
+      assetType: data.assetType ?? "file",
       publicId: data.publicId ?? null,
       filename: data.filename ?? null,
       bytes: data.bytes ?? null,
       width: data.width ?? null,
       height: data.height ?? null,
+      folderPath: data.folderPath ?? null,
+      expiresAt: data.expiresAt ?? null,
       createdAt: new Date(),
     };
     return asset;

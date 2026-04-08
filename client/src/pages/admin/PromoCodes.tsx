@@ -61,7 +61,7 @@ const promoSchema = z
   maxUses: z.coerce.number().min(1, "Must allow at least 1 use"),
   active: z.boolean().default(true),
   applyToSpecificProducts: z.boolean().default(false),
-  applicableProductIds: z.array(z.coerce.number().int()).default([]),
+  applicableProductIds: z.array(z.string().min(1)).default([]),
   durationPreset: z.enum(["none", "1day", "1week", "custom"]).default("none"),
   customExpiresAt: z.string().optional().nullable(),
   })
@@ -156,11 +156,10 @@ export default function AdminPromoCodes() {
     return { label: "Expires: (pick a date)", date: null as Date | null };
   }, [customExpiresAt, durationPreset]);
 
-  const productByNumericId = useMemo(() => {
-    const map = new Map<number, ProductApi>();
+  const productById = useMemo(() => {
+    const map = new Map<string, ProductApi>();
     for (const p of products) {
-      const idNum = Number(p.id);
-      if (Number.isFinite(idNum)) map.set(idNum, p);
+      if (p.id) map.set(String(p.id), p);
     }
     return map;
   }, [products]);
@@ -401,7 +400,7 @@ export default function AdminPromoCodes() {
       </div>
 
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[720px] w-[92vw] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingPromo ? "Edit Promo Code" : "Create Promo Code"}</DialogTitle>
           </DialogHeader>
@@ -518,7 +517,7 @@ export default function AdminPromoCodes() {
                                 </span>
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent align="start" className="p-0 w-[360px]">
+                            <PopoverContent align="start" className="p-0 w-[360px] z-[210]">
                               <Command>
                                 <CommandInput placeholder="Search products..." />
                                 <CommandList>
@@ -527,23 +526,20 @@ export default function AdminPromoCodes() {
                                     {products
                                       .map((p) => ({
                                         p,
-                                        idNum: Number(p.id),
+                                        idStr: String(p.id),
                                       }))
-                                      .filter(({ idNum }) =>
-                                        Number.isFinite(idNum),
-                                      )
-                                      .map(({ p, idNum }) => {
-                                        const selected = selectedProductIds.includes(idNum);
+                                      .map(({ p, idStr }) => {
+                                        const selected = selectedProductIds.includes(idStr);
                                         return (
                                           <CommandItem
                                             key={p.id}
-                                            value={`${idNum} ${p.name}`}
+                                            value={`${idStr} ${p.name}`}
                                             onSelect={() => {
                                               const next = selected
                                                 ? selectedProductIds.filter(
-                                                    (x) => x !== idNum,
+                                                    (x) => x !== idStr,
                                                   )
-                                                : [...selectedProductIds, idNum];
+                                                : [...selectedProductIds, idStr];
                                               form.setValue(
                                                 "applicableProductIds",
                                                 next,
@@ -571,15 +567,15 @@ export default function AdminPromoCodes() {
 
                           {selectedProductIds.length > 0 && (
                             <div className="flex flex-wrap gap-2 pt-2">
-                              {selectedProductIds.map((idNum) => {
-                                const prod = productByNumericId.get(idNum);
+                              {selectedProductIds.map((idStr) => {
+                                const prod = productById.get(idStr);
                                 return (
                                   <div
-                                    key={idNum}
+                                    key={idStr}
                                     className="inline-flex items-center gap-2 px-2 py-1 rounded-full border bg-muted/20"
                                   >
                                     <span className="text-xs font-medium">
-                                      {prod?.name ?? idNum}
+                                      {prod?.name ?? idStr}
                                     </span>
                                     <button
                                       type="button"
@@ -588,7 +584,7 @@ export default function AdminPromoCodes() {
                                         form.setValue(
                                           "applicableProductIds",
                                           selectedProductIds.filter(
-                                            (x) => x !== idNum,
+                                            (x) => x !== idStr,
                                           ),
                                           { shouldDirty: true, shouldValidate: true },
                                         );

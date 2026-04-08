@@ -429,7 +429,7 @@ export default function Checkout() {
         canonicalPath="/checkout"
         noIndex
       />
-      <div className="container mx-auto px-4 py-16 lg:py-32 max-w-7xl mt-10">
+      <div className="container mx-auto max-w-7xl px-4 pb-16 pt-4 sm:pt-6 lg:pb-20">
       <div className="flex flex-col lg:flex-row gap-20">
         <form
           data-testid="checkout-form"

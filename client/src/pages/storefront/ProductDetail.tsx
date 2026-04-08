@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
 import { useThemeStore } from "@/store/theme";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronLeft, FileText, Minus, Plus, ShieldCheck, Truck } from "lucide-react";
+import { ChevronDown, ChevronLeft, FileText, Minus, Plus, ShieldCheck, Truck, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { fetchProductById, fetchProducts, type ProductApi, type ProductSizeChart } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
@@ -1286,8 +1286,22 @@ export default function ProductDetail() {
             }`}
             onClick={(event) => event.stopPropagation()}
           >
+            <button
+              type="button"
+              onClick={() => closeGallery()}
+              className="absolute left-4 top-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-md transition-colors hover:opacity-85 sm:left-5 sm:top-5"
+              style={{
+                borderColor: isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(17,17,17,0.14)",
+                background: isDarkMode ? "rgba(0,0,0,0.42)" : "rgba(255,255,255,0.88)",
+                color: isDarkMode ? "#ffffff" : "#111111",
+              }}
+              aria-label="Close gallery"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
             <div
-              className="pointer-events-none absolute left-5 top-5 z-40 text-[10px] font-bold uppercase tracking-[0.2em]"
+              className="pointer-events-none absolute left-16 top-5 z-40 text-[10px] font-bold uppercase tracking-[0.2em] sm:left-[4.5rem]"
               style={{ color: isDarkMode ? "rgba(255,255,255,0.72)" : "rgba(17,17,17,0.68)" }}
             >
               {String(selectedImageIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}

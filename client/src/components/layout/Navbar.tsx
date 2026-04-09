@@ -620,8 +620,8 @@ export default function Navbar() {
               borderBottom: `1px solid ${chromeBorder}`,
               backdropFilter: chromeBackdrop,
               paddingTop: "max(env(safe-area-inset-top), 1rem)",
-              paddingRight: "max(env(safe-area-inset-right), 0px)",
-              paddingLeft: "max(env(safe-area-inset-left), 0px)",
+              paddingRight: "max(env(safe-area-inset-right), 2px)",
+              paddingLeft: "max(env(safe-area-inset-left), 2px)",
             }}
             
           >

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { useThemeStore } from "@/store/theme";
 import "./OurServices.css";
 
 interface OurServicesProps {
@@ -15,8 +16,7 @@ type ServiceCardConfig = {
 
 const GRAIN_DATA_URI = `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E")`;
 const EASY_EXCHANGE_IMAGE_URL = "/images/easy-exchange-final.png?v=1";
-const MADE_IN_NEPAL_IMAGE_URL = "/images/nepalrare.png";
-const OUR_SERVICES_BG_IMAGE_URL = "/images/about.webp";
+const MADE_IN_NEPAL_IMAGE_URL = "/images/made-in-nepal-badge.jpg";
 
 function Card1TruckArt() {
   return (
@@ -61,18 +61,20 @@ function Card2MountainBg() {
 
 function Card2Art({ imageUrl }: { imageUrl?: string }) {
   return (
-    <div className="relative flex h-[228px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#97abc0] via-[#aac0d4] to-[#c1d1de] lg:h-[268px]">
+    <div className="relative flex h-[228px] items-center justify-center overflow-hidden bg-[#d8e1ea] lg:h-[268px]">
       <Card2MountainBg />
-      <img
-        src={imageUrl ?? MADE_IN_NEPAL_IMAGE_URL}
-        alt="Made in Nepal visual"
-        width={1024}
-        height={1024}
-        decoding="async"
-        className="h-full w-full object-cover object-center"
-        draggable={false}
-      />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/18" />
+      <div className="relative z-[1] flex items-center justify-center p-6">
+        <img
+          src={imageUrl ?? MADE_IN_NEPAL_IMAGE_URL}
+          alt="Made in Nepal visual"
+          width={220}
+          height={220}
+          decoding="async"
+          className="block h-[144px] w-[144px] shrink-0 rounded-full border border-white/50 bg-white p-3 object-cover object-center shadow-lg shadow-black/15 select-none"
+          draggable={false}
+        />
+      </div>
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/12 via-transparent to-black/8" />
     </div>
   );
 }
@@ -97,6 +99,7 @@ function Card3ExchangeArt({ imageUrl }: { imageUrl?: string }) {
 
 export default function OurServices({ config: _config = {} }: OurServicesProps) {
   const [, setLocation] = useLocation();
+  const { theme } = useThemeStore();
   const sectionRef = useRef<HTMLElement>(null);
   const [cardsVisible, setCardsVisible] = useState(false);
   const [libraryImages, setLibraryImages] = useState<string[]>([]);
@@ -215,25 +218,29 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
   const sectionText = typeof config.text === "string" && config.text.trim()
     ? config.text
     : "Door-to-Door Delivery Across Nepal 🇳🇵";
-  const backgroundImage =
-    libraryImages[0] ??
-    (typeof config.backgroundImage === "string" && config.backgroundImage.trim()
-      ? config.backgroundImage
-      : OUR_SERVICES_BG_IMAGE_URL);
   const cardImages = libraryImages.slice(1, 4);
+  const isDark = theme === "dark";
 
   return (
     <section
       ref={sectionRef}
-      className="relative overflow-hidden px-4 py-10 text-white sm:px-6 sm:py-12 lg:px-10 lg:py-14"
+      className={`relative overflow-hidden px-4 py-10 sm:px-6 sm:py-12 lg:px-10 lg:py-14 ${
+        isDark ? "text-white" : "text-[#15171b]"
+      }`}
+      style={{
+        background: isDark
+          ? "linear-gradient(180deg, #0b1118 0%, #111a24 100%)"
+          : "linear-gradient(180deg, #edf3f8 0%, #e4ecf3 100%)",
+      }}
     >
-      <img
-        src={backgroundImage}
-        alt="Nepal background"
-        className="absolute inset-0 h-full w-full object-cover object-center"
+      <div
+        className="absolute inset-0"
+        style={{
+          background: isDark
+            ? "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.1), transparent 56%)"
+            : "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.75), transparent 58%)",
+        }}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-[#0d1a26]/65 via-[#13283b]/55 to-[#0a121b]/72" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.18),transparent_55%)]" />
 
       <div
         className="pointer-events-none absolute inset-0 z-[2] opacity-[0.05]"
@@ -243,9 +250,13 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
         }}
       />
 
-      <div className="relative z-10 mx-auto max-w-[1500px] rounded-[28px] border border-white/16 bg-white/8 p-4 shadow-[0_26px_70px_rgba(0,0,0,0.28)] backdrop-blur-[1.5px] sm:p-6 lg:p-8">
+      <div
+        className={`relative z-10 mx-auto max-w-[1500px] rounded-[28px] border p-4 shadow-[0_26px_70px_rgba(0,0,0,0.16)] sm:p-6 lg:p-8 ${
+          isDark ? "border-white/12 bg-white/[0.04]" : "border-black/8 bg-white/70"
+        }`}
+      >
         <h2
-          className="our-services-heading mb-2 text-center font-extrabold text-white"
+          className={`our-services-heading mb-2 text-center font-extrabold ${isDark ? "text-white" : "text-[#15171b]"}`}
           style={{
             fontFamily: "var(--font-display, 'Playfair Display', serif)",
             fontSize: "clamp(34px, 4.6vw, 58px)",
@@ -254,7 +265,7 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
           {sectionTitle}
         </h2>
         <p
-          className="mb-7 text-center font-medium text-white/90 lg:mb-9"
+          className={`mb-7 text-center font-medium lg:mb-9 ${isDark ? "text-white/85" : "text-[#4d5a68]"}`}
           style={{
             fontFamily: "var(--font-body, 'DM Sans', sans-serif)",
             fontSize: "clamp(14px, 1.35vw, 18px)",
@@ -266,7 +277,9 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
         <div className="grid max-w-[1500px] grid-cols-1 gap-5 md:grid-cols-3 md:gap-5 lg:gap-6">
           {serviceCards.slice(0, 3).map((card, index) => {
             const art =
-              cardImages[index] ? (
+              index === 1 ? (
+                <Card2Art imageUrl={MADE_IN_NEPAL_IMAGE_URL} />
+              ) : cardImages[index] ? (
                 <div className="relative flex h-[228px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#0f2233] via-[#20364b] to-[#36506a] lg:h-[268px]">
                   <img
                     src={cardImages[index]}
@@ -281,8 +294,6 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
                 </div>
               ) : index === 0 ? (
                 <Card1TruckArt />
-              ) : index === 1 ? (
-                <Card2Art imageUrl={cardImages[index]} />
               ) : (
                 <Card3ExchangeArt imageUrl={cardImages[index]} />
               );

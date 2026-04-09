@@ -108,22 +108,6 @@ export default function Contact() {
         }`}
       >
         <div className="mx-auto max-w-6xl">
-          <div className="mb-10 max-w-3xl">
-            <p
-              className={`mb-4 text-[10px] font-semibold uppercase tracking-[0.34em] ${
-                isDark ? "text-white/55" : "text-neutral-500"
-              }`}
-            >
-              Contact
-            </p>
-            <h2 className={`text-3xl font-black uppercase tracking-tight sm:text-5xl ${isDark ? "text-white" : "text-neutral-950"}`}>
-              Get In Touch
-            </h2>
-            <p className={`mt-4 text-sm leading-7 sm:text-base ${isDark ? "text-white/75" : "text-neutral-600"}`}>
-              Reach out for support with orders, exchanges, delivery questions, sizing, or any other
-              Rare Atelier assistance.
-            </p>
-          </div>
           <ContactInfo showMap />
         </div>
       </section>

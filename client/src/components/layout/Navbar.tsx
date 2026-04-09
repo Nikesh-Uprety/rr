@@ -24,6 +24,7 @@ import { createPortal } from "react-dom";
 import SearchBar from "./SearchBar";
 import { canAccessAdminPanel } from "@shared/auth-policy";
 import { getDefaultAdminPath } from "@/lib/adminAccess";
+import { ThemeTogglerButton } from "@/components/ui/theme-toggler-button";
 
 const ANNOUNCEMENT_ITEMS = [
   "Free shipping on orders over NPR 5,000",
@@ -33,7 +34,7 @@ const ANNOUNCEMENT_ITEMS = [
 ];
 
 export default function Navbar() {
-  const { theme } = useThemeStore();
+  const { theme, setTheme } = useThemeStore();
   const [location, setLocation] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isTabletViewport, setIsTabletViewport] = useState(false);

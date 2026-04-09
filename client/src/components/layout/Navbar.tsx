@@ -24,7 +24,6 @@ import { createPortal } from "react-dom";
 import SearchBar from "./SearchBar";
 import { canAccessAdminPanel } from "@shared/auth-policy";
 import { getDefaultAdminPath } from "@/lib/adminAccess";
-import { ThemeTogglerButton } from "@/components/ui/theme-toggler-button";
 
 const ANNOUNCEMENT_ITEMS = [
   "Free shipping on orders over NPR 5,000",
@@ -34,7 +33,7 @@ const ANNOUNCEMENT_ITEMS = [
 ];
 
 export default function Navbar() {
-  const { theme, setTheme } = useThemeStore();
+  const { theme } = useThemeStore();
   const [location, setLocation] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isTabletViewport, setIsTabletViewport] = useState(false);
@@ -569,9 +568,7 @@ export default function Navbar() {
 
   if (isStuffyClone) {
     const chromeColor = isStuffyLanding
-      ? theme === "dark"
-        ? "rgba(255,255,255,0.92)"
-        : "rgba(17,17,17,0.92)"
+      ? "rgba(255,255,255,0.96)"
       : theme === "dark"
         ? "rgba(255,255,255,0.92)"
         : "rgba(17,17,17,0.92)";
@@ -676,45 +673,6 @@ export default function Navbar() {
               <div className="[&>div>div]:border-none [&>div>div]:bg-transparent">
                 <SearchBar iconColor={chromeColor} minimal={isStuffyLanding && theme !== "dark"} />
               </div>
-              <ThemeTogglerButton
-                theme={theme}
-                onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className={`inline-flex items-center justify-center rounded-full transition-colors hover:bg-white/10 ${
-                  isStuffyLanding
-                    ? "[&_.MuiSwitch-root]:-mx-2 [&_.MuiSwitch-root]:scale-[0.72]"
-                    : "px-1"
-                }`}
-                style={{
-                  color: chromeColor,
-                  border: `1px solid ${chromeBorder}`,
-                  background: landingControlBackground,
-                  boxShadow: landingControlShadow,
-                }}
-                iconClassName="h-5 w-5"
-                title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-              />
-              <button
-                type="button"
-                onClick={() => openCartSidebar()}
-                className="relative flex h-11 w-11 items-center justify-center rounded-full"
-                style={{
-                  color: chromeColor,
-                  border: `1px solid ${chromeBorder}`,
-                  background: landingControlBackground,
-                  boxShadow: landingControlShadow,
-                }}
-                aria-label="Open cart"
-              >
-                <ShoppingBag className="h-5 w-5" />
-                {cartItemsCount > 0 ? (
-                  <span
-                    className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold"
-                    style={{ background: chromeColor, color: isStuffyLanding || theme === "dark" ? "rgba(0,0,0,0.92)" : "rgba(255,255,255,0.92)" }}
-                  >
-                    {cartItemsCount}
-                  </span>
-                ) : null}
-              </button>
             </div>
           </div>
         </header>
@@ -823,39 +781,6 @@ export default function Navbar() {
               <div className="hidden sm:block [&>div>div]:border-none [&>div>div]:bg-transparent">
                 <SearchBar iconColor={navForegroundColor} />
               </div>
-              <ThemeTogglerButton
-                theme={theme}
-                onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="inline-flex items-center justify-center rounded-full px-1"
-                style={{
-                  color: navForegroundColor,
-                  textShadow: useHeroContrastState ? "0 0 14px rgba(255,255,255,0.28)" : "none",
-                }}
-                iconClassName="h-5 w-5"
-              />
-              <button
-                type="button"
-                onClick={() => openCartSidebar()}
-                className="relative flex h-10 w-10 items-center justify-center"
-                style={{
-                  color: navForegroundColor,
-                  textShadow: useHeroContrastState ? "0 0 14px rgba(255,255,255,0.28)" : "none",
-                }}
-              >
-                <ShoppingBag className="h-5 w-5" />
-                {cartItemsCount > 0 ? (
-                  <span
-                    className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px]"
-                    style={{
-                      background: "var(--gold)",
-                      color: "var(--bg)",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    {cartItemsCount}
-                  </span>
-                ) : null}
-              </button>
               {isAuthenticated && user ? (
                 <button
                   type="button"

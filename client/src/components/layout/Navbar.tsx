@@ -189,6 +189,15 @@ export default function Navbar() {
       { name: "Atelier", href: "/atelier" },
     ];
   }, [isStuffyClone]);
+
+  const sidebarNavLinks = useMemo(() => {
+    if (!isStuffyClone) return navLinks;
+
+    return navLinks.filter(
+      (item) =>
+        item.name !== "Our Services" && item.name !== "Customer Care",
+    );
+  }, [isStuffyClone, navLinks]);
   const megaMenuContent = useMemo(
     () => ({
       "/": {
@@ -439,8 +448,8 @@ export default function Navbar() {
 
                   <div className="flex-1 overflow-y-auto px-8 py-6 sm:px-9">
                     <nav className="flex flex-col">
-                      {navLinks.map((item, index) => {
-                        const isActive = location === item.href;
+              {sidebarNavLinks.map((item, index) => {
+                const isActive = location === item.href;
                         return (
                           <Link
                             key={item.href}

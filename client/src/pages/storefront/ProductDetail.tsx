@@ -1365,7 +1365,7 @@ export default function ProductDetail() {
             }`}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="fixed left-4 top-4 z-50 sm:left-5 sm:top-5">
+            <div className="pointer-events-none fixed left-4 top-4 z-[120] sm:left-5 sm:top-5">
               <div
                 className="pointer-events-none inline-flex min-w-[68px] items-center justify-center rounded-full border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] backdrop-blur-sm"
                 style={{
@@ -1378,18 +1378,26 @@ export default function ProductDetail() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => closeGallery()}
-              className="fixed right-4 top-4 z-50 inline-flex h-10 w-10 items-center justify-center rounded-full border bg-transparent backdrop-blur-sm transition-all duration-200 hover:scale-[1.04] hover:shadow-[0_12px_30px_rgba(0,0,0,0.14)] sm:right-5 sm:top-5"
-              style={{
-                borderColor: isDarkMode ? "rgba(255,255,255,0.2)" : "rgba(17,17,17,0.32)",
-                color: isDarkMode ? "#ffffff" : "#111111",
-              }}
-              aria-label="Close gallery"
+            <div
+              className="pointer-events-none fixed inset-x-0 z-[120]"
+              style={{ top: "calc(max(env(safe-area-inset-top), 0px) + 3.9rem)" }}
             >
-              <X className="h-4 w-4" />
-            </button>
+              <div className="mx-auto flex w-full max-w-[1440px] justify-center px-4 sm:px-5 lg:px-8">
+                <button
+                  type="button"
+                  onClick={() => closeGallery()}
+                  className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border bg-transparent transition-all duration-200 hover:scale-[1.04] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                  style={{
+                    borderColor: isDarkMode ? "rgba(255,255,255,0.2)" : "rgba(17,17,17,0.32)",
+                    color: isDarkMode ? "#ffffff" : "#111111",
+                    backdropFilter: "none",
+                  }}
+                  aria-label="Close gallery"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
 
             <div className="flex h-full w-full items-stretch gap-4 px-2 pt-0 pb-4 sm:px-4 lg:gap-6 lg:px-6">
               {allImages.length > 1 ? (

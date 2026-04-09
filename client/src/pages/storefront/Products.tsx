@@ -8,6 +8,7 @@ import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { StorefrontBreadcrumbs } from "@/components/product/StorefrontBreadcrumbs";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useThemeStore } from "@/store/theme";
 import { canAccessAdminPanel } from "@shared/auth-policy";
 import { getDefaultAdminPath } from "@/lib/adminAccess";
 import {
@@ -133,6 +134,8 @@ function readShopSearchParams() {
 
 export default function Products() {
   const initialState = readShopSearchParams();
+  const { theme } = useThemeStore();
+  const isDark = theme === "dark";
 
   const [category, setCategory] = useState<string>(initialState.category);
   const [sortBy, setSortBy] = useState(initialState.sortBy);
@@ -159,6 +162,14 @@ export default function Products() {
   });
   const isStuffyClone = pageConfig?.template?.slug === "stuffyclone";
   const pageSize = isStuffyClone ? 16 : 10;
+  const storefrontSelectTheme = useMemo(
+    () => ({
+      backgroundColor: isDark ? "#161b22" : "#ffffff",
+      color: isDark ? "#e6edf3" : "#111111",
+      colorScheme: isDark ? ("dark" as const) : ("light" as const),
+    }),
+    [isDark],
+  );
 
   const shopPath = useMemo(() => {
     const params = new URLSearchParams();
@@ -492,17 +503,17 @@ export default function Products() {
                         </span>
                       </label>
                       <select
-                        style={{ fontFamily: "Roboto, sans-serif" }}
+                        style={{ fontFamily: "Roboto, sans-serif", ...storefrontSelectTheme }}
                         className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
                         aria-label="Sort products"
                       >
-                        <option value="newest">Newest</option>
-                        <option value="price-low">Price Low</option>
-                        <option value="price-high">Price High</option>
-                        <option value="best-seller">Best Seller</option>
-                        <option value="highest-stock">Highest Stock</option>
+                        <option style={storefrontSelectTheme} value="newest">Newest</option>
+                        <option style={storefrontSelectTheme} value="price-low">Price Low</option>
+                        <option style={storefrontSelectTheme} value="price-high">Price High</option>
+                        <option style={storefrontSelectTheme} value="best-seller">Best Seller</option>
+                        <option style={storefrontSelectTheme} value="highest-stock">Highest Stock</option>
                       </select>
                     </div>
 
@@ -514,16 +525,16 @@ export default function Products() {
                         </span>
                       </label>
                       <select
-                        style={{ fontFamily: "Roboto, sans-serif" }}
+                        style={{ fontFamily: "Roboto, sans-serif", ...storefrontSelectTheme }}
                         className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
                         value={stockFilter}
                         onChange={(e) => setStockFilter(e.target.value)}
                         aria-label="Filter products by stock or sale"
                       >
-                        <option value="all">All</option>
-                        <option value="on-sale">On Sale</option>
-                        <option value="in-stock">In Stock</option>
-                        <option value="out-of-stock">Out of Stock</option>
+                        <option style={storefrontSelectTheme} value="all">All</option>
+                        <option style={storefrontSelectTheme} value="on-sale">On Sale</option>
+                        <option style={storefrontSelectTheme} value="in-stock">In Stock</option>
+                        <option style={storefrontSelectTheme} value="out-of-stock">Out of Stock</option>
                       </select>
                     </div>
 
@@ -536,15 +547,15 @@ export default function Products() {
                           </span>
                         </label>
                         <select
-                          style={{ fontFamily: "Roboto, sans-serif" }}
+                          style={{ fontFamily: "Roboto, sans-serif", ...storefrontSelectTheme }}
                           className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
                           value={sizeFilter}
                           onChange={(e) => setSizeFilter(e.target.value)}
                           aria-label="Filter products by size"
                         >
-                          <option value="all">All</option>
+                          <option style={storefrontSelectTheme} value="all">All</option>
                           {availableSizes.map((size) => (
-                            <option key={size} value={size}>
+                            <option key={size} style={storefrontSelectTheme} value={size}>
                               {size}
                             </option>
                           ))}
@@ -558,15 +569,15 @@ export default function Products() {
                           </span>
                         </label>
                         <select
-                          style={{ fontFamily: "Roboto, sans-serif" }}
+                          style={{ fontFamily: "Roboto, sans-serif", ...storefrontSelectTheme }}
                           className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
                           value={colorFilter}
                           onChange={(e) => setColorFilter(e.target.value)}
                           aria-label="Filter products by color"
                         >
-                          <option value="all">All</option>
+                          <option style={storefrontSelectTheme} value="all">All</option>
                           {availableColors.map((color) => (
-                            <option key={color} value={color}>
+                            <option key={color} style={storefrontSelectTheme} value={color}>
                               {color}
                             </option>
                           ))}

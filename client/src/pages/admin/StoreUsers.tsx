@@ -61,12 +61,18 @@ const SUPERADMIN_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "manager", label: "Manager" },
   { value: "csr", label: "CSR" },
   { value: "staff", label: "Staff" },
+  { value: "sales", label: "Sales" },
+  { value: "marketing", label: "Marketing" },
+  { value: "cook", label: "Cook" },
 ];
 
 const STANDARD_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "manager", label: "Manager" },
   { value: "csr", label: "CSR" },
   { value: "staff", label: "Staff" },
+  { value: "sales", label: "Sales" },
+  { value: "marketing", label: "Marketing" },
+  { value: "cook", label: "Cook" },
 ];
 
 const PRIVILEGED_ROLE_VALUES = new Set(["superadmin", "owner", "admin"]);
@@ -121,6 +127,24 @@ function roleBadge(role: string) {
         className:
           "bg-emerald-100 text-emerald-800 border-0 dark:bg-emerald-900/30 dark:text-emerald-300",
       };
+    case "sales":
+      return {
+        label: "Sales",
+        className:
+          "bg-indigo-100 text-indigo-800 border-0 dark:bg-indigo-900/30 dark:text-indigo-300",
+      };
+    case "marketing":
+      return {
+        label: "Marketing",
+        className:
+          "bg-fuchsia-100 text-fuchsia-800 border-0 dark:bg-fuchsia-900/30 dark:text-fuchsia-300",
+      };
+    case "cook":
+      return {
+        label: "Cook",
+        className:
+          "bg-orange-100 text-orange-800 border-0 dark:bg-orange-900/30 dark:text-orange-300",
+      };
     case "staff":
     default:
       return {
@@ -134,7 +158,9 @@ function roleBadge(role: string) {
 export default function StoreUsers() {
   const [, setLocation] = useLocation();
   const { user: currentUser } = useCurrentUser();
-  const isCurrentUserSuperAdmin = currentUser?.role?.toLowerCase() === "superadmin";
+  const currentRole = currentUser?.role?.toLowerCase() ?? "";
+  const isCurrentUserSuperAdmin = currentRole === "superadmin";
+  const canManageStoreUsers = currentRole === "superadmin" || currentRole === "admin";
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -154,6 +180,7 @@ export default function StoreUsers() {
   const storeUsers = data?.data ?? [];
 
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addUserStep, setAddUserStep] = useState<1 | 2>(1);
   const [addForm, setAddForm] = useState({
     name: "",
     email: "",
@@ -178,6 +205,10 @@ export default function StoreUsers() {
     const lowered = role.toLowerCase();
     return roleOptions.some((option) => option.value === lowered) ? lowered : roleOptions[0]?.value ?? "manager";
   };
+  const resetAddUserState = () => {
+    setAddUserStep(1);
+    setAddForm({ name: "", email: "", password: "", role: roleOptions[0]?.value ?? "manager" });
+  };
 
   const createMutation = useMutation({
     mutationFn: async (payload: {
@@ -200,7 +231,7 @@ export default function StoreUsers() {
       }
       toast({ title: "User added", description: "Setup email sent (SMTP may be delayed)." });
       setIsAddOpen(false);
-      setAddForm({ name: "", email: "", password: "", role: roleOptions[0]?.value ?? "manager" });
+      resetAddUserState();
       invalidate();
     },
     onError: (err: any) => {
@@ -287,8 +318,11 @@ export default function StoreUsers() {
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <Button
             className="flex-1 sm:flex-none bg-[#2C3E2D] hover:bg-[#1A251B] text-white"
-            onClick={() => setIsAddOpen(true)}
-            disabled={isLoading || createMutation.isPending}
+            onClick={() => {
+              resetAddUserState();
+              setIsAddOpen(true);
+            }}
+            disabled={isLoading || createMutation.isPending || !canManageStoreUsers}
           >
             <Plus className="w-4 h-4 mr-2" /> Add User
           </Button>
@@ -344,7 +378,7 @@ export default function StoreUsers() {
                     const rb = roleBadge(u.role);
                     const addedAt = u.createdAt ? format(new Date(u.createdAt), "dd MMM yyyy") : "";
                     const targetRole = u.role?.toLowerCase() ?? "";
-                    const canManagePrivilegedTarget = isCurrentUserSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
+                    const canManagePrivilegedTarget = canManageStoreUsers && (isCurrentUserSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole));
                     const canDeleteTarget = !isSelf(u) && canManagePrivilegedTarget;
 
                     return (
@@ -482,7 +516,7 @@ export default function StoreUsers() {
               const initials = getInitials(u.name || u.email);
               const addedAt = u.createdAt ? format(new Date(u.createdAt), "dd MMM yyyy") : "";
               const targetRole = u.role?.toLowerCase() ?? "";
-              const canManagePrivilegedTarget = isCurrentUserSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
+              const canManagePrivilegedTarget = canManageStoreUsers && (isCurrentUserSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole));
               const canDeleteTarget = !isSelf(u) && canManagePrivilegedTarget;
               return (
                 <div
@@ -606,7 +640,7 @@ export default function StoreUsers() {
         onOpenChange={(open) => {
           setIsAddOpen(open);
           if (!open) {
-            setAddForm({ name: "", email: "", password: "", role: roleOptions[0]?.value ?? "manager" });
+            resetAddUserState();
           }
         }}
       >
@@ -633,6 +667,11 @@ export default function StoreUsers() {
                 return;
               }
 
+              if (addUserStep === 1) {
+                setAddUserStep(2);
+                return;
+              }
+
               createMutation.mutate({
                 name: addForm.name.trim(),
                 email: addForm.email.trim(),
@@ -641,69 +680,89 @@ export default function StoreUsers() {
               });
             }}
           >
-            <div className="space-y-2">
-              <Label htmlFor="store-user-name">Name</Label>
-              <Input
-                id="store-user-name"
-                value={addForm.name}
-                onChange={(e) => setAddForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="e.g. Ramesh Karki"
-                required
-              />
+            <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground">
+              Step {addUserStep} of 2 {addUserStep === 1 ? "- User Details" : "- Assign Role"}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="store-user-email">Email</Label>
-              <Input
-                id="store-user-email"
-                type="email"
-                value={addForm.email}
-                onChange={(e) => setAddForm((p) => ({ ...p, email: e.target.value }))}
-                placeholder="team@example.com"
-                required
-              />
-            </div>
+            {addUserStep === 1 ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="store-user-name">Name</Label>
+                  <Input
+                    id="store-user-name"
+                    value={addForm.name}
+                    onChange={(e) => setAddForm((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="e.g. Ramesh Karki"
+                    required
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="store-user-password">Password</Label>
-              <Input
-                id="store-user-password"
-                type="password"
-                value={addForm.password}
-                onChange={(e) => setAddForm((p) => ({ ...p, password: e.target.value }))}
-                placeholder="Minimum 6 characters"
-                required
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="store-user-email">Email</Label>
+                  <Input
+                    id="store-user-email"
+                    type="email"
+                    value={addForm.email}
+                    onChange={(e) => setAddForm((p) => ({ ...p, email: e.target.value }))}
+                    placeholder="team@example.com"
+                    required
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select
-                value={addForm.role}
-                onValueChange={(value) => setAddForm((p) => ({ ...p, role: value }))}
-              >
-                <SelectTrigger className="h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {roleOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="store-user-password">Password</Label>
+                  <Input
+                    id="store-user-password"
+                    type="password"
+                    value={addForm.password}
+                    onChange={(e) => setAddForm((p) => ({ ...p, password: e.target.value }))}
+                    placeholder="Minimum 6 characters"
+                    required
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Select
+                    value={addForm.role}
+                    onValueChange={(value) => setAddForm((p) => ({ ...p, role: value }))}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roleOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">User:</span> {addForm.name || "-"} · {addForm.email || "-"}
+                </div>
+              </>
+            )}
 
             <DialogFooter className="pt-3">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsAddOpen(false)}
+                onClick={() => {
+                  if (addUserStep === 2) {
+                    setAddUserStep(1);
+                    return;
+                  }
+                  setIsAddOpen(false);
+                }}
                 className="rounded-full"
                 disabled={createMutation.isPending}
               >
-                Cancel
+                {addUserStep === 2 ? "Back" : "Cancel"}
               </Button>
               <Button
                 type="submit"
@@ -711,7 +770,7 @@ export default function StoreUsers() {
                 loading={createMutation.isPending}
                 loadingText="Creating..."
               >
-                Add User
+                {addUserStep === 1 ? "Next: Role" : "Add User"}
               </Button>
             </DialogFooter>
           </form>

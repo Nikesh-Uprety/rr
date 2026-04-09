@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="Rare Atelier - Premium Streetwear & Minimal Luxury. Discover our exclusive collection of high-quality apparel." />
 
   <meta property="og:title" content="Rare Atelier" />
@@ -19,7 +19,7 @@
   <link rel="icon" type="image/webp" href="https://cdn2.blanxer.com/favicon/67cd36dcf133882caba612b4/692dcfc911060a551836d675.webp" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Roboto+Slab:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Roboto+Slab:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <title>Rare Atelier | Premium Streetwear</title>
   <script>
     // Apply theme class before React mounts to avoid flash.
@@ -28,16 +28,16 @@
       var theme = "light";
       try {
         var saved = localStorage.getItem("theme");
-        if (saved === "dark" || saved === "light") {
+        if (saved === "dark" || saved === "light" || saved === "warm") {
           theme = saved;
         } else {
-          var hour = new Date().getHours();
-          theme = hour >= 6 && hour < 18 ? "light" : "dark";
+          theme = "light";
         }
       } catch (e) {}
 
-      root.classList.toggle("dark", theme === "dark");
-      root.style.colorScheme = theme;
+      root.classList.remove("light", "dark", "warm");
+      root.classList.add(theme);
+      root.style.colorScheme = theme === "dark" ? "dark" : "light";
     })();
   </script>
   <script>
@@ -51,34 +51,39 @@
     })();
   </script>
   <style>
-    /* Prevent white flash before any CSS loads by forcing dark background immediately */
+    /* Match the default storefront theme before CSS loads. */
     html {
-      background-color: #050505;
+      background-color: #ffffff;
     }
 
     body {
-      background-color: #050505;
+      background-color: #ffffff;
     }
 
-    /* PRE-LOADER STYLES - Must be inline for instant rendering */
+    /* Lightweight delayed pre-loader for slower first visits only */
     #pre-loader {
       position: fixed;
       inset: 0;
       z-index: 99999;
-      background: #050505;
-      display: flex;
-      flex-direction: column;
+      background: rgba(255, 255, 255, 0.96);
+      display: none;
       align-items: center;
       justify-content: center;
-      transition: opacity 1s cubic-bezier(0.77, 0, 0.175, 1), visibility 1s;
-      color: white;
-      font-family: 'Playfair Display', serif;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.22s ease, visibility 0.22s ease;
+      color: #111111;
     }
 
-    /* Prevent scrollbar during loading */
     body.loading {
       overflow: hidden !important;
       height: 100vh;
+    }
+
+    #pre-loader.visible {
+      display: flex;
+      opacity: 1;
+      visibility: visible;
     }
 
     #pre-loader.loaded {
@@ -91,61 +96,59 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
     }
 
     .loader-logo {
-      font-size: 1.25rem;
-      font-weight: 600;
-      letter-spacing: 0.5em; /* Reduced for better mobile fit */
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.42em;
       text-transform: uppercase;
-      display: flex;
-      justify-content: center;
-      margin-bottom: 5px;
-      height: 1.5rem;
-    }
-
-    .letter {
-      display: inline-block;
-      opacity: 0;
-      transform: translateY(15px);
-      transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      filter: blur(5px);
-    }
-
-    .letter.visible {
-      opacity: 1;
-      transform: translateY(0);
-      filter: blur(0);
+      white-space: nowrap;
+      font-family: 'Archivo Narrow', 'Inter', sans-serif;
+      color: #111111;
     }
 
     .loader-bar-container {
-      width: 175px; /* Manually adjusted to align from A to E */
-      height: 1px;
-      background: rgba(255, 255, 255, 0.05);
+      width: min(12rem, 48vw);
+      height: 2px;
       overflow: hidden;
-      position: relative;
+      border-radius: 999px;
+      background: rgba(17, 17, 17, 0.12);
     }
 
-    #loader-progress {
-      position: absolute;
-      top: 0;
-      left: 0;
+    .loader-bar {
+      width: 100%;
       height: 100%;
-      width: 0;
-      background: linear-gradient(90deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 1));
-      transition: width 0.4s cubic-bezier(0.1, 0.5, 0.1, 1);
-      box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(17, 17, 17, 0.82);
+      transform-origin: left center;
+      animation: loader-progress 1.25s ease-in-out infinite;
+      will-change: transform, opacity;
     }
 
     .loader-status {
-      font-size: 0.65rem;
-      font-weight: 300;
-      letter-spacing: 0.25em;
+      font-size: 0.62rem;
+      font-weight: 500;
+      letter-spacing: 0.28em;
       text-transform: uppercase;
-      opacity: 0.4;
-      margin-top: 12px;
+      opacity: 0.58;
       font-family: 'Inter', sans-serif;
+    }
+
+    @keyframes loader-progress {
+      0% {
+        transform: scaleX(0.18);
+        opacity: 0.45;
+      }
+      50% {
+        transform: scaleX(0.78);
+        opacity: 1;
+      }
+      100% {
+        transform: scaleX(0.28);
+        opacity: 0.6;
+      }
     }
 
 
@@ -154,7 +157,7 @@
     #root {
       opacity: 0;
       min-height: 100vh;
-      background-color: #050505;
+      background-color: #ffffff;
       transition: opacity 1s ease;
     }
 
@@ -165,24 +168,19 @@
 </head>
 
 <body class="loading">
-  <div id="pre-loader">
+  <div id="pre-loader" aria-hidden="true">
     <div class="loader-content">
-      <div class="loader-logo" id="brand-loader"></div>
-      <div class="loader-bar-container">
-        <div id="loader-progress"></div>
-      </div>
-      <div class="loader-status">
-        Loading
-      </div>
+      <div class="loader-logo">RARE ATELIER</div>
+      <div class="loader-bar-container"><div class="loader-bar"></div></div>
+      <div class="loader-status">Loading</div>
     </div>
   </div>
 
   <div id="root"></div>
 
   <script>
-    // Optimized Smooth Loader Implementation using requestAnimationFrame
-    var finishLoading; // Global for the skip button
-    
+    var finishLoading;
+
     (function() {
       var isCanvasPreview = false;
       try {
@@ -190,122 +188,48 @@
       } catch (e) {}
 
       var loader = document.getElementById('pre-loader');
-      var progress = document.getElementById('loader-progress');
       var root = document.getElementById('root');
-      var brandContainer = document.getElementById('brand-loader');
       var body = document.body;
+      var hasCompleted = false;
+      var isVisible = false;
+      var revealTimer = null;
 
-      if (isCanvasPreview) {
-        if (loader) loader.style.display = 'none';
-        if (root) root.classList.add('ready');
-        if (body) body.classList.remove('loading');
-        finishLoading = function() {};
-        window.finishLoading = finishLoading;
-        return;
-      }
-      
-      var BRAND_NAME = "RARE ATELIER";
-      
-      // Setup letters
-      var chars = BRAND_NAME.split('');
-      for (var i = 0; i < chars.length; i++) {
-        var span = document.createElement('span');
-        var char = chars[i];
-        span.className = char === ' ' ? '' : 'letter';
-        span.textContent = char === ' ' ? '\u00A0' : char;
-        brandContainer.appendChild(span);
-      }
-      var letters = brandContainer.querySelectorAll('.letter');
-
-      var animationId;
-      var currentProgress = 0; // The actual visual value (0-100)
-      var targetProgress = 0; // Where the visual value is animating towards
-      var isFinishing = false; // Flag to indicate React is ready
-      var hasCompleted = false; // Prevent duplicate teardown calls
-
-      // Smooth easing function
-      function lerp(start, end, amt) {
-        return (1 - amt) * start + amt * end;
-      }
-
-      function updateUI() {
-        if (!progress) return;
-        
-        // Progress the bar
-        progress.style.width = currentProgress + '%';
-        
-        // Stagger the letters smoothly based on continuous visual progress
-        var revealThreshold = (currentProgress / 100) * letters.length;
-        for (var j = 0; j < letters.length; j++) {
-          if (j < revealThreshold) {
-            letters[j].classList.add('visible');
-          }
-        }
-      }
-
-      function loop() {
-        // If not finishing, slowly increment the target to build suspense
-        if (!isFinishing && targetProgress < 90) {
-           targetProgress += 0.2; 
-        }
-
-        // Lerp towards the target smoothly (0.1 is the speed of easing)
-        currentProgress = lerp(currentProgress, targetProgress, 0.1);
-        
-        updateUI();
-
-        // If we are finishing and visual progress reaches 99.5%, trigger the exit
-        if (isFinishing && currentProgress > 99.5) {
-          progress.style.width = '100%';
-          cancelAnimationFrame(animationId);
-          completeLoadSequence();
-          return;
-        }
-
-        animationId = requestAnimationFrame(loop);
-      }
-
-      function completeLoadSequence() {
+      function revealApp() {
         if (hasCompleted) return;
         hasCompleted = true;
-
-        if (loader && !loader.classList.contains('loaded')) {
-          loader.classList.add('loaded');
+        if (revealTimer) {
+          clearTimeout(revealTimer);
+          revealTimer = null;
         }
         if (root) {
           root.classList.add('ready');
         }
-
-        setTimeout(function() {
-          body.classList.add('app-ready');
-          body.classList.remove('loading');
+        if (loader) {
+          loader.classList.add('loaded');
+        }
+        window.setTimeout(function() {
+          if (body) body.classList.remove('loading');
           if (loader && loader.parentNode) {
             loader.parentNode.removeChild(loader);
           }
-        }, 800);
+        }, isVisible ? 180 : 0);
       }
 
-      finishLoading = function() {
-        if (isFinishing || hasCompleted) return;
-        
-        // React is ready! Accelerate the target to 100 immediately
-        isFinishing = true;
-        targetProgress = 100;
-
-        // Hard fallback: never leave app hidden if RAF is delayed/throttled.
-        setTimeout(completeLoadSequence, 900);
-      };
-
-      // Start the render loop
-      animationId = requestAnimationFrame(loop);
-
-      // The React app is now responsible for calling this when ready
+      finishLoading = revealApp;
       window.finishLoading = finishLoading;
 
-      // Extended safety timeout in case React fails entirely
-      setTimeout(finishLoading, 5000);
-      // Last-resort reveal if both animation and finish callback are delayed.
-      setTimeout(completeLoadSequence, 8000);
+      if (isCanvasPreview) {
+        revealApp();
+        return;
+      }
+
+      revealTimer = window.setTimeout(function() {
+        if (hasCompleted || !loader) return;
+        isVisible = true;
+        loader.classList.add('visible');
+      }, 180);
+
+      window.setTimeout(revealApp, 5000);
     })();
   </script>
   <script type="module" src="/src/main.tsx"></script>

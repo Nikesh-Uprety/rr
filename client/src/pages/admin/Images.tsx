@@ -24,6 +24,7 @@ import {
 import { Trash2, Upload, Images as ImagesIcon, Copy, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Pagination } from "@/components/admin/Pagination";
+import { AdminImagesSkeleton } from "@/components/admin/AdminPageSkeletons";
 
 type ImageCategory =
   | "product"
@@ -684,9 +685,7 @@ export default function AdminImagesPage() {
         </div>
 
         {imagesQuery.isLoading ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            Loading images…
-          </div>
+          <AdminImagesSkeleton />
         ) : filtered.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             No images found in this category.

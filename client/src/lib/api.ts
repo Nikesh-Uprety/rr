@@ -31,8 +31,10 @@ export interface ProductApi {
   shortDetails?: string | null;
   description: string | null;
   price: number;
+  costPrice?: number | null;
   imageUrl: string | null;
   galleryUrls?: string | null;
+  colorImageMap?: Record<string, string[]> | null;
   category: string | null;
   stock: number;
   colorOptions?: string | null;
@@ -48,11 +50,15 @@ export interface ProductApi {
   isActive?: boolean;
   stockBySize?: Record<string, number>;
   variants?: Array<{
-    id: number;
+    id: number | string;
     size: string;
     color: string | null;
     stock: number;
     sku: string | null;
+    compareAtPrice?: number | null;
+    sellingPrice?: number | null;
+    costPrice?: number | null;
+    weight?: number | null;
   }>;
   sizeChart?: ProductSizeChart | null;
 }
@@ -94,6 +100,16 @@ export interface OrderInput {
   deliveryAddress?: string | null;
   promoCodeId?: string;
 }
+
+export interface PendingCheckoutPayload {
+  orderInput: OrderInput;
+  subtotal: number;
+  shipping: number;
+  total: number;
+  createdAt: string;
+}
+
+const PENDING_CHECKOUT_KEY = "ra_pending_checkout_order";
 
 export async function fetchProducts(filters?: {
   category?: string;
@@ -204,6 +220,49 @@ export async function createOrder(data: OrderInput) {
     data?: { orderNumber: string; total: number; order: OrderDetail };
     error?: string;
   };
+}
+
+export function cachePendingCheckout(payload: PendingCheckoutPayload): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(PENDING_CHECKOUT_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage write errors (private mode / quota).
+  }
+}
+
+export function getPendingCheckout(): PendingCheckoutPayload | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PENDING_CHECKOUT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PendingCheckoutPayload;
+    if (!parsed?.orderInput?.items?.length) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingCheckout(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(PENDING_CHECKOUT_KEY);
+  } catch {
+    // Ignore storage write errors (private mode / quota).
+  }
+}
+
+export function updatePendingCheckoutPaymentMethod(paymentMethod: string): void {
+  const existing = getPendingCheckout();
+  if (!existing) return;
+  cachePendingCheckout({
+    ...existing,
+    orderInput: {
+      ...existing.orderInput,
+      paymentMethod,
+    },
+  });
 }
 
 export interface OrderDetail {

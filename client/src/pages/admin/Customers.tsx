@@ -75,7 +75,7 @@ export default function AdminCustomers() {
   const [isExportingCustomers, setIsExportingCustomers] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [customerPage, setCustomerPage] = useState(1);
-  const [customerPageSize, setCustomerPageSize] = useState(15);
+  const customerPageSize = 10;
   const [chartTimeRange, setChartTimeRange] = useState<"1w" | "1m" | "all">("1w");
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -137,7 +137,7 @@ export default function AdminCustomers() {
 
   useEffect(() => {
     setCustomerPage(1);
-  }, [search, customerPageSize]);
+  }, [search]);
 
   const listCustomers = customerPageData?.data ?? [];
   const totalCustomers = customerPageData?.total ?? 0;
@@ -793,7 +793,6 @@ export default function AdminCustomers() {
           }}
           totalItems={totalCustomers}
           pageSize={customerPageSize}
-          onPageSizeChange={setCustomerPageSize}
         />
       </div>
 

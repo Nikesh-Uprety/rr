@@ -135,7 +135,7 @@ export default function ContactInfo({ showMap = true }: ContactInfoProps) {
                       <Facebook className="w-4 h-4" />
                     </a>
                     <a
-                      href="https://www.instagram.com/rare.np/"
+                      href="https://www.instagram.com/rareofficial.au/"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-2 rounded-full border border-border hover:bg-muted transition-colors"

@@ -52,6 +52,7 @@ import "@/styles/admin-shell.css";
 const ADMIN_SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
 const ADMIN_SIDEBAR_EXPANDED_WIDTH_KEY = "sidebar-width-expanded";
 const ADMIN_SIDEBAR_COLLAPSED_WIDTH_KEY = "sidebar-width-collapsed";
+const ADMIN_THEME_KEY = "admin-theme";
 const ADMIN_SIDEBAR_MIN_WIDTH = 220;
 const ADMIN_SIDEBAR_DEFAULT_WIDTH = 288;
 const ADMIN_SIDEBAR_COLLAPSED_MIN_WIDTH = 56;
@@ -73,6 +74,7 @@ export default function AdminLayout({
   const pathname = location.split("?")[0];
   const { user } = useCurrentUser();
   const { theme, setTheme } = useThemeStore();
+  const storefrontThemeRef = useRef<"light" | "dark" | "warm">("light");
   const { toast } = useToast();
   const { getUnreadCountByType, markTypeRead } = useNotifications();
   useAdminWebSocket();
@@ -109,6 +111,22 @@ export default function AdminLayout({
   useEffect(() => {
     setMobileMenuOpen(false); // Close mobile menu on route change
   }, [pathname]);
+
+  // Admin panel defaults to light mode, independent from storefront theme.
+  // We restore the previous theme when leaving the admin shell.
+  useEffect(() => {
+    storefrontThemeRef.current = theme;
+    if (typeof window === "undefined") return;
+
+    const saved = localStorage.getItem(ADMIN_THEME_KEY);
+    const adminTheme = saved === "dark" || saved === "light" ? saved : "light";
+    setTheme(adminTheme);
+
+    return () => {
+      setTheme(storefrontThemeRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     applyAdminFontSettings(readAdminFontSettings());
@@ -323,7 +341,11 @@ export default function AdminLayout({
     window.dispatchEvent(new Event("canvas-customization-nav"));
   };
   const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(ADMIN_THEME_KEY, next);
+    }
   };
 
   return (
@@ -366,7 +388,7 @@ export default function AdminLayout({
         <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-card/50">
           <Link href="/" className="flex items-center">
             <img
-              src="/images/logo.webp"
+              src="/images/newproductpagelogo.png"
               alt="RARE.NP Logo"
               className="h-9 sm:h-10 w-auto object-contain dark:brightness-0 dark:invert"
             />
@@ -482,7 +504,7 @@ export default function AdminLayout({
             title="Open Home Page"
           >
             <img
-              src="/images/logo.webp"
+              src="/images/newproductpagelogo.png"
               alt="RARE.NP"
               className="h-10 w-auto object-contain dark:brightness-0 dark:invert"
             />
@@ -662,7 +684,7 @@ export default function AdminLayout({
                 title="Open Home Page"
               >
                 <img
-                  src="/images/logo.webp"
+                  src="/images/newproductpagelogo.png"
                   alt="RARE.NP"
                   className="h-7 w-auto object-contain brightness-0 dark:brightness-0 dark:invert"
                 />

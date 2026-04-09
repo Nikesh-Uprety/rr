@@ -60,15 +60,17 @@ export default function Navbar() {
   const { data: pageConfig } = useQuery({
     queryKey: ["page-config", previewTemplateId],
     queryFn: () => fetchPageConfig(previewTemplateId),
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: previewTemplateId !== null ? 0 : 5 * 60 * 1000,
+    refetchOnMount: previewTemplateId !== null ? "always" : false,
+    refetchOnWindowFocus: previewTemplateId !== null,
   });
+  const isStuffyClone = pageConfig?.template?.slug === "stuffyclone";
 
   const isStorefront = !location.startsWith("/admin");
   const isHomeRoute = location === "/";
   const isAtelierRoute = location === "/atelier";
   const isProductDetailRoute = /^\/product\/[^/]+/.test(location);
+  const isStuffyProductDetail = isStuffyClone && isProductDetailRoute;
   const isHeroRoute = isHomeRoute || isAtelierRoute;
   const isInnerStorefrontRoute = isStorefront && !isHeroRoute;
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] = useState(false);
@@ -140,17 +142,11 @@ export default function Navbar() {
         setHasScrolledPastThreshold(true);
       }
 
-      const previousY = lastScrollYRef.current;
-      const delta = y - previousY;
       const nearTop = y <= 40;
 
       if (nearTop) {
         setIsNavHidden(false);
         setHasScrolledPastThreshold(false);
-      } else if (delta > 6) {
-        setIsNavHidden(true);
-      } else if (delta < -6) {
-        setIsNavHidden(false);
       }
 
       lastScrollYRef.current = y;
@@ -173,15 +169,26 @@ export default function Navbar() {
       .join("")
       .toUpperCase() || (user?.email?.[0] || "U").toUpperCase();
 
-  const baseNavLinks = [
-    { name: "Home", href: "/" },
-    { name: "Shop", href: "/products" },
-    { name: "Collection", href: "/new-collection" },
-    { name: "Atelier", href: "/atelier" },
-  ];
   const navLinks = useMemo(() => {
-    return baseNavLinks;
-  }, [baseNavLinks]);
+    if (isStuffyClone) {
+      return [
+        { name: "Shop", href: "/products" },
+        { name: "Collection", href: "/new-collection" },
+        { name: "Our Services", href: "/atelier" },
+        { name: "FAQ", href: "/shipping" },
+        { name: "Customer Care", href: "/refund" },
+        { name: "Contact", href: "/atelier#contact" },
+        { name: "Cart", href: "/cart" },
+      ];
+    }
+
+    return [
+      { name: "Home", href: "/" },
+      { name: "Shop", href: "/products" },
+      { name: "Collection", href: "/new-collection" },
+      { name: "Atelier", href: "/atelier" },
+    ];
+  }, [isStuffyClone]);
   const megaMenuContent = useMemo(
     () => ({
       "/": {
@@ -256,7 +263,13 @@ export default function Navbar() {
 
   const getInnerPageChrome = (darkMode: boolean) => {
     if (!darkMode) {
-      return getGlassChrome("light", { active: true });
+      return {
+        background: "#ffffff",
+        backdropFilter: "none",
+        WebkitBackdropFilter: "none",
+        borderColor: "rgba(0,0,0,0.08)",
+        boxShadow: "0 1px 0 rgba(0,0,0,0.06)",
+      };
     }
 
     return {
@@ -273,6 +286,8 @@ export default function Navbar() {
   const announceHeight = announceRef.current?.offsetHeight ?? 28;
   const forceSolidLightNavbar = isInnerStorefrontRoute;
   const isHeroMegaOpen = isHeroRoute && !hasScrolledPastThreshold && Boolean(activeMegaNavHref);
+  const isStuffyLanding = isStuffyClone && location === "/";
+  const shouldUseDarkStuffyChrome = isStuffyClone && theme === "dark";
   const navForegroundColor = isHeroMegaOpen
     ? "#111111"
     : forceSolidLightNavbar
@@ -280,7 +295,7 @@ export default function Navbar() {
     : useHeroContrastState
       ? "#ffffff"
       : isDark
-        ? "#111111"
+        ? "#ffffff"
         : "#ffffff";
   const navLinkColor = navForegroundColor;
   const navChrome = isHeroMegaOpen
@@ -303,17 +318,29 @@ export default function Navbar() {
     : useHeroContrastState
     ? "0 2px 12px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3), 0 0 20px rgba(255,255,255,0.15)"
     : "none";
-  const mobileMenuSurface = {
-    background: "#ffffff",
-    borderColor: "rgba(17,17,17,0.14)",
-    mutedBorder: "rgba(17,17,17,0.10)",
-    text: "#111111",
-    textMuted: "rgba(17,17,17,0.56)",
-    tile: "#ffffff",
-    iconBg: "rgba(17,17,17,0.04)",
-    accent: "#111111",
-    accentText: "#ffffff",
-  };
+  const mobileMenuSurface = shouldUseDarkStuffyChrome
+    ? {
+        background: "rgba(10,10,10,0.96)",
+        borderColor: "rgba(255,255,255,0.14)",
+        mutedBorder: "rgba(255,255,255,0.10)",
+        text: "rgba(255,255,255,0.94)",
+        textMuted: "rgba(255,255,255,0.56)",
+        tile: "rgba(255,255,255,0.04)",
+        iconBg: "rgba(255,255,255,0.06)",
+        accent: "#ffffff",
+        accentText: "#111111",
+      }
+    : {
+        background: "#ffffff",
+        borderColor: "rgba(17,17,17,0.16)",
+        mutedBorder: "rgba(17,17,17,0.12)",
+        text: "#000000",
+        textMuted: "rgba(0,0,0,0.62)",
+        tile: "#ffffff",
+        iconBg: "rgba(0,0,0,0.04)",
+        accent: "#000000",
+        accentText: "#ffffff",
+      };
 
   const clearMegaCloseTimer = () => {
     if (megaCloseTimerRef.current) {
@@ -358,7 +385,7 @@ export default function Navbar() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm lg:hidden"
+                  className={isStuffyClone ? "fixed inset-0 z-[120] bg-black/50 backdrop-blur-sm" : "fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm lg:hidden"}
                   onClick={() => setIsMobileMenuOpen(false)}
                 />
                 <motion.aside
@@ -366,7 +393,7 @@ export default function Navbar() {
                   animate={{ x: 0 }}
                   exit={{ x: "-100%" }}
                   transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
-                  className="fixed inset-y-0 left-0 z-[81] flex w-[min(82vw,340px)] max-w-[340px] flex-col border-r lg:hidden"
+                  className={isStuffyClone ? "fixed inset-y-0 left-0 z-[121] flex w-[min(88vw,360px)] max-w-[360px] flex-col border-r" : "fixed inset-y-0 left-0 z-[81] flex w-[min(82vw,340px)] max-w-[340px] flex-col border-r lg:hidden"}
                   style={{
                     background: mobileMenuSurface.background,
                     color: mobileMenuSurface.text,
@@ -385,10 +412,14 @@ export default function Navbar() {
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       <img
-                        src="/images/logo.webp"
+                        src="/images/newproductpagelogo-removebg-preview.png"
                         alt="Rare Atelier"
-                        className="h-8 w-auto object-contain"
-                        style={{ filter: "brightness(0)" }}
+                        className="h-auto w-full max-w-[10.5rem] object-contain sm:max-w-[12rem]"
+                        style={{
+                          filter: theme === "dark"
+                            ? "brightness(0) invert(1) drop-shadow(0 0 14px rgba(255,255,255,0.28))"
+                            : "brightness(0)",
+                        }}
                       />
                     </Link>
                     <button
@@ -406,7 +437,7 @@ export default function Navbar() {
                     </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-6 py-4 sm:px-6">
+                  <div className="flex-1 overflow-y-auto px-8 py-6 sm:px-9">
                     <nav className="flex flex-col">
                       {navLinks.map((item, index) => {
                         const isActive = location === item.href;
@@ -414,9 +445,9 @@ export default function Navbar() {
                           <Link
                             key={item.href}
                             href={item.href}
-                            className="border-b py-5 text-[14px] font-black uppercase tracking-[0.14em] transition-opacity duration-200"
+                            className="border-b py-5 text-[16px] font-bold uppercase tracking-[0.22em] transition-opacity duration-200"
                             style={{
-                              fontFamily: "var(--font-mono)",
+                              fontFamily: "\"Archivo Narrow\", system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
                               borderColor: mobileMenuSurface.mutedBorder,
                               color: isActive ? mobileMenuSurface.accent : mobileMenuSurface.text,
                               opacity: isActive ? 1 : 0.78,
@@ -427,6 +458,25 @@ export default function Navbar() {
                         );
                       })}
                     </nav>
+
+                    <div
+                      className="mt-6 flex items-center justify-between border-t pt-5"
+                      style={{ borderColor: mobileMenuSurface.mutedBorder }}
+                    >
+                      <p
+                        className="text-[10px] font-bold uppercase tracking-[0.24em]"
+                        style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
+                      >
+                        Theme
+                      </p>
+                      <ThemeTogglerButton
+                        theme={theme}
+                        onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
+                        className="rounded-full px-1 py-0.5 transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+                        iconClassName="h-4 w-4"
+                        title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                      />
+                    </div>
 
                     {isAuthenticated && user ? (
                       <div
@@ -498,7 +548,7 @@ export default function Navbar() {
                           {cartItemsCount} item{cartItemsCount === 1 ? "" : "s"}
                         </p>
                       </div>
-                      <ShoppingBag className="h-4.5 w-4.5" />
+                      <ShoppingBag className="h-5 w-5" />
                     </button>
                   </div>
                 </motion.aside>
@@ -508,6 +558,160 @@ export default function Navbar() {
           document.body,
         );
 
+  if (isStuffyClone) {
+    const chromeColor = isStuffyLanding
+      ? theme === "dark"
+        ? "rgba(255,255,255,0.92)"
+        : "rgba(17,17,17,0.92)"
+      : theme === "dark"
+        ? "rgba(255,255,255,0.92)"
+        : "rgba(17,17,17,0.92)";
+    const chromeBg = isStuffyLanding
+      ? "transparent"
+      : isStuffyProductDetail && !isScrolled
+        ? "transparent"
+      : isStuffyProductDetail
+        ? theme === "dark"
+          ? "rgba(13,17,23,0.18)"
+          : "#ffffff"
+      : theme === "dark"
+        ? "rgba(13,17,23,0.68)"
+        : "#ffffff";
+    const chromeBorder = isStuffyLanding
+      ? "transparent"
+      : isStuffyProductDetail && !isScrolled
+        ? "transparent"
+      : isStuffyProductDetail
+        ? theme === "dark"
+          ? "rgba(255,255,255,0.06)"
+          : "rgba(17,17,17,0.10)"
+      : theme === "dark"
+        ? "rgba(255,255,255,0.10)"
+        : "rgba(17,17,17,0.10)";
+    const chromeBackdrop = isStuffyLanding || (isStuffyProductDetail && !isScrolled) ? "none" : "blur(14px)";
+    const landingControlBackground = isStuffyLanding
+      ? "transparent"
+      : isStuffyProductDetail
+      ? theme === "dark"
+        ? "rgba(15,23,42,0.18)"
+        : "#ffffff"
+      : theme === "dark"
+        ? "rgba(22,27,34,0.82)"
+        : "#ffffff";
+    const landingControlBorder = isStuffyLanding
+      ? "transparent"
+      : theme === "dark"
+        ? "rgba(255,255,255,0.10)"
+        : "rgba(17,17,17,0.10)";
+    const landingControlShadow = isStuffyLanding
+      ? "none"
+      : theme === "dark"
+      ? "0 12px 30px rgba(0,0,0,0.24)"
+      : "0 12px 30px rgba(15,23,42,0.08)";
+
+    return (
+      <>
+        {mobileMenu}
+        <header className="fixed inset-x-0 top-0 z-[110] pointer-events-auto">
+          <div
+            className="relative flex w-full items-center justify-between gap-3 px-4 py-4 sm:px-6 md:px-8"
+            style={{
+              background: chromeBg,
+              borderBottom: `1px solid ${chromeBorder}`,
+              backdropFilter: chromeBackdrop,
+              paddingTop: "max(env(safe-area-inset-top), 1rem)",
+              paddingRight: "max(env(safe-area-inset-right), 0px)",
+              paddingLeft: "max(env(safe-area-inset-left), 0px)",
+            }}
+            
+          >
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="group inline-flex min-h-11 items-center gap-3 rounded-full px-3 py-2 text-[13px] font-bold uppercase tracking-[0.28em] transition-opacity hover:opacity-80 sm:px-4 sm:text-[14px]"
+              style={{
+                color: chromeColor,
+                fontFamily: '"Archivo Narrow", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+                background: landingControlBackground,
+                border: `1px solid ${landingControlBorder}`,
+                boxShadow: landingControlShadow,
+              }}
+              aria-label="Open menu"
+            >
+              <span className="flex w-5 flex-col gap-1.5" aria-hidden="true">
+                <span className="h-px w-3 bg-current transition-all duration-300 ease-out group-hover:w-5" />
+                <span className="h-px w-5 bg-current transition-all duration-300 ease-out" />
+                <span className="h-px w-4 self-end bg-current transition-all duration-300 ease-out group-hover:w-2" />
+              </span>
+              <span>Menu</span>
+            </button>
+
+            <div className="pointer-events-none absolute inset-x-0 flex justify-center px-20 sm:px-28 md:px-36">
+              {isStuffyLanding ? null : (
+                <Link href="/" className="pointer-events-auto inline-flex items-center justify-center">
+                  <img
+                    src="/images/newproductpagelogo-removebg-preview.png"
+                    alt="Rare Atelier"
+                    className="h-auto w-full max-w-[12rem] object-contain sm:max-w-[15rem] md:max-w-[18rem]"
+                    style={{
+                      filter: theme === "dark"
+                        ? "brightness(0) invert(1) drop-shadow(0 0 18px rgba(255,255,255,0.38)) drop-shadow(0 0 34px rgba(255,255,255,0.16))"
+                        : "brightness(0)",
+                    }}
+                  />
+                </Link>
+              )}
+            </div>
+
+            <div className="ml-auto flex items-center justify-end gap-2 sm:gap-2.5">
+              <div className="[&>div>div]:border-none [&>div>div]:bg-transparent">
+                <SearchBar iconColor={chromeColor} minimal={isStuffyLanding && theme !== "dark"} />
+              </div>
+              <ThemeTogglerButton
+                theme={theme}
+                onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className={`inline-flex items-center justify-center rounded-full transition-colors hover:bg-white/10 ${
+                  isStuffyLanding
+                    ? "[&_.MuiSwitch-root]:-mx-2 [&_.MuiSwitch-root]:scale-[0.72]"
+                    : "px-1"
+                }`}
+                style={{
+                  color: chromeColor,
+                  border: `1px solid ${chromeBorder}`,
+                  background: landingControlBackground,
+                  boxShadow: landingControlShadow,
+                }}
+                iconClassName="h-5 w-5"
+                title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              />
+              <button
+                type="button"
+                onClick={() => openCartSidebar()}
+                className="relative flex h-11 w-11 items-center justify-center rounded-full"
+                style={{
+                  color: chromeColor,
+                  border: `1px solid ${chromeBorder}`,
+                  background: landingControlBackground,
+                  boxShadow: landingControlShadow,
+                }}
+                aria-label="Open cart"
+              >
+                <ShoppingBag className="h-5 w-5" />
+                {cartItemsCount > 0 ? (
+                  <span
+                    className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold"
+                    style={{ background: chromeColor, color: isStuffyLanding || theme === "dark" ? "rgba(0,0,0,0.92)" : "rgba(255,255,255,0.92)" }}
+                  >
+                    {cartItemsCount}
+                  </span>
+                ) : null}
+              </button>
+            </div>
+          </div>
+        </header>
+      </>
+    );
+  }
   return (
     <>
       <header
@@ -588,28 +792,22 @@ export default function Navbar() {
             </div>
 
             <Link href="/" className="flex justify-self-center items-center justify-center text-center">
-              <img
-                src={isProductDetailRoute ? "/images/newproductpagelogo.png" : "/images/logo.webp"}
-                alt="Rare Atelier"
+              <span
                 className={
                   isProductDetailRoute
-                    ? "mx-auto h-auto w-[27vw] min-w-[150px] max-w-[360px] object-contain sm:w-[24vw] lg:w-[19vw]"
-                    : "mx-auto h-11 w-auto object-contain sm:h-12 lg:h-14"
+                    ? "mx-auto text-[clamp(1rem,2.1vw,1.55rem)] font-bold uppercase tracking-[0.42em]"
+                    : "mx-auto text-[13px] font-bold uppercase tracking-[0.42em] sm:text-[14px] lg:text-[15px]"
                 }
-                width={isProductDetailRoute ? undefined : 1449}
-                height={isProductDetailRoute ? undefined : 289}
                 style={{
-                  filter: isProductDetailRoute
-                    ? "invert(1) brightness(1.06) contrast(1.08)"
-                    : logoFilter,
-                  transition: "filter 0.25s ease",
-                  opacity: 1,
+                  color: isProductDetailRoute ? "#ffffff" : navForegroundColor,
+                  fontFamily: "\"Archivo Narrow\", system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+                  textShadow: isProductDetailRoute ? "0 2px 12px rgba(0,0,0,0.42)" : "none",
                   mixBlendMode: isProductDetailRoute ? "difference" : "normal",
-                  imageRendering: "-webkit-optimize-contrast",
-                  backfaceVisibility: "hidden",
                   transform: isProductDetailRoute ? "translateY(1px)" : "none",
                 }}
-              />
+              >
+                Rare Atelier
+              </span>
             </Link>
 
             <div className="ml-auto flex items-center justify-end gap-1 sm:gap-2">
@@ -619,12 +817,12 @@ export default function Navbar() {
               <ThemeTogglerButton
                 theme={theme}
                 onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="flex h-10 w-10 items-center justify-center"
+                className="inline-flex items-center justify-center rounded-full px-1"
                 style={{
                   color: navForegroundColor,
                   textShadow: useHeroContrastState ? "0 0 14px rgba(255,255,255,0.28)" : "none",
                 }}
-                iconClassName="h-4.5 w-4.5"
+                iconClassName="h-5 w-5"
               />
               <button
                 type="button"
@@ -635,7 +833,7 @@ export default function Navbar() {
                   textShadow: useHeroContrastState ? "0 0 14px rgba(255,255,255,0.28)" : "none",
                 }}
               >
-                <ShoppingBag className="h-4.5 w-4.5" />
+                <ShoppingBag className="h-5 w-5" />
                 {cartItemsCount > 0 ? (
                   <span
                     className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px]"

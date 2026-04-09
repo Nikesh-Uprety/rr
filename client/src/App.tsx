@@ -40,6 +40,7 @@ const loadAdminDashboardPage = () => import("@/pages/admin/Dashboard");
 const loadAdminProductsPage = () => import("@/pages/admin/Products");
 const loadAdminInventoryPage = () => import("@/pages/admin/Inventory");
 const loadAdminOrdersPage = () => import("@/pages/admin/Orders");
+const loadAdminOrdersNewPage = () => import("@/pages/admin/OrdersNew");
 const loadAdminBillsPage = () => import("@/pages/admin/Bills");
 const loadAdminCustomersPage = () => import("@/pages/admin/Customers");
 const loadAdminMessagesPage = () => import("@/pages/admin/Messages");
@@ -75,6 +76,7 @@ const AdminDashboard = lazy(loadAdminDashboardPage);
 const AdminProducts = lazy(loadAdminProductsPage);
 const AdminInventory = lazy(loadAdminInventoryPage);
 const AdminOrders = lazy(loadAdminOrdersPage);
+const AdminOrdersNew = lazy(loadAdminOrdersNewPage);
 const AdminBills = lazy(loadAdminBillsPage);
 const AdminCustomers = lazy(loadAdminCustomersPage);
 const AdminMessages = lazy(loadAdminMessagesPage);
@@ -224,6 +226,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/admin/products" || cleanPath === "/admin/products/new") return loadAdminProductsPage();
   if (cleanPath === "/admin/inventory") return loadAdminInventoryPage();
   if (cleanPath === "/admin/orders") return loadAdminOrdersPage();
+  if (cleanPath === "/admin/orders/new") return loadAdminOrdersNewPage();
   if (cleanPath === "/admin/customers") return loadAdminCustomersPage();
   if (cleanPath === "/admin/messages") return loadAdminMessagesPage();
   if (/^\/admin\/store-users\/[^/]+$/.test(cleanPath)) return loadAdminStoreUserProfilePage();
@@ -286,9 +289,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const pathname = normalizePath(location);
   const isCommerceFlow = isCommerceFlowPath(pathname);
-  const [showNavbarOnScroll, setShowNavbarOnScroll] = useState(false);
   const commerceBreadcrumb = getCommerceBreadcrumb(pathname);
-  const shouldShowNavbar = !isCommerceFlow || showNavbarOnScroll;
   const previewTemplateId = useMemo(() => {
     if (typeof window === "undefined") return null;
     const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
@@ -299,13 +300,15 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
     const rawValue = new URLSearchParams(window.location.search).get("canvasFontPreset");
     return isStorefrontFontPreset(rawValue) ? rawValue : null;
   }, []);
+  const shouldHardRefreshConfig = previewTemplateId !== null;
   const { data: pageConfig } = useQuery({
     queryKey: ["page-config", previewTemplateId],
     queryFn: () => fetchPageConfig(previewTemplateId),
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: shouldHardRefreshConfig ? 0 : 5 * 60 * 1000,
+    refetchOnMount: shouldHardRefreshConfig ? "always" : false,
+    refetchOnWindowFocus: shouldHardRefreshConfig,
   });
+  const isStuffyLanding = pageConfig?.template?.slug === "stuffyclone" && pathname === "/";
 
   // Finish the pre-loader when the main app layout has mounted
   useEffect(() => {
@@ -328,21 +331,22 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
   }, [pageConfig?.fontPreset, previewFontPreset]);
 
   useEffect(() => {
-    if (!isCommerceFlow) {
-      setShowNavbarOnScroll(true);
-      return;
-    }
+    if (!isStuffyLanding) return;
 
-    const onScroll = () => {
-      setShowNavbarOnScroll(window.scrollY > 8);
-    };
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
 
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
     };
-  }, [isCommerceFlow, pathname]);
+  }, [isStuffyLanding]);
+
+  const shouldShowNavbar = true;
+  const shouldShowFooter = !isStuffyLanding;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -362,7 +366,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <CartSidebar />
-      <Footer />
+      {shouldShowFooter ? <Footer /> : null}
     </div>
   );
 }
@@ -465,6 +469,13 @@ function AppRoutes() {
         <ProtectedRoute requiredAdminPage="products">
           <AdminLayout>
             <AdminInventory />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/orders/new">
+        <ProtectedRoute requiredAdminPage="orders">
+          <AdminLayout>
+            <AdminOrdersNew />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

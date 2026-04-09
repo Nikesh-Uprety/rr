@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Trash2, CheckCircle2, ShoppingBag, Banknote, BadgePercent, Sparkles, ArrowLeft } from "lucide-react";
 import { DeliveryLocationSelect, NEPAL_LOCATIONS } from "@/components/DeliveryLocationSelect";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { cacheLatestOrder, createOrder, validatePromoCode } from "@/lib/api";
+import { useMutation } from "@tanstack/react-query";
+import { cacheLatestOrder, cachePendingCheckout, clearPendingCheckout, createOrder, validatePromoCode } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
@@ -57,6 +57,8 @@ const NEPAL_DISTRICTS = [
 
 export type PaymentMethodId = (typeof PAYMENT_OPTIONS)[number]["id"] | "cash_on_delivery";
 
+const MANUAL_PAYMENT_METHODS: PaymentMethodId[] = ["esewa", "khalti", "fonepay"];
+
 function getCheckoutOriginalPrice(price: number, originalPrice?: number | null, salePercentage?: number | null, saleActive?: boolean | null) {
   const currentPrice = Number(price);
   const explicitOriginalPrice = Number(originalPrice);
@@ -77,27 +79,6 @@ function getCheckoutOriginalPrice(price: number, originalPrice?: number | null, 
   }
 
   return currentPrice;
-}
-
-function hydrateOrderWithCartSelections(order: any, items: CartState["items"]) {
-  const remaining = [...items];
-  const nextItems = (order?.items ?? []).map((item: any) => {
-    const matchIndex = remaining.findIndex(
-      (cartItem) =>
-        cartItem.product.id === item.productId &&
-        cartItem.variant.size === (item.size ?? cartItem.variant.size),
-    );
-    const match = matchIndex >= 0 ? remaining.splice(matchIndex, 1)[0] : null;
-    return match
-      ? {
-          ...item,
-          color: match.variant.color,
-          variantColor: item.variantColor ?? match.variant.color,
-        }
-      : item;
-  });
-
-  return { ...order, items: nextItems };
 }
 
 export default function Checkout() {
@@ -307,45 +288,74 @@ export default function Checkout() {
       return;
     }
 
+    const orderPayload = {
+      items: items.map((item) => ({
+        variantId:
+          item.variant.id?.toString() ??
+          item.product.variants
+            ?.find(
+              (variant) =>
+                variant.size === item.variant.size && variant.color === item.variant.color,
+            )
+            ?.id
+            ?.toString(),
+        productId: item.product.id,
+        size: item.variant.size,
+        color: item.variant.color,
+        quantity: item.quantity,
+        priceAtTime: item.product.price,
+      })),
+      shipping: {
+        firstName: firstNameVal,
+        lastName: lastNameVal,
+        email: emailVal,
+        phone: phoneVal,
+        address: addressVal,
+        city: cityVal,
+        zip: "00000",
+        country: "Nepal",
+        locationCoordinates: deliveryLocation,
+        deliveryLocation,
+      },
+      paymentMethod,
+      source: "website",
+      deliveryRequired,
+      deliveryProvider: deliveryRequired ? deliveryProvider : null,
+      deliveryAddress: deliveryRequired ? deliveryAddress || null : null,
+      promoCodeId: appliedPromo?.id,
+    };
+
     try {
       const totalQuantity = items.reduce((acc, item) => acc + Number(item.quantity), 0);
 
-      const result = await mutateAsync({
-        items: items.map((item) => ({
-          variantId:
-            item.variant.id?.toString() ??
-            item.product.variants
-              ?.find(
-                (variant) =>
-                  variant.size === item.variant.size && variant.color === item.variant.color,
-              )
-              ?.id
-              ?.toString(),
-          productId: item.product.id,
-          size: item.variant.size,
-          color: item.variant.color,
-          quantity: item.quantity,
-          priceAtTime: item.product.price,
-        })),
-        shipping: {
+      if (MANUAL_PAYMENT_METHODS.includes(paymentMethod)) {
+        saveFormData({
+          email: emailVal,
           firstName: firstNameVal,
           lastName: lastNameVal,
-          email: emailVal,
-          phone: phoneVal,
           address: addressVal,
           city: cityVal,
-          zip: "00000",
-          country: "Nepal",
-          locationCoordinates: deliveryLocation,
-          deliveryLocation,
-        },
-        paymentMethod,
-        source: "website",
-        deliveryRequired,
-        deliveryProvider: deliveryRequired ? deliveryProvider : null,
-        deliveryAddress: deliveryRequired ? deliveryAddress || null : null,
-        promoCodeId: appliedPromo?.id,
-      });
+          phone: phoneVal,
+        });
+
+        cachePendingCheckout({
+          orderInput: orderPayload,
+          subtotal,
+          shipping,
+          total,
+          createdAt: new Date().toISOString(),
+        });
+
+        setStep(2);
+        toast({
+          title: "Proceed to payment",
+          description: "Upload your payment screenshot to complete and create the order.",
+        });
+        setLocation(`/checkout/payment?method=${paymentMethod}`);
+        return;
+      }
+
+      const result = await mutateAsync(orderPayload);
 
       if (!result.success || !result.data) {
         const errorCode = (result as any).code;
@@ -364,14 +374,11 @@ export default function Checkout() {
         return;
       }
 
-      const needsPaymentPage =
-        paymentMethod === "esewa" ||
-        paymentMethod === "khalti" ||
-        paymentMethod === "fonepay";
-
       if (paymentMethod === "stripe") {
         setStep(3);
-        cacheLatestOrder(hydrateOrderWithCartSelections(result.data.order, items));
+        cacheLatestOrder(result.data.order);
+        clearPendingCheckout();
+        clearSavedFormData();
         clearCart();
         toast({ title: "Order created. Redirecting to Stripe..." });
         try {
@@ -392,26 +399,9 @@ export default function Checkout() {
         return;
       }
 
-      if (needsPaymentPage) {
-        saveFormData({
-          email: emailVal,
-          firstName: firstNameVal,
-          lastName: lastNameVal,
-          address: addressVal,
-          city: cityVal,
-          phone: phoneVal,
-        });
-        setStep(3);
-        cacheLatestOrder(hydrateOrderWithCartSelections(result.data.order, items));
-        setLocation(
-          `/checkout/payment?orderId=${result.data.order.id}&method=${paymentMethod}`,
-        );
-        // Don't clear cart - user might come back to change payment method
-        return;
-      }
-
       setStep(3);
-      cacheLatestOrder(hydrateOrderWithCartSelections(result.data.order, items));
+      cacheLatestOrder(result.data.order);
+      clearPendingCheckout();
       setLocation(`/order-confirmation/${result.data.order.id}`);
       clearCart();
       clearSavedFormData();
@@ -697,7 +687,7 @@ export default function Checkout() {
           </Button>
         </form>
 
-        <div className="w-full lg:w-[450px] bg-zinc-50 dark:bg-zinc-200 p-10 h-fit rounded-2xl border border-zinc-200 dark:border-zinc-300 shadow-sm text-zinc-900">
+        <div className="w-full lg:w-[450px] bg-zinc-50 dark:bg-zinc-900 p-10 h-fit rounded-2xl border border-zinc-200 dark:border-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100">
           <div className="space-y-6 mb-10">
             {items.map(item => (
               <div key={item.id} className="flex gap-4">
@@ -715,10 +705,10 @@ export default function Checkout() {
                     </div>
                   )}
                 </div>
-                <div className="text-right text-[10px] font-black uppercase tracking-widest text-zinc-900">
+                <div className="text-right text-[10px] font-black uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
                   <div>{formatPrice(item.product.price)}</div>
                   {Number(item.product.originalPrice ?? item.product.price) > item.product.price && (
-                    <div className="mt-1 text-[8px] text-zinc-500 line-through">
+                    <div className="mt-1 text-[8px] text-zinc-500 dark:text-zinc-400 line-through">
                       {formatPrice(Number(item.product.originalPrice))}
                     </div>
                   )}
@@ -732,7 +722,7 @@ export default function Checkout() {
               <Input 
                 placeholder="Gift card or discount code" 
                 data-testid="checkout-promo-input"
-                className={`h-12 rounded-none bg-white border-gray-200 uppercase ${appliedPromo ? "pr-10 border-emerald-500" : ""}`} 
+                className={`h-12 rounded-none bg-white border-gray-200 uppercase dark:bg-zinc-950 dark:border-zinc-700 dark:text-zinc-100 dark:placeholder:text-zinc-500 ${appliedPromo ? "pr-10 border-emerald-500" : ""}`} 
                 value={promoCodeInput}
                 onChange={(e) => setPromoCodeInput(e.target.value)}
                 disabled={!!appliedPromo}
@@ -762,7 +752,7 @@ export default function Checkout() {
             </Button>
           </div>
 
-          <div className="space-y-4 text-[10px] uppercase tracking-widest font-bold text-zinc-600 pt-8 border-t border-zinc-200">
+          <div className="space-y-4 text-[10px] uppercase tracking-widest font-bold text-zinc-600 dark:text-zinc-300 pt-8 border-t border-zinc-200 dark:border-zinc-700">
             {productDiscountTotal > 0 && (
               <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-lime-300/10 to-amber-200/10 px-4 py-4 text-emerald-700">
                 <div className="mt-0.5 rounded-full bg-emerald-500/15 p-2">
@@ -779,7 +769,7 @@ export default function Checkout() {
             )}
             <div className="flex justify-between items-center">
               <span>Subtotal</span>
-              <span className="text-zinc-900 font-black">{formatPrice(subtotal)}</span>
+              <span className="text-zinc-900 dark:text-zinc-100 font-black">{formatPrice(subtotal)}</span>
             </div>
             {productDiscountTotal > 0 && (
               <div className="flex justify-between items-center text-emerald-600">
@@ -796,11 +786,11 @@ export default function Checkout() {
                 <span className="font-black">-{formatPrice(discountAmount)}</span>
               </div>
             )}
-            <div className="flex justify-between items-center text-zinc-600">
+            <div className="flex justify-between items-center text-zinc-600 dark:text-zinc-300">
               <span>Shipping</span>
-              <span className="text-zinc-900 font-black">{formatPrice(shipping)}</span>
+              <span className="text-zinc-900 dark:text-zinc-100 font-black">{formatPrice(shipping)}</span>
             </div>
-            <div className="flex justify-between text-zinc-900 text-sm font-extrabold pt-4">
+            <div className="flex justify-between text-zinc-900 dark:text-zinc-100 text-sm font-extrabold pt-4">
               <span>Total</span>
               <span>{formatPrice(total)}</span>
             </div>

@@ -16,7 +16,7 @@ import {
   fetchAdminOrders,
   fetchAdminProducts,
   fetchAdminCustomers,
-  exportOrdersCSVInstant,
+  exportDashboard24hCSVInstant,
   type AdminOrder,
   type AdminCustomer,
 } from "@/lib/adminApi";
@@ -281,7 +281,7 @@ export default function AdminDashboard() {
           <ArrowRight className="h-4 w-4 text-[#2C5234] transition-transform duration-300 group-hover:translate-x-1 dark:text-foreground" />
         </Button>
         <ExportButton
-          onExport={() => exportOrdersCSVInstant()}
+          onExport={() => exportDashboard24hCSVInstant()}
           label="Export Report"
           className={`justify-between ${quickActionBtnClass} ${quickActionLightClass}`}
         />

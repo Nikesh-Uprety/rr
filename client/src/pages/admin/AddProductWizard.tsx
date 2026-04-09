@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { memo, useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -43,24 +44,44 @@ import type { CategoryApi } from "@/lib/api";
 import { apiRequest, getErrorMessage } from "@/lib/queryClient";
 import { syncStockBySizeToSizes } from "./productStock";
 
+const variantRowSchema = z.object({
+  id: z.string(),
+  color: z.string(),
+  size: z.string(),
+  crossedPrice: z.coerce.number().min(0).default(0),
+  sellingPrice: z.coerce.number().min(0).default(0),
+  costPrice: z.coerce.number().min(0).default(0),
+  weight: z.coerce.number().min(0).default(0),
+  quantity: z.coerce.number().min(0).default(0),
+  sku: z.string().min(1, "SKU required"),
+});
+
 const productSchema = z.object({
   name: z.string().min(2, "Name required"),
   shortDetails: z.string().optional(),
   description: z.string().optional(),
   category: z.string().optional(),
   price: z.coerce.number().min(1, "Price required"),
+  costPrice: z.coerce.number().min(0).default(0),
   stockStatus: z.enum(["in_stock", "out_of_stock"]),
   stock: z.coerce.number().min(0).default(0),
   stockBySize: z.record(z.string(), z.coerce.number().min(0)).default({}),
   imageUrl: z.string().optional(),
   galleryUrlsText: z.string().optional(),
-  colorOptions: z.array(z.string()),
-  sizeOptions: z.array(z.string()),
+  colorOptions: z.array(z.string()).default([]),
+  sizeOptions: z.array(z.string()).default([]),
+  variantsEnabled: z.boolean().default(false),
+  variantColorHexMap: z.record(z.string(), z.string()).default({}),
+  variants: z.array(variantRowSchema).default([]),
+  continueSellingOutOfStock: z.boolean().default(false),
   salePercentage: z.coerce.number().min(0).max(100).default(0),
   saleActive: z.boolean().default(false),
+  colorImageMap: z.record(z.string(), z.array(z.string())).optional().default({}),
 });
 
+type ProductVariantRow = z.infer<typeof variantRowSchema>;
 type ProductFormValues = z.infer<typeof productSchema>;
+type ColorDetail = { name: string; hex: string };
 
 const DEFAULT_SIZES = ["S", "M", "L", "XL"];
 const DEFAULT_COLORS = ["Black", "White", "Red", "Navy", "Olive", "Sand", "Charcoal"];
@@ -71,6 +92,139 @@ const IMAGE_CATEGORIES = [
   { value: "landing_page", label: "Landing Pages" },
   { value: "collection_page", label: "Collection Pages" },
 ];
+
+const DEFAULT_COLOR_SWATCHES: Record<string, string> = {
+  Black: "#1c1b1b",
+  White: "#ffffff",
+  Red: "#b42318",
+  Navy: "#182b56",
+  Olive: "#4d5d38",
+  Sand: "#d9c8a8",
+  Charcoal: "#36454f",
+};
+
+const slugifyVariantToken = (value: string): string =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const normalizeVariantColor = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+};
+
+const normalizeHex = (value: string | undefined): string => {
+  const trimmed = (value ?? "").trim();
+  if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmed)) {
+    return trimmed.length === 4
+      ? `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`.toLowerCase()
+      : trimmed.toLowerCase();
+  }
+  return "#000000";
+};
+
+const buildVariantKey = (color: string, size: string) => `${color}:::${size}`;
+
+const buildVariantSku = (productName: string, color: string, size: string): string => {
+  const productSlug = slugifyVariantToken(productName) || "product";
+  const colorSlug = slugifyVariantToken(color) || "default";
+  const sizeSlug = slugifyVariantToken(size) || "one";
+  return `${productSlug}-${colorSlug}-${sizeSlug}`;
+};
+
+const sanitizeVariantNumber = (value: number | string | undefined): number => {
+  const numeric = typeof value === "number" ? value : Number(value ?? 0);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, numeric);
+};
+
+const preserveExistingVariantsOnUpdate = ({
+  productName,
+  colors,
+  sizes,
+  existingVariants,
+  basePrice,
+  baseCostPrice,
+}: {
+  productName: string;
+  colors: string[];
+  sizes: string[];
+  existingVariants: ProductVariantRow[];
+  basePrice: number;
+  baseCostPrice: number;
+}): ProductVariantRow[] => {
+  const existingByKey = new Map(existingVariants.map((variant) => [buildVariantKey(variant.color, variant.size), variant]));
+
+  return colors.flatMap((color) =>
+    sizes.map((size) => {
+      const existing = existingByKey.get(buildVariantKey(color, size));
+      return {
+        id: existing?.id ?? buildVariantKey(color, size),
+        color,
+        size,
+        crossedPrice: sanitizeVariantNumber(existing?.crossedPrice ?? 0),
+        sellingPrice: sanitizeVariantNumber(existing?.sellingPrice ?? basePrice),
+        costPrice: sanitizeVariantNumber(existing?.costPrice ?? baseCostPrice),
+        weight: sanitizeVariantNumber(existing?.weight ?? 0),
+        quantity: sanitizeVariantNumber(existing?.quantity ?? 0),
+        sku: existing?.sku?.trim() || buildVariantSku(productName, color, size),
+      };
+    }),
+  );
+};
+
+const generateVariants = (colors: string[], sizes: string[]) =>
+  colors.flatMap((color) => sizes.map((size) => ({ color, size })));
+
+const buildStockBySizeFromVariants = (variants: ProductVariantRow[]) =>
+  variants.reduce<Record<string, number>>((draft, variant) => {
+    draft[variant.size] = (draft[variant.size] ?? 0) + Math.trunc(sanitizeVariantNumber(variant.quantity));
+    return draft;
+  }, {});
+
+const VariantMatrixRow = memo(function VariantMatrixRow({
+  row,
+  duplicateSku,
+  onFieldChange,
+  onCopySellingPrice,
+}: {
+  row: ProductVariantRow;
+  duplicateSku: boolean;
+  onFieldChange: (id: string, field: keyof ProductVariantRow, value: number | string) => void;
+  onCopySellingPrice: (row: ProductVariantRow) => void;
+}) {
+  return (
+    <tr className="border-b border-black/5 align-top last:border-none dark:border-white/10">
+      <td className="whitespace-nowrap px-3 py-3 text-sm font-semibold text-[#223227] dark:text-white">{row.color}/{row.size}</td>
+      <td className="min-w-[110px] px-2 py-3"><Input type="number" min={0} value={row.crossedPrice} onChange={(event) => onFieldChange(row.id, "crossedPrice", event.target.value)} className="h-10 rounded-xl" /></td>
+      <td className="min-w-[110px] px-2 py-3"><Input type="number" min={0} value={row.sellingPrice} onChange={(event) => onFieldChange(row.id, "sellingPrice", event.target.value)} className="h-10 rounded-xl font-semibold" /></td>
+      <td className="min-w-[110px] px-2 py-3"><Input type="number" min={0} value={row.costPrice} onChange={(event) => onFieldChange(row.id, "costPrice", event.target.value)} className="h-10 rounded-xl" /></td>
+      <td className="min-w-[100px] px-2 py-3"><Input type="number" min={0} value={row.weight} onChange={(event) => onFieldChange(row.id, "weight", event.target.value)} className="h-10 rounded-xl" /></td>
+      <td className="min-w-[100px] px-2 py-3"><Input type="number" min={0} value={row.quantity} onChange={(event) => onFieldChange(row.id, "quantity", event.target.value)} className="h-10 rounded-xl" /></td>
+      <td className="min-w-[210px] px-2 py-3">
+        <Input
+          value={row.sku}
+          onChange={(event) => onFieldChange(row.id, "sku", event.target.value)}
+          className={cn("h-10 rounded-xl", duplicateSku && "border-red-500 text-red-600 focus-visible:ring-red-500 dark:border-red-400 dark:text-red-300")}
+        />
+        <div className="mt-1 flex items-center justify-between gap-2 text-[10px]">
+          <span className={duplicateSku ? "text-red-600 dark:text-red-300" : "text-muted-foreground"}>
+            {duplicateSku ? "SKU must be unique" : "Editable auto-generated SKU"}
+          </span>
+          <button type="button" className="font-semibold text-[#223227] underline decoration-dotted underline-offset-4 dark:text-white" onClick={() => onCopySellingPrice(row)}>
+            Copy price down
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
 
 interface AddProductWizardProps {
   categories: CategoryApi[];
@@ -109,11 +263,12 @@ export default function AddProductWizard({
   galleryUploadStatus,
 }: AddProductWizardProps) {
   const [step, setStep] = useState(1);
-  const [customColors, setCustomColors] = useState<string[]>([]);
+  const [customColors, setCustomColors] = useState<Array<{ name: string; hex: string }>>([]);
   const [customSizes, setCustomSizes] = useState<string[]>([]);
   const [newColorHex, setNewColorHex] = useState("#000000");
   const [newColorName, setNewColorName] = useState("");
   const [newSizeInput, setNewSizeInput] = useState("");
+  const [bulkSellingPrice, setBulkSellingPrice] = useState("");
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -138,33 +293,36 @@ export default function AddProductWizard({
     queryFn: () => fetchAdminAttributes(),
   });
 
-  const attributeColors = useMemo(() => {
-    const colors: string[] = [];
-    (attributes ?? []).filter(a => a.type === "color").forEach(a => {
-      const [label, hex] = a.value.split("|");
-      if (label?.trim()) colors.push(`${label.trim()} (${hex?.trim() || "#000000"})`);
-    });
-    return colors;
-  }, [attributes]);
+  const attributeColors = useMemo(
+    () =>
+      (attributes ?? [])
+        .filter((attribute) => attribute.type === "color")
+        .flatMap((attribute) => {
+          const [rawName, rawHex] = attribute.value.split("|");
+          const name = normalizeVariantColor(rawName ?? "");
+          if (!name) return [];
+          return [{ name, hex: normalizeHex(rawHex) }];
+        }),
+    [attributes],
+  );
 
   const availableColors = useMemo(() => {
-    return [...DEFAULT_COLORS, ...attributeColors, ...customColors];
+    const merged = new Map<string, { name: string; hex: string }>();
+    [...DEFAULT_COLORS.map((name) => ({ name, hex: DEFAULT_COLOR_SWATCHES[name] ?? "#000000" })), ...attributeColors, ...customColors].forEach((color) => {
+      const name = normalizeVariantColor(color.name);
+      if (!name) return;
+      merged.set(name, { name, hex: normalizeHex(color.hex) });
+    });
+    return Array.from(merged.values());
   }, [attributeColors, customColors]);
 
-  const availableSizes = useMemo(() => {
-    return [...DEFAULT_SIZES, ...customSizes];
-  }, [customSizes]);
+  const availableSizes = useMemo(() => [...DEFAULT_SIZES, ...customSizes], [customSizes]);
 
   const selectedColors = addForm.watch("colorOptions") || [];
   const selectedSizes = addForm.watch("sizeOptions") || [];
-
-  // Initialize default sizes on mount
-  useEffect(() => {
-    const current = addForm.getValues("sizeOptions") || [];
-    if (current.length === 0) {
-      addForm.setValue("sizeOptions", [...DEFAULT_SIZES], { shouldValidate: false, shouldDirty: false });
-    }
-  }, []);
+  const variantsEnabled = addForm.watch("variantsEnabled") ?? false;
+  const variantRows = addForm.watch("variants") || [];
+  const variantColorHexMap = addForm.watch("variantColorHexMap") || {};
 
   useEffect(() => {
     if (!categories.length) return;
@@ -196,32 +354,72 @@ export default function AddProductWizard({
     };
   }, []);
 
-  const toggleColor = useCallback((color: string) => {
-    const currentColors = addForm.getValues("colorOptions") || [];
-    const next = currentColors.includes(color)
-      ? currentColors.filter((c: string) => c !== color)
-      : [...currentColors, color];
-    addForm.setValue("colorOptions", next, { shouldValidate: false, shouldDirty: false });
-  }, [addForm]);
+  const upsertColorSelection = useCallback(
+    (rawColor: string, rawHex?: string) => {
+      const color = normalizeVariantColor(rawColor);
+      if (!color) return;
+      const currentColors = addForm.getValues("colorOptions") || [];
+      const exists = currentColors.includes(color);
+      const nextColors = exists ? currentColors.filter((item: string) => item !== color) : [...currentColors, color];
+      addForm.setValue("colorOptions", nextColors, { shouldValidate: false, shouldDirty: true });
+      const nextHexMap = {
+        ...(addForm.getValues("variantColorHexMap") || {}),
+        [color]: normalizeHex(rawHex ?? variantColorHexMap[color] ?? DEFAULT_COLOR_SWATCHES[color] ?? "#000000"),
+      };
+      addForm.setValue("variantColorHexMap", nextHexMap, { shouldValidate: false, shouldDirty: true });
+    },
+    [addForm, variantColorHexMap],
+  );
 
-  const toggleSize = useCallback((size: string) => {
-    const currentSizes = addForm.getValues("sizeOptions") || [];
-    const next = currentSizes.includes(size)
-      ? currentSizes.filter((s: string) => s !== size)
-      : [...currentSizes, size];
-    addForm.setValue("sizeOptions", next, { shouldValidate: false, shouldDirty: true });
-    addForm.setValue("stockBySize", syncStockBySizeToSizes(addForm.getValues("stockBySize"), next), {
-      shouldValidate: false,
-      shouldDirty: true,
-    });
-  }, [addForm]);
+  const removeColorSelection = useCallback(
+    (color: string) => {
+      const currentColors = addForm.getValues("colorOptions") || [];
+      addForm.setValue(
+        "colorOptions",
+        currentColors.filter((item: string) => item !== color),
+        { shouldValidate: false, shouldDirty: true },
+      );
+    },
+    [addForm],
+  );
+
+  const updateColorHex = useCallback(
+    (color: string, value: string) => {
+      addForm.setValue(
+        "variantColorHexMap",
+        {
+          ...(addForm.getValues("variantColorHexMap") || {}),
+          [color]: normalizeHex(value),
+        },
+        { shouldValidate: false, shouldDirty: true },
+      );
+    },
+    [addForm],
+  );
+
+  const toggleSize = useCallback(
+    (size: string) => {
+      const normalizedSize = size.trim().toUpperCase();
+      if (!normalizedSize) return;
+      const currentSizes = addForm.getValues("sizeOptions") || [];
+      const next = currentSizes.includes(normalizedSize)
+        ? currentSizes.filter((item: string) => item !== normalizedSize)
+        : [...currentSizes, normalizedSize];
+      addForm.setValue("sizeOptions", next, { shouldValidate: false, shouldDirty: true });
+      addForm.setValue("stockBySize", syncStockBySizeToSizes(addForm.getValues("stockBySize"), next), {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
+    },
+    [addForm],
+  );
 
   const addCustomColor = () => {
-    if (!newColorName.trim()) return;
-    const label = `${newColorName.trim()} (${newColorHex})`;
-    if (!customColors.includes(label)) {
-      setCustomColors((prev) => [...prev, label]);
-    }
+    const name = normalizeVariantColor(newColorName);
+    if (!name) return;
+    const hex = normalizeHex(newColorHex);
+    setCustomColors((prev) => (prev.some((entry) => entry.name === name) ? prev : [...prev, { name, hex }]));
+    upsertColorSelection(name, hex);
     setNewColorName("");
   };
 
@@ -229,7 +427,6 @@ export default function AddProductWizard({
     const trimmed = newSizeInput.trim().toUpperCase();
     if (!trimmed || availableSizes.includes(trimmed)) return;
     setCustomSizes((prev) => [...prev, trimmed]);
-    // Also add to form
     const currentSizes = addForm.getValues("sizeOptions") || [];
     if (!currentSizes.includes(trimmed)) {
       const nextSizes = [...currentSizes, trimmed];
@@ -269,29 +466,142 @@ export default function AddProductWizard({
     }
   };
 
-  const canProceedStep1 = addForm.watch("name")?.length >= 2 && addForm.watch("price") >= 1;
-  const canProceedStep2 = true;
-  const stockBySizeValues = addForm.watch("stockBySize") || {};
   const productName = addForm.watch("name") || "Untitled product";
   const productTagline = addForm.watch("shortDetails") || "A polished new product waiting for its final story.";
   const productDescription =
     addForm.watch("description") || "Use this space to frame the fit, material, and energy of the piece before it goes live.";
   const productPrice = Number(addForm.watch("price")) || 0;
+  const productCostPrice = Number(addForm.watch("costPrice")) || 0;
   const galleryUrls = ((addForm.watch("galleryUrlsText") || "") as string)
     .split(/\n/)
     .map((u: string) => u.trim())
     .filter(Boolean);
   const mainImageUrl = addForm.watch("imageUrl") || galleryUrls[0] || null;
+  const colorImageMap = addForm.watch("colorImageMap") || {};
   const saleIsActive = !!addForm.watch("saleActive");
   const salePercentage = Number(addForm.watch("salePercentage")) || 0;
+
+  useEffect(() => {
+    if (!variantsEnabled) return;
+    const nextVariants = preserveExistingVariantsOnUpdate({
+      productName,
+      colors: selectedColors,
+      sizes: selectedSizes,
+      existingVariants: variantRows,
+      basePrice: productPrice,
+      baseCostPrice: productCostPrice,
+    });
+    if (JSON.stringify(nextVariants) !== JSON.stringify(variantRows)) {
+      addForm.setValue("variants", nextVariants, { shouldValidate: false, shouldDirty: true });
+    }
+  }, [addForm, productCostPrice, productName, productPrice, selectedColors, selectedSizes, variantRows, variantsEnabled]);
+
+  useEffect(() => {
+    if (!variantsEnabled) return;
+    const timer = window.setTimeout(() => {
+      const nextStockBySize = buildStockBySizeFromVariants(variantRows);
+      addForm.setValue("stockBySize", syncStockBySizeToSizes(nextStockBySize, selectedSizes), {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
+      addForm.setValue(
+        "stock",
+        variantRows.reduce((sum: number, variant: ProductVariantRow) => sum + Math.trunc(sanitizeVariantNumber(variant.quantity)), 0),
+        { shouldValidate: false, shouldDirty: true },
+      );
+    }, 160);
+    return () => window.clearTimeout(timer);
+  }, [addForm, selectedSizes, variantRows, variantsEnabled]);
+
+  const updateVariantField = useCallback(
+    (id: string, field: keyof ProductVariantRow, value: number | string) => {
+      const currentVariants = addForm.getValues("variants") || [];
+      addForm.setValue(
+        "variants",
+        currentVariants.map((variant: ProductVariantRow) =>
+          variant.id === id
+            ? {
+                ...variant,
+                [field]: field === "sku" || field === "color" || field === "size" || field === "id"
+                  ? String(value)
+                  : sanitizeVariantNumber(value as number | string),
+              }
+            : variant,
+        ),
+        { shouldValidate: false, shouldDirty: true },
+      );
+    },
+    [addForm],
+  );
+
+  const handleBulkApplySellingPrice = useCallback(() => {
+    const price = sanitizeVariantNumber(bulkSellingPrice);
+    if (!variantRows.length) return;
+    addForm.setValue(
+      "variants",
+      variantRows.map((variant: ProductVariantRow) => ({ ...variant, sellingPrice: price })),
+      { shouldValidate: false, shouldDirty: true },
+    );
+  }, [addForm, bulkSellingPrice, variantRows]);
+
+  const handleCopySellingPrice = useCallback(
+    (sourceRow: ProductVariantRow) => {
+      addForm.setValue(
+        "variants",
+        variantRows.map((variant: ProductVariantRow) =>
+          variant.id === sourceRow.id ? variant : { ...variant, sellingPrice: sourceRow.sellingPrice },
+        ),
+        { shouldValidate: false, shouldDirty: true },
+      );
+    },
+    [addForm, variantRows],
+  );
+
+  const duplicateSkuIds = useMemo(() => {
+    const counts = new Map<string, number>();
+    variantRows.forEach((variant: ProductVariantRow) => {
+      const sku = variant.sku.trim().toLowerCase();
+      if (!sku) return;
+      counts.set(sku, (counts.get(sku) ?? 0) + 1);
+    });
+    return new Set(
+      variantRows
+        .filter((variant: ProductVariantRow) => {
+          const sku = variant.sku.trim().toLowerCase();
+          return sku.length > 0 && (counts.get(sku) ?? 0) > 1;
+        })
+        .map((variant: ProductVariantRow) => variant.id),
+    );
+  }, [variantRows]);
+
+  const selectedColorDetails = useMemo<ColorDetail[]>(
+    () =>
+      selectedColors.map((color: string) => ({
+        name: color,
+        hex: normalizeHex(variantColorHexMap[color] ?? DEFAULT_COLOR_SWATCHES[color] ?? "#000000"),
+      })),
+    [selectedColors, variantColorHexMap],
+  );
+
+  const stockBySizeValues = addForm.watch("stockBySize") || {};
   const discountedPrice =
     saleIsActive && productPrice > 0
       ? Math.max(0, Math.round(productPrice * (1 - salePercentage / 100)))
       : productPrice;
-  const totalStock = selectedSizes.reduce((total: number, size: string) => {
-    return total + (stockBySizeValues[size] ?? 0);
-  }, 0);
+  const totalStock = variantsEnabled
+    ? variantRows.reduce((sum: number, variant: ProductVariantRow) => sum + Math.trunc(sanitizeVariantNumber(variant.quantity)), 0)
+    : selectedSizes.reduce((total: number, size: string) => total + (stockBySizeValues[size] ?? 0), 0);
 
+  const hasVariantRequirements = !variantsEnabled || (
+    selectedColors.length > 0 &&
+    selectedSizes.length > 0 &&
+    variantRows.length === generateVariants(selectedColors, selectedSizes).length &&
+    variantRows.every((variant: ProductVariantRow) => variant.sellingPrice > 0 && variant.sku.trim().length > 0) &&
+    duplicateSkuIds.size === 0
+  );
+
+  const canProceedStep1 = addForm.watch("name")?.length >= 2 && addForm.watch("price") >= 1 && Boolean(addForm.watch("category"));
+  const canProceedStep2 = hasVariantRequirements;
   const steps = [
     { num: 1, label: "Details", icon: FileText },
     { num: 2, label: "Attributes", icon: Tag },
@@ -409,14 +719,12 @@ export default function AddProductWizard({
 
   const pieChartData = useMemo(() => {
     const data: { name: string; value: number; fill: string }[] = [];
-    if (selectedColors.length > 0) {
-      const colorPalette = ["#81a074", "#b33a2f", "#223227", "#d4c5a9", "#6b7c62", "#a89f8f", "#4a5d4e", "#c9b99a"];
-      selectedColors.forEach((color: string, i: number) => {
-        const hexMatch = color.match(/\((#[0-9a-fA-F]{6})\)/);
+    if (selectedColorDetails.length > 0) {
+      selectedColorDetails.forEach((color: ColorDetail) => {
         data.push({
-          name: color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, ""),
+          name: color.name,
           value: 1,
-          fill: hexMatch ? hexMatch[1] : colorPalette[i % colorPalette.length],
+          fill: color.hex,
         });
       });
     }
@@ -424,7 +732,7 @@ export default function AddProductWizard({
       data.push({ name: "No colors", value: 1, fill: "#d1d5db" });
     }
     return data;
-  }, [selectedColors]);
+  }, [selectedColorDetails]);
 
   const sizeStockData = useMemo(() => {
     if (selectedSizes.length === 0 || totalStock === 0) return [];
@@ -496,7 +804,7 @@ export default function AddProductWizard({
 
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                   {mainImageUrl ? (
-                    <img src={mainImageUrl} alt={productName} className="h-16 w-16 rounded-full border-2 border-white/80 object-cover shadow-md dark:border-white/20" />
+                    <img src={mainImageUrl} alt={productName} className="h-16 w-16 rounded-full border-2 border-white/80 object-cover shadow-md opacity-100 dark:border-white/20" />
                   ) : (
                     <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-black/10 bg-white/60 dark:border-white/10 dark:bg-white/5">
                       <ImageIcon className="h-6 w-6 opacity-40" />
@@ -551,8 +859,8 @@ export default function AddProductWizard({
             <div className="rounded-2xl border border-black/5 bg-[#fbfaf7] p-3 dark:border-white/10 dark:bg-white/[0.02]">
               <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Colors</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {selectedColors.length ? selectedColors.slice(0, 3).map((color: string) => (
-                  <Badge key={color} variant="outline" className="rounded-full text-[10px] px-2 py-0">{color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, "")}</Badge>
+                {selectedColorDetails.length ? selectedColorDetails.slice(0, 3).map((color: ColorDetail) => (
+                  <Badge key={color.name} variant="outline" className="rounded-full text-[10px] px-2 py-0">{color.name}</Badge>
                 )) : <span className="text-[10px] text-muted-foreground">None</span>}
               </div>
             </div>
@@ -570,7 +878,7 @@ export default function AddProductWizard({
               <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Stock by Size</p>
               <Badge className="rounded-full bg-[#81a074]/10 text-[#223227] hover:bg-[#81a074]/10 dark:bg-[#81a074]/20 dark:text-white text-[10px]">{totalStock} total</Badge>
             </div>
-            <div className="space-y-2.5 pb-1">
+            <div className="max-h-40 overflow-y-auto space-y-2.5 pb-1 pr-1">
               {sizeStockData.map((item: { size: string; stock: number; pct: number }) => (
                 <div key={item.size} className="flex min-h-6 items-center gap-3">
                   <span className="text-[11px] font-bold text-[#223227] dark:text-white w-6 text-center">{item.size}</span>
@@ -815,6 +1123,24 @@ export default function AddProductWizard({
                         </FormItem>
                       )}
                     />
+                    <FormField
+                      control={addForm.control}
+                      name="costPrice"
+                      render={({ field }) => (
+                        <FormItem className="mt-4">
+                          <FormLabel>Cost Price (NPR)</FormLabel>
+                          <FormControl>
+                            <PriceInput
+                              min={0}
+                              value={field.value}
+                              onChange={(val) => field.onChange(val)}
+                              placeholder="0"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                         </div>
                       </div>
 
@@ -851,231 +1177,284 @@ export default function AddProductWizard({
                     >
                       <div className="space-y-6">
                         <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
-                          <div className="mb-5 flex items-center gap-2">
-                            <Palette className="h-4 w-4" />
+                          <div className="mb-5 flex items-start justify-between gap-4">
                             <div>
-                              <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">Colors</h3>
-                              <p className="mt-1 text-sm text-muted-foreground">{selectedColors.length} selected</p>
+                              <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">Product Variants</h3>
+                              <p className="mt-1 text-sm text-muted-foreground">Define colors and sizes, then auto-generate editable child variants without losing row edits.</p>
                             </div>
-                          </div>
-
-                    {/* Default colors */}
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Default Colors</p>
-                      <div className="flex flex-wrap gap-2">
-                        {DEFAULT_COLORS.map((color) => {
-                          const isSelected = selectedColors.includes(color);
-                          return (
-                            <button
-                              key={color}
-                              type="button"
-                              onClick={() => toggleColor(color)}
-                              className={cn(
-                                "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold border transition-all",
-                                isSelected
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "bg-background text-muted-foreground border-border hover:border-foreground"
-                              )}
-                            >
-                              {color}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Attribute colors from DB */}
-                    {attributeColors.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Attribute Colors</p>
-                        <div className="flex flex-wrap gap-2">
-                          {attributeColors.map((color) => {
-                            const isSelected = selectedColors.includes(color);
-                            const hexMatch = color.match(/\((#[0-9a-fA-F]{6})\)/);
-                            const hex = hexMatch ? hexMatch[1] : undefined;
-                            const displayName = color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, "");
-                            return (
-                              <button
-                                key={color}
-                                type="button"
-                                onClick={() => toggleColor(color)}
-                                className={cn(
-                                  "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold border transition-all",
-                                  isSelected
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "bg-background text-muted-foreground border-border hover:border-foreground"
-                                )}
-                              >
-                                {hex && (
-                                  <span className="w-3 h-3 rounded-full border border-border" style={{ backgroundColor: hex }} />
-                                )}
-                                {displayName}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Custom colors */}
-                    {customColors.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Custom Colors</p>
-                        <div className="flex flex-wrap gap-2">
-                          {customColors.map((color) => {
-                            const isSelected = selectedColors.includes(color);
-                            const hexMatch = color.match(/\((#[0-9a-fA-F]{6})\)/);
-                            const hex = hexMatch ? hexMatch[1] : undefined;
-                            const displayName = color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, "");
-                            return (
-                              <button
-                                key={color}
-                                type="button"
-                                onClick={() => toggleColor(color)}
-                                className={cn(
-                                  "flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold border transition-all",
-                                  isSelected
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "bg-background text-muted-foreground border-border hover:border-foreground"
-                                )}
-                              >
-                                {hex && (
-                                  <span className="w-3 h-3 rounded-full border border-border" style={{ backgroundColor: hex }} />
-                                )}
-                                {displayName}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Add custom color */}
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={newColorHex}
-                        onChange={(e) => setNewColorHex(e.target.value)}
-                        className="w-8 h-8 rounded cursor-pointer border border-border"
-                      />
-                      <Input
-                        value={newColorName}
-                        onChange={(e) => setNewColorName(e.target.value)}
-                        placeholder="Color name (e.g. Burgundy)"
-                        className="w-40 text-xs h-8"
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomColor())}
-                      />
-                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addCustomColor} disabled={!newColorName.trim()}>
-                        <Plus className="w-3 h-3 mr-1" /> Add Color
-                      </Button>
-                    </div>
-                        </div>
-
-                        <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
-                          <div className="mb-5 flex items-center gap-2">
-                            <Ruler className="h-4 w-4" />
-                            <div>
-                              <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">Attributes</h3>
-                              <p className="mt-1 text-sm text-muted-foreground">Configure sizes and inventory in one cleaner section.</p>
-                            </div>
-                          </div>
-
-                          <FormField
-                            control={addForm.control}
-                            name="stockStatus"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <RadioGroup value={field.value} onValueChange={field.onChange} className="flex flex-wrap gap-4">
-                                    <div className="flex items-center space-x-2">
-                                      <RadioGroupItem value="in_stock" id="add-in-stock" />
-                                      <Label htmlFor="add-in-stock">In Stock</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                      <RadioGroupItem value="out_of_stock" id="add-out-of-stock" />
-                                      <Label htmlFor="add-out-of-stock">Out of Stock</Label>
-                                    </div>
-                                  </RadioGroup>
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-
-                          <div className="mt-5">
-                            <Label className="text-xs font-bold uppercase tracking-wider">Available Sizes</Label>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {availableSizes.map((size) => {
-                                const isSelected = selectedSizes.includes(size);
-                                return (
-                                  <button
-                                    key={size}
-                                    type="button"
-                                    onClick={() => toggleSize(size)}
-                                    className={cn(
-                                      "rounded-full border px-3 py-1.5 text-xs font-bold uppercase transition-all",
-                                      isSelected
-                                        ? "border-primary bg-primary text-primary-foreground"
-                                        : "border-border bg-background text-muted-foreground hover:border-foreground",
-                                    )}
-                                  >
-                                    {size}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            <div className="mt-3 flex items-center gap-2">
-                              <Input
-                                value={newSizeInput}
-                                onChange={(e) => setNewSizeInput(e.target.value)}
-                                placeholder="New size (e.g. XXL)"
-                                className="h-8 w-32 text-xs"
-                                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomSize())}
+                            <div className="flex items-center gap-3 rounded-full border border-black/5 bg-[#f7faf4] px-4 py-2 dark:border-white/10 dark:bg-white/[0.04]">
+                              <Label htmlFor="add-variants-enabled" className="text-xs font-bold uppercase tracking-[0.18em] text-[#223227] dark:text-white">Enable variants</Label>
+                              <Switch
+                                id="add-variants-enabled"
+                                checked={variantsEnabled}
+                                onCheckedChange={(checked) => addForm.setValue("variantsEnabled", checked, { shouldValidate: false, shouldDirty: true })}
                               />
-                              <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={addCustomSize} disabled={!newSizeInput.trim()}>
-                                <Plus className="mr-1 h-3 w-3" /> Add Size
-                              </Button>
                             </div>
                           </div>
 
-                          {addForm.watch("stockStatus") === "in_stock" && selectedSizes.length > 0 ? (
-                            <div className="mt-6 rounded-2xl border border-border/60 bg-gradient-to-br from-muted/40 to-muted/20 p-5">
-                              <div className="mb-4 flex items-center justify-between">
-                                <Label className="text-xs font-bold uppercase tracking-wider">Stock By Size</Label>
-                                <Badge className="rounded-full bg-primary/10 text-primary hover:bg-primary/10">{totalStock} total</Badge>
+                          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                            <div className="rounded-2xl border border-black/5 bg-[#fbfaf7] p-5 dark:border-white/10 dark:bg-white/[0.02]">
+                              <div className="mb-4 flex items-center gap-2">
+                                <Palette className="h-4 w-4" />
+                                <div>
+                                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#223227] dark:text-white">Color values</p>
+                                  <p className="text-xs text-muted-foreground">Add tags, set hex codes, and preview each swatch visually.</p>
+                                </div>
                               </div>
-                              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                                {selectedSizes.map((size: string) => {
-                                  const currentStock = stockBySizeValues[size] ?? undefined;
+
+                              <div className="flex flex-wrap gap-2">
+                                {availableColors.map((color) => {
+                                  const isSelected = selectedColors.includes(color.name);
                                   return (
-                                    <div
-                                      key={size}
-                                      className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/50 bg-background/70 p-4 text-center"
+                                    <button
+                                      key={color.name}
+                                      type="button"
+                                      onClick={() => upsertColorSelection(color.name, color.hex)}
+                                      className={cn(
+                                        "flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold transition-all",
+                                        isSelected
+                                          ? "border-[#223227] bg-[#223227] text-white dark:border-white dark:bg-white dark:text-[#101611]"
+                                          : "border-black/10 bg-white text-[#223227] hover:border-[#223227] dark:border-white/10 dark:bg-[#111914] dark:text-white",
+                                      )}
                                     >
-                                      <Label className="text-sm font-bold">{size}</Label>
-                                      <QuantityInput
-                                        min={0}
-                                        step={1}
-                                        value={currentStock}
-                                        className="h-11 w-full max-w-[120px] justify-center"
-                                        onChange={(newValue) => {
-                                          const current = addForm.getValues("stockBySize") || {};
-                                          addForm.setValue(
-                                            "stockBySize",
-                                            {
-                                              ...syncStockBySizeToSizes(current, selectedSizes),
-                                              [size]: newValue,
-                                            },
-                                            { shouldValidate: false, shouldDirty: true },
-                                          );
-                                        }}
-                                        placeholder="—"
-                                      />
-                                    </div>
+                                      <span className="h-3 w-3 rounded-full border border-black/10" style={{ backgroundColor: color.hex }} />
+                                      {color.name}
+                                    </button>
                                   );
                                 })}
                               </div>
+
+                              <div className="mt-4 flex flex-wrap items-center gap-2">
+                                <input
+                                  type="color"
+                                  value={newColorHex}
+                                  onChange={(event) => setNewColorHex(event.target.value)}
+                                  className="h-10 w-10 cursor-pointer rounded-xl border border-black/10 bg-white p-1 dark:border-white/10 dark:bg-[#101611]"
+                                />
+                                <Input
+                                  value={newColorName}
+                                  onChange={(event) => setNewColorName(event.target.value)}
+                                  placeholder="Add custom color"
+                                  className="h-10 min-w-[180px] flex-1 rounded-xl"
+                                  onKeyDown={(event) => event.key === "Enter" && (event.preventDefault(), addCustomColor())}
+                                />
+                                <Button type="button" variant="outline" className="rounded-xl" onClick={addCustomColor} disabled={!newColorName.trim()}>
+                                  <Plus className="mr-2 h-4 w-4" /> Add color
+                                </Button>
+                              </div>
+
+                              <div className="mt-4 space-y-3">
+                                {selectedColorDetails.length ? selectedColorDetails.map((color: ColorDetail) => (
+                                  <div key={color.name} className="flex flex-wrap items-center gap-3 rounded-2xl border border-black/5 bg-white p-3 dark:border-white/10 dark:bg-[#101611]">
+                                    <span className="h-5 w-5 rounded-full border border-black/10" style={{ backgroundColor: color.hex }} />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-semibold text-[#223227] dark:text-white">{color.name}</p>
+                                      <p className="text-[11px] text-muted-foreground">Color code for {color.name}</p>
+                                    </div>
+                                    <Input
+                                      value={color.hex}
+                                      onChange={(event) => updateColorHex(color.name, event.target.value)}
+                                      className="h-10 w-[140px] rounded-xl"
+                                      placeholder="#1c1b1b"
+                                    />
+                                    <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => removeColorSelection(color.name)}>
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )) : (
+                                  <div className="rounded-2xl border border-dashed border-black/10 px-4 py-5 text-sm text-muted-foreground dark:border-white/10">
+                                    Add at least one color to start building variants.
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          ) : null}
+
+                            <div className="rounded-2xl border border-black/5 bg-[#fbfaf7] p-5 dark:border-white/10 dark:bg-white/[0.02]">
+                              <div className="mb-4 flex items-center gap-2">
+                                <Ruler className="h-4 w-4" />
+                                <div>
+                                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#223227] dark:text-white">Choose size</p>
+                                  <p className="text-xs text-muted-foreground">Pick the active size buttons or add custom sizes like XXL.</p>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                {availableSizes.map((size) => {
+                                  const isSelected = selectedSizes.includes(size);
+                                  return (
+                                    <button
+                                      key={size}
+                                      type="button"
+                                      onClick={() => toggleSize(size)}
+                                      className={cn(
+                                        "rounded-full border px-3 py-2 text-xs font-bold uppercase transition-all",
+                                        isSelected
+                                          ? "border-[#223227] bg-[#223227] text-white dark:border-white dark:bg-white dark:text-[#101611]"
+                                          : "border-black/10 bg-white text-[#223227] hover:border-[#223227] dark:border-white/10 dark:bg-[#111914] dark:text-white",
+                                      )}
+                                    >
+                                      {size}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap items-center gap-2">
+                                <Input
+                                  value={newSizeInput}
+                                  onChange={(event) => setNewSizeInput(event.target.value)}
+                                  placeholder="Add size"
+                                  className="h-10 min-w-[140px] flex-1 rounded-xl"
+                                  onKeyDown={(event) => event.key === "Enter" && (event.preventDefault(), addCustomSize())}
+                                />
+                                <Button type="button" variant="outline" className="rounded-xl" onClick={addCustomSize} disabled={!newSizeInput.trim()}>
+                                  <Plus className="mr-2 h-4 w-4" /> Add size
+                                </Button>
+                              </div>
+
+                              <div className="mt-4 rounded-2xl border border-black/5 bg-white/80 px-4 py-4 dark:border-white/10 dark:bg-[#101611]">
+                                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#223227] dark:text-white">Readiness</p>
+                                <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
+                                  <li className={cn(selectedColors.length > 0 && "text-[#223227] dark:text-white")}>1. Add at least one color</li>
+                                  <li className={cn(selectedSizes.length > 0 && "text-[#223227] dark:text-white")}>2. Add at least one size</li>
+                                  <li className={cn(hasVariantRequirements && "text-[#223227] dark:text-white")}>3. Make sure each generated row has price + unique SKU</li>
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-5 rounded-2xl border border-black/5 bg-[#fbfaf7] p-5 dark:border-white/10 dark:bg-white/[0.02]">
+                            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#223227] dark:text-white">Inventory setup</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {variantsEnabled
+                                    ? `${variantRows.length} variants generated from ${selectedColors.length || 0} colors × ${selectedSizes.length || 0} sizes.`
+                                    : "You can still manage simple stock by size if variants stay off."}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 rounded-full border border-black/5 bg-white px-3 py-1.5 text-xs font-semibold text-[#223227] dark:border-white/10 dark:bg-[#101611] dark:text-white">
+                                <span>{totalStock} total qty</span>
+                                {duplicateSkuIds.size > 0 ? <Badge variant="destructive" className="rounded-full">Duplicate SKU</Badge> : null}
+                              </div>
+                            </div>
+
+                            {variantsEnabled ? (
+                              <>
+                                <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-black/5 bg-white p-3 dark:border-white/10 dark:bg-[#101611]">
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={bulkSellingPrice}
+                                    onChange={(event) => setBulkSellingPrice(event.target.value)}
+                                    placeholder="Bulk selling price"
+                                    className="h-10 w-[180px] rounded-xl"
+                                  />
+                                  <Button type="button" variant="outline" className="rounded-xl" onClick={handleBulkApplySellingPrice} disabled={!variantRows.length}>
+                                    Apply to all variants
+                                  </Button>
+                                  <div className="text-xs text-muted-foreground">SKU format: {`${slugifyVariantToken(productName) || "product"}-color-size`}</div>
+                                </div>
+
+                                <div className="overflow-x-auto rounded-2xl border border-black/5 bg-white dark:border-white/10 dark:bg-[#101611]">
+                                  <table className="min-w-full border-collapse">
+                                    <thead className="sticky top-0 bg-[#f7faf4] dark:bg-[#141c16]">
+                                      <tr className="text-left text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                                        <th className="px-3 py-3">Variant</th>
+                                        <th className="px-2 py-3">Crossed Price</th>
+                                        <th className="px-2 py-3">Selling Price</th>
+                                        <th className="px-2 py-3">Cost Price</th>
+                                        <th className="px-2 py-3">Weight</th>
+                                        <th className="px-2 py-3">Quantity</th>
+                                        <th className="px-2 py-3">SKU</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {variantRows.length ? variantRows.map((row: ProductVariantRow) => (
+                                        <VariantMatrixRow
+                                          key={row.id}
+                                          row={row}
+                                          duplicateSku={duplicateSkuIds.has(row.id)}
+                                          onFieldChange={updateVariantField}
+                                          onCopySellingPrice={handleCopySellingPrice}
+                                        />
+                                      )) : (
+                                        <tr>
+                                          <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                                            Add colors and sizes to generate your variant combinations.
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                                <div className="mt-4 flex items-center gap-3 rounded-2xl border border-black/5 bg-white px-4 py-3 dark:border-white/10 dark:bg-[#101611]">
+                                  <Checkbox
+                                    id="continue-selling-out-of-stock"
+                                    checked={addForm.watch("continueSellingOutOfStock") === true}
+                                    onCheckedChange={(checked) => addForm.setValue("continueSellingOutOfStock", checked === true, { shouldDirty: true })}
+                                  />
+                                  <Label htmlFor="continue-selling-out-of-stock" className="text-sm font-medium text-[#223227] dark:text-white">
+                                    Continue selling even when product is out of stock
+                                  </Label>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="space-y-4">
+                                <FormField
+                                  control={addForm.control}
+                                  name="stockStatus"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <RadioGroup value={field.value} onValueChange={field.onChange} className="flex flex-wrap gap-4">
+                                          <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="in_stock" id="add-in-stock" />
+                                            <Label htmlFor="add-in-stock">In Stock</Label>
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="out_of_stock" id="add-out-of-stock" />
+                                            <Label htmlFor="add-out-of-stock">Out of Stock</Label>
+                                          </div>
+                                        </RadioGroup>
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                {addForm.watch("stockStatus") === "in_stock" && selectedSizes.length > 0 ? (
+                                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                                    {selectedSizes.map((size: string) => {
+                                      const currentStock = stockBySizeValues[size] ?? undefined;
+                                      return (
+                                        <div key={size} className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/50 bg-background/70 p-4 text-center">
+                                          <Label className="text-sm font-bold">{size}</Label>
+                                          <QuantityInput
+                                            min={0}
+                                            step={1}
+                                            value={currentStock}
+                                            className="h-11 w-full max-w-[120px] justify-center"
+                                            onChange={(newValue) => {
+                                              const current = addForm.getValues("stockBySize") || {};
+                                              addForm.setValue(
+                                                "stockBySize",
+                                                {
+                                                  ...syncStockBySizeToSizes(current, selectedSizes),
+                                                  [size]: newValue,
+                                                },
+                                                { shouldValidate: false, shouldDirty: true },
+                                              );
+                                            }}
+                                            placeholder="—"
+                                          />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
@@ -1138,7 +1517,6 @@ export default function AddProductWizard({
                           </div>
                         </div>
                       </div>
-
                       {renderLivePreview("attributes")}
 
                       <div className="sticky bottom-0 mt-8 border-t border-black/5 bg-[#eff4eb] px-1 py-4 shadow-[0_-10px_24px_rgba(34,63,41,0.05)] dark:border-white/10 dark:bg-[#101611] dark:shadow-none xl:col-span-2">
@@ -1443,6 +1821,86 @@ export default function AddProductWizard({
                       </div>
                     )}
                         </div>
+
+                        {selectedColors.length > 0 && (
+                          <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
+                            <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">
+                              <Palette className="h-4 w-4" /> Color-Specific Images
+                            </h3>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Attach images that match each selected color so the storefront can swap visuals on hover or click.
+                            </p>
+                            <div className="mt-4 space-y-4">
+                              {selectedColors.map((color: string) => {
+                                const urls = (colorImageMap[color] || []) as string[];
+                                return (
+                                  <div key={color} className="rounded-2xl border border-border/60 bg-white/80 p-4 dark:bg-white/[0.03]">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                                          {color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, "")}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">{urls.length} images</p>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => onMediaLibraryOpen(`add-color:${color}`)}
+                                      >
+                                        <FolderInput className="mr-1.5 h-3.5 w-3.5" /> From Library
+                                      </Button>
+                                    </div>
+                                    <Textarea
+                                      rows={3}
+                                      className="mt-3 text-xs"
+                                      placeholder="Paste image URLs (one per line)"
+                                      value={urls.join("\n")}
+                                      onChange={(event) => {
+                                        const nextUrls = event.target.value
+                                          .split(/\n/)
+                                          .map((u) => u.trim())
+                                          .filter(Boolean);
+                                        const nextMap = { ...(colorImageMap as Record<string, string[]>) };
+                                        if (nextUrls.length) {
+                                          nextMap[color] = nextUrls;
+                                        } else {
+                                          delete nextMap[color];
+                                        }
+                                        addForm.setValue("colorImageMap", nextMap, { shouldDirty: true });
+                                      }}
+                                    />
+                                    {urls.length > 0 ? (
+                                      <div className="mt-3 grid grid-cols-4 gap-3">
+                                        {urls.map((url, index) => (
+                                          <div key={`${color}-${index}`} className="group relative aspect-square overflow-hidden rounded-lg border border-border">
+                                            <img src={url} alt="" className="h-full w-full object-cover" />
+                                            <button
+                                              type="button"
+                                              className="absolute right-1 top-1 rounded-full bg-black/70 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                                              onClick={() => {
+                                                const nextUrls = urls.filter((_, i) => i !== index);
+                                                const nextMap = { ...(colorImageMap as Record<string, string[]>) };
+                                                if (nextUrls.length) {
+                                                  nextMap[color] = nextUrls;
+                                                } else {
+                                                  delete nextMap[color];
+                                                }
+                                                addForm.setValue("colorImageMap", nextMap, { shouldDirty: true });
+                                              }}
+                                            >
+                                              <X className="h-3 w-3" />
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {renderLivePreview("media")}

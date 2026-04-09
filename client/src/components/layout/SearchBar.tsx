@@ -8,9 +8,10 @@ import { useClickAway } from "react-use";
 
 interface SearchBarProps {
   iconColor?: string;
+  minimal?: boolean;
 }
 
-export default function SearchBar({ iconColor }: SearchBarProps) {
+export default function SearchBar({ iconColor, minimal = false }: SearchBarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<ProductApi[]>([]);
@@ -78,15 +79,23 @@ export default function SearchBar({ iconColor }: SearchBarProps) {
         initial={false}
         animate={{
           width: isOpen ? (window.innerWidth < 640 ? "calc(100vw - 120px)" : "300px") : "40px",
-          backgroundColor: isOpen ? "rgba(var(--background), 0.8)" : "transparent",
+          backgroundColor: minimal ? "transparent" : isOpen ? "rgba(var(--background), 0.8)" : "transparent",
         }}
-        className={`flex items-center h-10 rounded-full overflow-hidden transition-colors ${
-          isOpen ? "bg-gray-50 dark:bg-muted/50 border border-gray-100 dark:border-white/10 px-3 shadow-inner" : ""
+        className={`flex items-center h-10 overflow-hidden transition-colors ${
+          minimal
+            ? `rounded-none border-b px-1 ${
+                isOpen ? "border-current/55" : "border-transparent"
+              }`
+            : `rounded-full ${
+                isOpen ? "bg-gray-50 dark:bg-muted/50 border border-gray-100 dark:border-white/10 px-3 shadow-inner" : ""
+              }`
         }`}
       >
         <button
           onClick={toggleSearch}
-          className="flex-shrink-0 w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+          className={`flex h-10 w-10 flex-shrink-0 items-center justify-center transition-colors ${
+            minimal ? "text-current hover:opacity-70" : "text-muted-foreground hover:text-primary"
+          }`}
           style={iconColor ? ({ color: iconColor } satisfies CSSProperties) : undefined}
           aria-label="Toggle search"
         >
@@ -102,13 +111,16 @@ export default function SearchBar({ iconColor }: SearchBarProps) {
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholder="Search products..."
-            className="w-full bg-transparent border-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none text-sm placeholder:text-muted-foreground/60 px-2"
+            className={`w-full border-none bg-transparent px-2 text-sm focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 ${
+              minimal ? "text-current placeholder:text-current/55" : "placeholder:text-muted-foreground/60"
+            }`}
+            style={iconColor ? ({ color: iconColor } satisfies CSSProperties) : undefined}
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery("")}
-              className="p-1 text-muted-foreground hover:text-primary"
+              className={`p-1 ${minimal ? "text-current hover:opacity-70" : "text-muted-foreground hover:text-primary"}`}
               style={iconColor ? ({ color: iconColor } satisfies CSSProperties) : undefined}
             >
               <X className="w-4 h-4" />
@@ -123,7 +135,7 @@ export default function SearchBar({ iconColor }: SearchBarProps) {
             initial={{ opacity: 0, y: 10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.98 }}
-            className="absolute top-full right-0 mt-3 w-[300px] sm:w-[400px] bg-white dark:bg-neutral-950 rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 overflow-hidden z-[100]"
+            className="absolute top-full right-0 mt-3 w-[300px] sm:w-[400px] bg-white dark:bg-neutral-950 rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 overflow-hidden z-[230]"
           >
             <div className="p-2">
               {isLoading ? (

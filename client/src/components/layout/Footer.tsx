@@ -58,7 +58,7 @@ export default function Footer() {
   const isHomePage = location === "/";
   const isMaisonNocturne = pageConfig?.template?.slug === "maison-nocturne";
   const isNikeshDesign = pageConfig?.template?.slug === "nikeshdesign";
-  const INSTAGRAM_URL = "https://www.instagram.com/rare.np/";
+  const INSTAGRAM_URL = "https://www.instagram.com/rareofficial.au/";
   const TIKTOK_URL = "https://www.tiktok.com/@rare.np";
   const FACEBOOK_URL = "https://www.facebook.com/rarenp";
   const BUILDER_WEBSITE_URL = "https://nikeshuprety.com.np";
@@ -130,7 +130,7 @@ export default function Footer() {
             <div className="col-span-1">
               <Link href="/" className="inline-block">
                 <img
-                  src="/images/logo.webp"
+                  src="/images/newproductpagelogo.png"
                   alt="Rare Atelier"
                   className="h-12 w-auto mb-8 object-contain brightness-0 invert"
                 />
@@ -242,7 +242,7 @@ export default function Footer() {
               <div className="col-span-1">
                 <Link href="/" className="inline-block">
                   <img
-                    src="/images/logo.webp"
+                    src="/images/newproductpagelogo.png"
                     alt="Rare Atelier"
                     className="mb-8 h-12 w-auto object-contain brightness-0 invert"
                   />

@@ -220,6 +220,11 @@ describe("auth route handlers", () => {
           password: "Secret123",
           role: "staff",
         },
+        user: {
+          role: "admin",
+          name: "Admin User",
+          email: "admin@example.com",
+        },
       } as any,
       duplicateRes as any,
     );
@@ -257,6 +262,7 @@ describe("auth route handlers", () => {
           role: "staff",
         },
         user: {
+          role: "admin",
           name: "Admin User",
           email: "admin@example.com",
         },

@@ -112,7 +112,7 @@ export default function OrdersTrendChart({ orders = [], trendData, timeRange = "
         valueFormatter: (value: number | null) =>
           value == null
             ? ""
-            : `NPR ${Math.round(value).toLocaleString("en-NP")}`,
+            : `रू ${Math.round(value).toLocaleString("en-NP")}`,
       },
       {
         data: chartData.map((d) => d.total),
@@ -148,9 +148,9 @@ export default function OrdersTrendChart({ orders = [], trendData, timeRange = "
         min: 0,
         valueFormatter: (value: number | null) => {
           if (value === null) return "";
-          if (value >= 1000000) return `NPR ${(value / 1000000).toFixed(1)}M`;
-          if (value >= 1000) return `NPR ${(value / 1000).toFixed(0)}k`;
-          return `NPR ${Math.round(value).toLocaleString("en-NP")}`;
+          if (value >= 1000000) return `रू ${(value / 1000000).toFixed(1)}M`;
+          if (value >= 1000) return `रू ${(value / 1000).toFixed(0)}k`;
+          return `रू ${Math.round(value).toLocaleString("en-NP")}`;
         },
       },
     ],
@@ -170,6 +170,12 @@ export default function OrdersTrendChart({ orders = [], trendData, timeRange = "
       "& .MuiChartsAxis-tickLabel": {
         fill: isDark ? "rgba(255,255,255,0.78)" : "rgba(24,24,24,0.6)",
       },
+      "& .MuiChartsLegend-label": {
+        fill: isDark ? "rgba(255,255,255,0.86)" : "rgba(24,24,24,0.7)",
+      },
+      "& .MuiChartsLegend-mark": {
+        stroke: isDark ? "rgba(255,255,255,0.20)" : "rgba(0,0,0,0.08)",
+      },
       "& .MuiChartsAxis-line": {
         stroke: isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)",
       },
@@ -178,6 +184,12 @@ export default function OrdersTrendChart({ orders = [], trendData, timeRange = "
       },
       "& .MuiChartsGrid-line": {
         stroke: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+      },
+      "& .MuiChartsTooltip-root": {
+        backgroundColor: isDark ? "rgba(18,18,18,0.96)" : "#ffffff",
+        color: isDark ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.86)",
+        border: `1px solid ${isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)"}`,
+        boxShadow: isDark ? "0 18px 60px rgba(0,0,0,0.6)" : "0 18px 60px rgba(0,0,0,0.18)",
       },
     },
   };

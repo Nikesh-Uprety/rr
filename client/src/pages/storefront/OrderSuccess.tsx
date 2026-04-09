@@ -416,7 +416,7 @@ export default function OrderSuccess() {
         <div className="p-6 md:p-10">
           <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-700 pb-6">
             <div className="flex items-center gap-4">
-              <img src="/images/logo.webp" alt="RARE.NP" className="h-11 w-11 object-contain" />
+              <img src="/images/newproductpagelogo.png" alt="RARE.NP" className="h-11 w-11 object-contain" />
               <div>
                 <p className="text-xl font-black tracking-tight text-black dark:text-white">RARE.NP</p>
                 <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">Official Bill Preview</p>

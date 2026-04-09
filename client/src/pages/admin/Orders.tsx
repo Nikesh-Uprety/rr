@@ -4,6 +4,7 @@ import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useLocation } from "wouter";
 import { Search, Receipt, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -43,6 +44,12 @@ const BillViewer = lazy(() =>
   import("@/components/admin/BillViewer").then((module) => ({ default: module.BillViewer })),
 );
 
+function formatAdminNpr(amount: number | string): string {
+  const num = typeof amount === "string" ? parseFloat(amount) : Number(amount ?? 0);
+  if (Number.isNaN(num)) return "रू 0";
+  return `रू ${num.toLocaleString("en-NP")}`;
+}
+
 function BillButton({ orderId }: { orderId: string }) {
   const [showBill, setShowBill] = useState(false);
 
@@ -53,22 +60,18 @@ function BillButton({ orderId }: { orderId: string }) {
     refetchOnWindowFocus: true,
   });
 
-  if (isLoading) return <div className="text-muted-foreground text-xs">Loading bill...</div>;
+  if (isLoading) return <div className="text-muted-foreground text-xs">Loading…</div>;
 
-  if (!data) return (
-    <div className="text-muted-foreground text-xs">
-      Bill not generated yet.
-    </div>
-  );
+  if (!data) return <div className="text-muted-foreground text-xs">—</div>;
 
   return (
     <>
       <button
         onClick={(e) => { e.stopPropagation(); setShowBill(true); }}
-        className="view-bill-btn"
+        className="inline-flex h-7 items-center rounded-md border border-border bg-white px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-700 transition-colors hover:bg-neutral-900 hover:text-white dark:bg-card dark:text-neutral-200 dark:hover:bg-white dark:hover:text-black"
+        title={`Bill ${data.billNumber}`}
       >
-        <Receipt size={14} />
-        View Bill — {data.billNumber}
+        View Bill
       </button>
 
       {showBill && (
@@ -85,6 +88,7 @@ function BillButton({ orderId }: { orderId: string }) {
 }
 
 export default function AdminOrders() {
+  const [, setLocation] = useLocation();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -319,7 +323,12 @@ export default function AdminOrders() {
             {totalOrders} orders • {statusFilter === 'all' ? 'All' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
           </p>
         </div>
-        <ExportButton onExport={() => exportOrdersCSV()} />
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setLocation("/admin/orders/new")}>
+            Add Order
+          </Button>
+          <ExportButton onExport={() => exportOrdersCSV()} />
+        </div>
       </div>
 
       <OrdersTrendChart
@@ -404,30 +413,18 @@ export default function AdminOrders() {
             className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden"
           >
             <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
-            <colgroup>
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "17%" }} />
-              <col style={{ width: "23%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "8%" }} />
-              <col style={{ width: "4%" }} />
-              <col style={{ width: "10%" }} />
-            </colgroup>
+          <table className="w-full min-w-[1040px] table-auto text-left text-sm">
             <thead className="bg-transparent border-b border-[#E5E5E0] dark:border-border text-xs uppercase text-muted-foreground font-semibold tracking-wider">
               <tr>
-                <th className="px-4 py-3 font-medium">S.N</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">S.N</th>
                 <th className="px-4 py-3 font-medium">Customer</th>
                 <th className="px-4 py-3 font-medium">Items</th>
-                <th className="px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3 font-medium">Payment</th>
-                <th className="px-4 py-3 font-medium">Delivered</th>
-                <th className="px-4 py-3 font-medium">Paid</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Bill</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">Date</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">Payment</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">Delivered</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">Paid</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">Status</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">Bill</th>
                 <th className="px-4 py-3 font-medium text-right">Amount</th>
               </tr>
             </thead>
@@ -569,8 +566,8 @@ export default function AdminOrders() {
                         <td className="px-4 py-3">
                           <BillButton orderId={order.id} />
                         </td>
-                        <td className="px-4 py-3 text-right font-medium">
-                          {formatPrice((order.total ?? 0) - (order.discountAmount ?? 0))}
+                        <td className="px-4 py-3 text-right font-semibold text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
+                          {formatAdminNpr((order.total ?? 0) - (order.discountAmount ?? 0))}
                         </td>
                       </tr>
                     );
@@ -737,11 +734,11 @@ export default function AdminOrders() {
                   >
                     <SelectTrigger data-testid="admin-order-status-select" className={cn(
                         "h-10 text-xs font-bold uppercase tracking-wider rounded-md",
-                        selectedOrder.status === "completed" ? "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20" :
-                        selectedOrder.status === "pending" ? "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20" :
-                        selectedOrder.status === "processing" ? "bg-blue-100 text-blue-700 border-blue-700/20" :
-                        selectedOrder.status === "pos" ? "bg-purple-100 text-purple-700 border-purple-700/20" :
-                        "bg-[#FDECEC] text-[#9A2D2D] border-[#9A2D2D]/20"
+                        selectedOrder.status === "completed" ? "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20 dark:bg-green-950 dark:text-green-300 dark:border-green-900" :
+                        selectedOrder.status === "pending" ? "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-900" :
+                        selectedOrder.status === "processing" ? "bg-blue-100 text-blue-700 border-blue-700/20 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900" :
+                        selectedOrder.status === "pos" ? "bg-purple-100 text-purple-700 border-purple-700/20 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-900" :
+                        "bg-[#FDECEC] text-[#9A2D2D] border-[#9A2D2D]/20 dark:bg-red-950 dark:text-red-300 dark:border-red-900"
                       )}>
                       <SelectValue placeholder="Update Status" />
                     </SelectTrigger>

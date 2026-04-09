@@ -4,6 +4,23 @@ import type { ProductApi, CategoryApi } from "./api";
 // Type alias for admin product view
 export type AdminProduct = ProductApi;
 
+export interface AdminProductVariantInput {
+  color: string;
+  size: string;
+  crossedPrice: number;
+  sellingPrice: number;
+  costPrice: number;
+  quantity: number;
+  sku: string;
+  weight: number;
+}
+
+export interface AdminProductInput extends Omit<ProductApi, "id" | "variants"> {
+  variantsEnabled?: boolean;
+  continueSellingOutOfStock?: boolean;
+  variants?: AdminProductVariantInput[];
+}
+
 export interface AdminOrder {
   id: string;
   email: string;
@@ -509,7 +526,7 @@ export async function fetchAdminProducts(filters?: {
 }
 
 export async function createAdminProduct(
-  data: Omit<ProductApi, "id">,
+  data: AdminProductInput,
 ): Promise<ProductApi> {
   const res = await apiRequest("POST", "/api/admin/products", data);
   const json = (await res.json()) as {
@@ -521,7 +538,7 @@ export async function createAdminProduct(
 
 export async function updateAdminProduct(
   id: string,
-  data: Partial<Omit<ProductApi, "id">>,
+  data: Partial<AdminProductInput>,
 ): Promise<ProductApi> {
   const res = await apiRequest("PUT", `/api/admin/products/${id}`, data);
   const json = (await res.json()) as {
@@ -683,6 +700,49 @@ export async function updateOrderStatus(
   return json.data;
 }
 
+export interface AdminCreateOrderInput {
+  items: Array<{
+    productId: string;
+    variantId?: string | number;
+    size?: string;
+    color?: string;
+    quantity: number;
+    priceAtTime: number;
+  }>;
+  shipping: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    address: string;
+    city: string;
+    zip: string;
+    country: string;
+    deliveryLocation: string;
+    locationCoordinates?: string;
+  };
+  paymentMethod: string;
+  source?: string;
+  deliveryRequired?: boolean;
+  deliveryProvider?: string | null;
+  deliveryAddress?: string | null;
+  promoCodeId?: string;
+  status?: "pending" | "processing" | "completed" | "cancelled";
+}
+
+export async function createAdminOrder(data: AdminCreateOrderInput) {
+  const res = await apiRequest("POST", "/api/admin/orders", data);
+  const json = (await res.json()) as {
+    success: boolean;
+    data?: { orderNumber: string; total: number; order: AdminOrder };
+    error?: string;
+  };
+  if (!json.success) {
+    throw new Error(json.error || "Failed to create order");
+  }
+  return json.data;
+}
+
 export async function verifyOrderPayment(
   id: string,
   paymentVerified: "verified" | "rejected",
@@ -703,6 +763,14 @@ export function exportOrdersCSV(): Promise<void> {
 
 export function exportOrdersCSVInstant(): void {
   triggerAdminCsvDownload("/api/admin/orders/export");
+}
+
+export function exportDashboard24hCSV(): Promise<void> {
+  return downloadAdminCsv("/api/admin/dashboard/export", "rare-backend-24h.csv");
+}
+
+export function exportDashboard24hCSVInstant(): void {
+  triggerAdminCsvDownload("/api/admin/dashboard/export");
 }
 
 export function exportAnalyticsCSV(range: string): Promise<void> {

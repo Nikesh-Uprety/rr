@@ -1,4 +1,14 @@
-const ADMIN_PANEL_ROLES = ["superadmin", "owner", "admin", "manager", "csr", "staff"] as const;
+const ADMIN_PANEL_ROLES = [
+  "superadmin",
+  "owner",
+  "admin",
+  "manager",
+  "csr",
+  "staff",
+  "sales",
+  "marketing",
+  "cook",
+] as const;
 
 export const ADMIN_PAGE_KEYS = [
   "dashboard",
@@ -66,6 +76,43 @@ const ADMIN_PAGE_ACCESS: Record<AdminPanelRole, readonly AdminPageKey[]> = {
     "customers",
     "bills",
   ],
+  sales: [
+    "dashboard",
+    "profile",
+    "messages",
+    "notifications",
+    "orders",
+    "customers",
+    "bills",
+    "pos",
+    "promo-codes",
+  ],
+  marketing: [
+    "dashboard",
+    "profile",
+    "messages",
+    "notifications",
+    "marketing",
+    "analytics",
+    "customers",
+  ],
+  cook: [
+    "dashboard",
+    "profile",
+    "messages",
+    "notifications",
+    "orders",
+    "bills",
+  ],
+};
+
+const OVERRIDE_RESTRICTED_PAGES_BY_ROLE: Partial<Record<AdminPanelRole, readonly AdminPageKey[]>> = {
+  manager: ["store-users"],
+  staff: ["store-users"],
+  csr: ["store-users"],
+  sales: ["store-users"],
+  marketing: ["store-users"],
+  cook: ["store-users"],
 };
 
 export function normalizeAdminRole(role: string | null | undefined): AdminPanelRole | null {
@@ -93,13 +140,30 @@ export function normalizeAdminPageList(
   return Array.from(new Set(normalized));
 }
 
+export function sanitizeAdminPageOverrides(
+  role: string | null | undefined,
+  overrides: Array<string | null | undefined> | null | undefined,
+): AdminPageKey[] {
+  const normalizedRole = normalizeAdminRole(role);
+  if (!normalizedRole) return [];
+
+  const normalizedOverrides = normalizeAdminPageList(overrides);
+  const restrictedPages = new Set(OVERRIDE_RESTRICTED_PAGES_BY_ROLE[normalizedRole] ?? []);
+  if (restrictedPages.size === 0) {
+    return normalizedOverrides;
+  }
+
+  return normalizedOverrides.filter((page) => !restrictedPages.has(page));
+}
+
 export function getAdminAllowedPages(
   role: string | null | undefined,
   additionalPages?: Array<string | null | undefined> | null,
 ): AdminPageKey[] {
   const normalizedRole = normalizeAdminRole(role);
-  const basePages = normalizedRole ? [...ADMIN_PAGE_ACCESS[normalizedRole]] : [];
-  const extraPages = normalizeAdminPageList(additionalPages);
+  if (!normalizedRole) return [];
+  const basePages = [...ADMIN_PAGE_ACCESS[normalizedRole]];
+  const extraPages = sanitizeAdminPageOverrides(normalizedRole, additionalPages);
   return Array.from(new Set([...basePages, ...extraPages]));
 }
 

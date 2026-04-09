@@ -10,6 +10,20 @@ interface WebSocketMessage {
   message?: string;
 }
 
+const shouldDebugWebSocket = import.meta.env.DEV;
+
+function debugWebSocket(...args: unknown[]) {
+  if (shouldDebugWebSocket) {
+    console.log(...args);
+  }
+}
+
+function errorWebSocket(...args: unknown[]) {
+  if (shouldDebugWebSocket) {
+    console.error(...args);
+  }
+}
+
 function getNotificationVariant(
   notification: AdminNotification,
 ): "success" | "warning" | "destructive" | "info" {
@@ -52,7 +66,7 @@ export function useAdminWebSocket() {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log("[WebSocket] Connected to admin notifications");
+        debugWebSocket("[WebSocket] Connected to admin notifications");
         setIsConnected(true);
         reconnectAttempts.current = 0;
 
@@ -100,7 +114,7 @@ export function useAdminWebSocket() {
               break;
               
             case "connected":
-              console.log("[WebSocket] Server confirmed connection:", message.message);
+              debugWebSocket("[WebSocket] Server confirmed connection:", message.message);
               break;
               
             case "pong":
@@ -108,37 +122,37 @@ export function useAdminWebSocket() {
               break;
               
             default:
-              console.log("[WebSocket] Unknown message type:", message.type);
+              debugWebSocket("[WebSocket] Unknown message type:", message.type);
           }
         } catch (err) {
-          console.error("[WebSocket] Failed to parse message:", err);
+          errorWebSocket("[WebSocket] Failed to parse message:", err);
         }
       };
 
       ws.onerror = (error) => {
-        console.error("[WebSocket] Error:", error);
+        errorWebSocket("[WebSocket] Error:", error);
       };
 
       ws.onclose = () => {
-        console.log("[WebSocket] Connection closed");
+        debugWebSocket("[WebSocket] Connection closed");
         setIsConnected(false);
         wsRef.current = null;
 
         // Attempt to reconnect with exponential backoff
         if (reconnectAttempts.current < maxReconnectAttempts) {
           const delay = baseReconnectDelay * Math.pow(2, reconnectAttempts.current);
-          console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`);
+          debugWebSocket(`[WebSocket] Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttempts.current++;
             connect();
           }, delay);
         } else {
-          console.log("[WebSocket] Max reconnection attempts reached");
+          debugWebSocket("[WebSocket] Max reconnection attempts reached");
         }
       };
     } catch (err) {
-      console.error("[WebSocket] Failed to create WebSocket:", err);
+      errorWebSocket("[WebSocket] Failed to create WebSocket:", err);
     }
   }, [queryClient]);
 

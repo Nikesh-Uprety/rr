@@ -29,6 +29,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { AdminProfileSkeleton } from "@/components/admin/AdminPageSkeletons";
 import {
   Camera,
   Expand,
@@ -467,14 +468,7 @@ export default function AdminProfilePage() {
   });
 
   if (overviewQuery.isLoading || !overview || !form) {
-    return (
-      <div className="space-y-4 animate-in fade-in duration-300">
-        <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">Profile</h1>
-        <Card>
-          <CardContent className="pt-6 text-sm text-muted-foreground">Loading profile...</CardContent>
-        </Card>
-      </div>
-    );
+    return <AdminProfileSkeleton />;
   }
 
   const fullName = `${form.firstName} ${form.lastName}`.trim() || overview.profile.email;

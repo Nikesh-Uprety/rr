@@ -34,8 +34,7 @@ export const useThemeStore = create<ThemeState>((set) => {
     if (savedTheme && ['light', 'dark', 'warm'].includes(savedTheme)) {
       return savedTheme;
     }
-    const hour = new Date().getHours();
-    return hour >= 6 && hour < 18 ? 'light' : 'dark';
+    return 'light';
   };
 
   const initialTheme = getInitialTheme();

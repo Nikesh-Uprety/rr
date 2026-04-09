@@ -2,11 +2,14 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDownWideNarrow, ExternalLink, Palette, Ruler, Sparkles, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
+import { fetchProducts, fetchCategories, fetchPageConfig, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { StorefrontBreadcrumbs } from "@/components/product/StorefrontBreadcrumbs";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccessAdminPanel } from "@shared/auth-policy";
+import { getDefaultAdminPath } from "@/lib/adminAccess";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +30,76 @@ function parseJsonArray(s: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+const COLOR_NAME_SWATCHES: Record<string, string> = {
+  black: "#111111",
+  white: "#f5f5f5",
+  cream: "#f2eadf",
+  ivory: "#fff8e7",
+  beige: "#d8c3a5",
+  tan: "#c19a6b",
+  brown: "#7a5a43",
+  mocha: "#7b5b45",
+  chocolate: "#5d3a1a",
+  camel: "#c19a6b",
+  grey: "#7c7c7c",
+  gray: "#7c7c7c",
+  charcoal: "#36454f",
+  silver: "#bfc5cc",
+  blue: "#2548b1",
+  navy: "#1f2a44",
+  "navy blue": "#1f2a44",
+  royal: "#4169e1",
+  "royal blue": "#4169e1",
+  sky: "#76b5ff",
+  "sky blue": "#76b5ff",
+  baby: "#a9d6ff",
+  "baby blue": "#a9d6ff",
+  teal: "#0f766e",
+  turquoise: "#40e0d0",
+  green: "#2f7d32",
+  olive: "#556b2f",
+  sage: "#9caf88",
+  mint: "#98ff98",
+  red: "#c62828",
+  maroon: "#6b1f2a",
+  burgundy: "#6d213c",
+  wine: "#722f37",
+  pink: "#f7a6ec",
+  blush: "#e8b4b8",
+  rose: "#e11d48",
+  purple: "#7c3aed",
+  lavender: "#b497d6",
+  lilac: "#c8a2c8",
+  yellow: "#facc15",
+  mustard: "#d4a017",
+  orange: "#f97316",
+  gold: "#c9a84c",
+};
+
+function resolveNamedColorSwatch(label: string): string | null {
+  const normalized = label.trim().toLowerCase();
+  if (!normalized) return null;
+  return COLOR_NAME_SWATCHES[normalized] ?? null;
+}
+
+function parseColorOption(value: string): { label: string; swatch: string | null } {
+  const trimmed = value.trim();
+  const hexMatch = trimmed.match(/#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/);
+  const label = trimmed
+    .replace(/\(\s*#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\s*\)/g, "")
+    .replace(/\|\s*#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})/g, "")
+    .trim();
+
+  return {
+    label: label || trimmed,
+    swatch: hexMatch?.[0] ?? resolveNamedColorSwatch(label || trimmed),
+  };
+}
+
+function normalizeColorLabel(value: string | null | undefined): string {
+  return parseColorOption(value ?? "").label.trim().toLowerCase();
 }
 
 function getHoverImage(product: ProductApi): string {
@@ -68,8 +141,24 @@ export default function Products() {
   const [colorFilter, setColorFilter] = useState(initialState.colorFilter);
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [page, setPage] = useState(initialState.page);
-  const PAGE_SIZE = 10;
+  const [selectedCardColors, setSelectedCardColors] = useState<Record<string, string>>({});
+  const [hoveredCardColors, setHoveredCardColors] = useState<Record<string, string | null>>({});
   const hasInitializedFilters = useRef(false);
+  const previewTemplateId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
+    return rawValue && /^\d+$/.test(rawValue) ? rawValue : null;
+  }, []);
+  const { user, isAuthenticated } = useCurrentUser({ enabled: previewTemplateId === null });
+  const { data: pageConfig } = useQuery({
+    queryKey: ["page-config", previewTemplateId],
+    queryFn: () => fetchPageConfig(previewTemplateId),
+    staleTime: previewTemplateId !== null ? 0 : 5 * 60 * 1000,
+    refetchOnMount: previewTemplateId !== null ? "always" : false,
+    refetchOnWindowFocus: previewTemplateId !== null,
+  });
+  const isStuffyClone = pageConfig?.template?.slug === "stuffyclone";
+  const pageSize = isStuffyClone ? 16 : 10;
 
   const shopPath = useMemo(() => {
     const params = new URLSearchParams();
@@ -127,9 +216,9 @@ export default function Products() {
     () => ({
       category: category === "all" ? undefined : category,
       page,
-      limit: PAGE_SIZE,
+      limit: pageSize,
     }),
-    [category, page],
+    [category, page, pageSize],
   );
 
   const {
@@ -244,7 +333,7 @@ export default function Products() {
   const isOverflowSelected = overflowCategories.some((cat) => cat.slug === category);
 
   return (
-    <div className="w-full pb-16 pt-4 pl-3 pr-1 sm:pt-6 sm:pl-4 sm:pr-2 lg:pl-6 lg:pr-2 xl:pl-7 xl:pr-2 2xl:pl-8 2xl:pr-2">
+    <div className={`min-h-screen w-full pb-16 ${isStuffyClone ? "px-0 pt-24" : "pl-3 pr-1 sm:pl-4 sm:pr-2 lg:px-6 xl:px-7 2xl:px-8 pt-4 sm:pt-6"} ${isStuffyClone ? "bg-white text-neutral-950 dark:bg-[#0d1117] dark:text-[#e6edf3] sm:pt-28" : ""}`}>
       <StorefrontSeo
         title={
           category !== "all"
@@ -269,27 +358,31 @@ export default function Products() {
         }}
       />
 
-      <div className="w-full">
-        <div className="mb-6">
-          <StorefrontBreadcrumbs
-            items={[
-              { label: "Home", href: "/" },
-              { label: "Shop" },
-            ]}
-          />
-        </div>
+      <div className={`w-full ${isStuffyClone ? "bg-white px-3 pr-1 sm:px-4 sm:pr-2 lg:px-6 xl:px-7 2xl:px-8 dark:bg-[#0d1117]" : ""}`}>
+        {!isStuffyClone ? (
+          <>
+            <div className="mb-6">
+              <StorefrontBreadcrumbs
+                items={[
+                  { label: "Home", href: "/" },
+                  { label: "Shop" },
+                ]}
+              />
+            </div>
 
-        <div className="mb-8 border-b border-border/70 pb-5 text-center">
-          <h1 className="text-3xl font-black uppercase tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-4xl">
-            All Products
-          </h1>
-          <p
-            style={{ fontFamily: "Roboto, sans-serif" }}
-            className="mt-2 text-[10px] font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-300"
-          >
-            Showing {filteredProducts.length} results
-          </p>
-        </div>
+            <div className="mb-8 border-b border-border/70 pb-5 text-center">
+              <h1 className="text-3xl font-black uppercase tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-4xl">
+                All Products
+              </h1>
+              <p
+                style={{ fontFamily: "Roboto, sans-serif" }}
+                className="mt-2 text-[10px] font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-300"
+              >
+                Showing {filteredProducts.length} results
+              </p>
+            </div>
+          </>
+        ) : null}
 
         <div className="min-h-[400px] text-neutral-900 dark:text-neutral-100">
           <div className="mb-10 space-y-5">
@@ -299,10 +392,10 @@ export default function Products() {
                   <button
                     onClick={() => setCategory("all")}
                     style={{ fontFamily: "Roboto, sans-serif" }}
-                    className={`shrink-0 border-b-2 px-1 py-1 text-sm md:text-base font-medium uppercase tracking-[0.16em] transition-colors ${
+                    className={`shrink-0 border-b-2 px-1 py-1 text-sm font-medium uppercase tracking-[0.16em] transition-colors md:text-base ${
                       category === "all"
                         ? "border-current text-neutral-900 dark:text-neutral-100"
-                        : "border-transparent text-neutral-800/85 dark:text-neutral-300/85 hover:text-neutral-900 dark:hover:text-neutral-100"
+                        : "border-transparent text-neutral-800/85 dark:text-neutral-300/85 hover:text-neutral-900 dark:hover:bg-black/40 dark:hover:text-white"
                     }`}
                   >
                     All
@@ -312,10 +405,10 @@ export default function Products() {
                       key={cat.id}
                       onClick={() => setCategory(cat.slug)}
                       style={{ fontFamily: "Roboto, sans-serif" }}
-                      className={`shrink-0 border-b-2 px-1 py-1 text-sm md:text-base font-medium uppercase tracking-[0.16em] transition-colors ${
+                      className={`shrink-0 border-b-2 px-1 py-1 text-sm font-medium uppercase tracking-[0.16em] transition-colors md:text-base ${
                         category === cat.slug
                           ? "border-current text-neutral-900 dark:text-neutral-100"
-                          : "border-transparent text-neutral-800/85 dark:text-neutral-300/85 hover:text-neutral-900 dark:hover:text-neutral-100"
+                          : "border-transparent text-neutral-800/85 dark:text-neutral-300/85 hover:text-neutral-900 dark:hover:bg-black/40 dark:hover:text-white"
                       }`}
                     >
                       {cat.name}
@@ -329,18 +422,18 @@ export default function Products() {
                           style={{ fontFamily: "Roboto, sans-serif" }}
                           className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full border px-3 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-sm transition-colors ${
                             isOverflowSelected
-                              ? "border-neutral-900 bg-neutral-900 text-white hover:bg-neutral-800 dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
-                              : "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
+                              ? "border-transparent bg-neutral-950 text-white hover:bg-neutral-800 dark:bg-[#1f6feb] dark:text-white dark:hover:bg-[#388bfd]"
+                              : "border-transparent bg-white text-neutral-950 hover:bg-neutral-100 dark:bg-[#161b22] dark:text-[#e6edf3] dark:hover:bg-[#1f242d]"
                           }`}
                         >
                           <span>More</span>
-                          <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/90 px-1.5 text-[9px] font-black tracking-normal text-black">
+                          <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/90 px-1.5 text-[9px] font-black tracking-normal text-black dark:bg-neutral-950 dark:text-white">
                             {overflowCategories.length}
                           </span>
                           <ChevronDown className="h-3.5 w-3.5" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="min-w-[12rem] rounded-xl border border-black/10 bg-white/95 p-2 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-sm dark:border-white/15 dark:bg-neutral-900/95 dark:shadow-[0_10px_28px_rgba(0,0,0,0.35)]">
+                      <DropdownMenuContent align="start" className="min-w-[12rem] rounded-xl border border-black/10 bg-white/95 p-2 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-sm dark:border-white/12 dark:bg-[#161b22]/95 dark:shadow-[0_10px_28px_rgba(0,0,0,0.35)]">
                         <DropdownMenuLabel className="px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-700 dark:text-neutral-200">
                           <span className="inline-flex items-center gap-1.5">
                             <Sparkles className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-200" />
@@ -370,19 +463,19 @@ export default function Products() {
                     <button
                       type="button"
                       style={{ fontFamily: "Roboto, sans-serif" }}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-neutral-300 bg-white px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-900 shadow-sm transition-all hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
+                      className="inline-flex h-10 items-center gap-2 rounded-full border border-transparent bg-white px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 dark:bg-[#161b22] dark:text-[#e6edf3] dark:hover:bg-[#1f242d]"
                     >
                       <ArrowDownWideNarrow className="h-3.5 w-3.5" />
                       <span>{SORT_LABELS[sortBy] ? `Sort: ${SORT_LABELS[sortBy]}` : "Sort By"}</span>
                       {activeFilterCount > 0 ? (
-                        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-neutral-100 px-1.5 text-[9px] font-black tracking-normal text-neutral-800 dark:bg-neutral-700 dark:text-neutral-100">
+                        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-neutral-100 px-1.5 text-[9px] font-black tracking-normal text-neutral-900 dark:bg-neutral-800 dark:text-white">
                           {activeFilterCount}
                         </span>
                       ) : null}
                       <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isSortMenuOpen ? "rotate-180" : ""}`} />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[18rem] rounded-xl border border-neutral-200 bg-white/95 p-3 shadow-[0_12px_32px_rgba(15,23,42,0.1)] backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/95 dark:shadow-[0_12px_32px_rgba(0,0,0,0.3)]">
+                  <DropdownMenuContent align="end" className="w-[18rem] rounded-xl border border-neutral-200 bg-white/95 p-3 shadow-[0_12px_32px_rgba(15,23,42,0.1)] backdrop-blur-sm dark:border-white/12 dark:bg-[#161b22]/95 dark:shadow-[0_12px_32px_rgba(0,0,0,0.3)]">
                     <DropdownMenuLabel className="px-0 text-[10px] font-bold uppercase tracking-[0.22em] text-neutral-700 dark:text-neutral-200">
                       <span className="inline-flex items-center gap-1.5">
                         <Sparkles className="h-3.5 w-3.5 text-cyan-500" />
@@ -400,7 +493,7 @@ export default function Products() {
                       </label>
                       <select
                         style={{ fontFamily: "Roboto, sans-serif" }}
-                        className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-900 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-neutral-100 dark:focus:ring-white"
+                        className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
                         aria-label="Sort products"
@@ -422,7 +515,7 @@ export default function Products() {
                       </label>
                       <select
                         style={{ fontFamily: "Roboto, sans-serif" }}
-                        className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-900 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-neutral-100 dark:focus:ring-white"
+                        className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
                         value={stockFilter}
                         onChange={(e) => setStockFilter(e.target.value)}
                         aria-label="Filter products by stock or sale"
@@ -444,7 +537,7 @@ export default function Products() {
                         </label>
                         <select
                           style={{ fontFamily: "Roboto, sans-serif" }}
-                          className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-900 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-neutral-100 dark:focus:ring-white"
+                          className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
                           value={sizeFilter}
                           onChange={(e) => setSizeFilter(e.target.value)}
                           aria-label="Filter products by size"
@@ -466,7 +559,7 @@ export default function Products() {
                         </label>
                         <select
                           style={{ fontFamily: "Roboto, sans-serif" }}
-                          className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-900 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-neutral-100 dark:focus:ring-white"
+                          className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
                           value={colorFilter}
                           onChange={(e) => setColorFilter(e.target.value)}
                           aria-label="Filter products by color"
@@ -483,7 +576,7 @@ export default function Products() {
 
                     <button
                       type="button"
-                      className="mt-3 h-8 w-full rounded border border-black/20 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-white/25 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                      className="mt-3 h-8 w-full rounded border border-black/20 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-800 transition-colors hover:bg-neutral-100 dark:border-white/18 dark:text-[#e6edf3] dark:hover:bg-[#1f242d]"
                       onClick={() => {
                         setSortBy("newest");
                         setStockFilter("all");
@@ -505,7 +598,7 @@ export default function Products() {
             </div>
           ) : isError ? (
             <div className="py-20 text-center space-y-4">
-              <p className="uppercase text-[10px] tracking-widest font-bold text-neutral-400 dark:text-neutral-500">
+              <p className="uppercase text-[10px] tracking-widest font-bold text-neutral-500 dark:text-neutral-300">
                 Failed to load products. Try again.
               </p>
               <button
@@ -518,18 +611,33 @@ export default function Products() {
           ) : (
             <div>
               {filteredProducts.length > 0 ? (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 md:gap-3 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5">
+                <div className={`grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 lg:gap-4 ${isStuffyClone ? "xl:grid-cols-4" : "md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-5"}`}>
                   {filteredProducts.map((product) => {
                     const hoverImage = getHoverImage(product);
                     const mainImage = product.imageUrl ?? hoverImage ?? "";
-                      return (
+                    const colorOptions = parseJsonArray(product.colorOptions);
+                    const colorImageMap = product.colorImageMap ?? {};
+                    const normalizedColorMap = Object.entries(colorImageMap).reduce<Record<string, string[]>>((acc, [key, value]) => {
+                      if (Array.isArray(value)) {
+                        acc[normalizeColorLabel(key)] = value.filter(Boolean);
+                      }
+                      return acc;
+                    }, {});
+                    const defaultColor = colorOptions[0] ?? null;
+                    const activeColor =
+                      hoveredCardColors[product.id] ?? selectedCardColors[product.id] ?? defaultColor ?? "";
+                    const activeColorImages =
+                      activeColor ? normalizedColorMap[normalizeColorLabel(activeColor)] ?? [] : [];
+                    const primaryImage = activeColorImages[0] ?? mainImage;
+                    const secondaryImage = activeColorImages[1] ?? hoverImage ?? primaryImage;
+                    return (
                         <Link
                           key={product.id}
                           href={`/product/${product.id}?from=${encodeURIComponent(shopPath)}`}
                           className="group block"
                         >
                         <div className="mb-2">
-                          <div className="relative aspect-[3/5] overflow-hidden rounded-md border border-white/80 bg-zinc-50 dark:border-white/20 dark:bg-zinc-900/70">
+                          <div className={`relative overflow-hidden rounded-md border ${isStuffyClone ? "aspect-[5/6] border-neutral-200 bg-zinc-50 dark:border-white/10 dark:bg-[#161b22]" : "aspect-[3/5] border-white/80 bg-zinc-50 dark:border-white/20 dark:bg-zinc-900/70"}`}>
                           <button
                             type="button"
                               onClick={(e) => {
@@ -549,26 +657,34 @@ export default function Products() {
                           )}
                           {product.stock === 0 && (
                             <div
-                              className={`absolute ${product.saleActive ? "top-12" : "top-3"} left-3 z-10 bg-black/80 dark:bg-neutral-800/90 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded`}
+                              className={`absolute ${product.saleActive ? "top-12" : "top-3"} left-3 z-10 bg-black/80 dark:bg-[#21262d] text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded`}
                             >
                               Out of Stock
                             </div>
                           )}
                           <img
-                            src={mainImage}
+                            src={primaryImage}
                             alt={product.name}
-                            className="absolute inset-0 h-full w-full object-cover opacity-100 group-hover:opacity-0 transition-none"
+                            className={`absolute inset-0 h-full w-full object-cover ${
+                              isStuffyClone
+                                ? "translate-x-0 transition-transform duration-500 ease-out group-hover:-translate-x-full motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-100 motion-reduce:group-hover:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-200"
+                                : "opacity-100 transition-opacity duration-300 group-hover:opacity-0"
+                            }`}
                           />
                           <img
-                            src={hoverImage}
+                            src={secondaryImage}
                             alt={product.name}
-                            className="absolute inset-0 h-full w-full object-cover opacity-0 group-hover:opacity-100 transition-none"
+                            className={`absolute inset-0 h-full w-full object-cover ${
+                              isStuffyClone
+                                ? "translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-0 motion-reduce:group-hover:opacity-100 motion-reduce:transition-opacity motion-reduce:duration-200"
+                                : "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                            }`}
                           />
                           </div>
                         </div>
-                        <div className="space-y-1">
+                        <div className={`space-y-1 ${isStuffyClone ? "text-neutral-950 dark:text-[#e6edf3]" : ""}`}>
                           <h3
-                            className="mb-1 truncate"
+                            className="mb-1 truncate text-[rgb(17,17,17)] dark:text-[#f0f6fc]"
                             style={{
                               fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
                               fontWeight: 700,
@@ -583,7 +699,7 @@ export default function Products() {
                               className={`text-sm font-bold uppercase tracking-wider ${
                                 product.saleActive
                                   ? "text-red-700 dark:text-red-400"
-                                  : "text-neutral-500 dark:text-neutral-400"
+                                  : "text-neutral-700 dark:text-[#c9d1d9]"
                               }`}
                             >
                               {product.saleActive && Number(product.salePercentage) > 0
@@ -594,36 +710,74 @@ export default function Products() {
                                 : formatPrice(product.price)}
                             </p>
                             {product.saleActive && Number(product.salePercentage) > 0 && (
-                              <p className="text-[10px] text-neutral-400 dark:text-neutral-500 line-through opacity-70">
+                              <p className="text-[10px] text-neutral-500 dark:text-neutral-300 line-through opacity-70">
                                 {formatPrice(product.price)}
                               </p>
                             )}
                           </div>
+                          {isStuffyClone && colorOptions.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {colorOptions.map((color) => {
+                                const parsed = parseColorOption(color);
+                                const isActive = normalizeColorLabel(activeColor) === normalizeColorLabel(color);
+                                return (
+                                  <button
+                                    key={`${product.id}-${color}`}
+                                    type="button"
+                                    className={`h-4 w-4 rounded-sm border transition ${isActive ? "border-neutral-900 dark:border-[#f0f6fc]" : "border-neutral-300/80 dark:border-white/30"}`}
+                                    style={{
+                                      background:
+                                        parsed.swatch ??
+                                        "linear-gradient(135deg, rgba(120,120,120,0.15), rgba(120,120,120,0.35))",
+                                    }}
+                                    onMouseEnter={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      setHoveredCardColors((prev) => ({ ...prev, [product.id]: color }));
+                                    }}
+                                    onMouseLeave={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      setHoveredCardColors((prev) => ({ ...prev, [product.id]: null }));
+                                    }}
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      setSelectedCardColors((prev) => ({ ...prev, [product.id]: color }));
+                                    }}
+                                    aria-label={`Select ${parsed.label} color`}
+                                  />
+                                );
+                              })}
+                            </div>
+                          ) : null}
                         </div>
                       </Link>
                     );
                   })}
                 </div>
               ) : (
-                <div className="py-20 text-center uppercase text-[10px] tracking-widest font-bold text-neutral-400 dark:text-neutral-500">
+                <div className="py-20 text-center uppercase text-[10px] tracking-widest font-bold text-neutral-500 dark:text-neutral-300">
                   No products found.
                 </div>
               )}
 
-              {totalProducts > PAGE_SIZE && (
+              {totalProducts > pageSize && (
                 <div className="mt-12 flex items-center justify-center gap-2">
                   <button
+                    type="button"
+                    aria-label="Previous page"
                     onClick={() => {
                       setPage((p) => Math.max(1, p - 1));
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                     disabled={page === 1}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30 dark:border-white/12 dark:hover:bg-[#1f242d]"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
-                  {Array.from({ length: Math.min(5, Math.ceil(totalProducts / PAGE_SIZE)) }, (_, i) => {
-                    const totalPages = Math.ceil(totalProducts / PAGE_SIZE);
+                  {Array.from({ length: Math.min(5, Math.ceil(totalProducts / pageSize)) }, (_, i) => {
+                    const totalPages = Math.ceil(totalProducts / pageSize);
                     let pageNum: number;
                     if (totalPages <= 5) pageNum = i + 1;
                     else if (page <= 3) pageNum = i + 1;
@@ -631,6 +785,7 @@ export default function Products() {
                     else pageNum = page - 2 + i;
                     return (
                       <button
+                        type="button"
                         key={pageNum}
                         onClick={() => {
                           setPage(pageNum);
@@ -638,8 +793,8 @@ export default function Products() {
                         }}
                         className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-colors ${
                           pageNum === page
-                            ? "bg-[#2C3E2D] text-white dark:bg-[#4ADE80] dark:text-[#1A251B]"
-                            : "border border-border/60 text-foreground hover:bg-muted"
+                            ? "bg-[#2C3E2D] text-white dark:bg-[#1f6feb] dark:text-white"
+                            : "border border-border/60 text-foreground hover:bg-muted dark:border-white/12 dark:hover:bg-[#1f242d]"
                         }`}
                       >
                         {pageNum}
@@ -647,12 +802,14 @@ export default function Products() {
                     );
                   })}
                   <button
+                    type="button"
+                    aria-label="Next page"
                     onClick={() => {
-                      setPage((p) => Math.min(Math.ceil(totalProducts / PAGE_SIZE), p + 1));
+                      setPage((p) => Math.min(Math.ceil(totalProducts / pageSize), p + 1));
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
-                    disabled={page >= Math.ceil(totalProducts / PAGE_SIZE)}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
+                    disabled={page >= Math.ceil(totalProducts / pageSize)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30 dark:border-white/12 dark:hover:bg-[#1f242d]"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>

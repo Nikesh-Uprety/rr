@@ -8,7 +8,7 @@ import path from "path";
 import sharp from "sharp";
 import multer from "multer";
 import { z } from "zod";
-import { ADMIN_PAGE_KEYS, canAccessAdminPage, canAccessAdminPanel, getAdminAllowedPages, normalizeAdminPageList, requiresTwoFactorChallenge } from "@shared/auth-policy";
+import { ADMIN_PAGE_KEYS, canAccessAdminPage, canAccessAdminPanel, getAdminAllowedPages, normalizeAdminPageList, requiresTwoFactorChallenge, sanitizeAdminPageOverrides } from "@shared/auth-policy";
 import { MAISON_NOCTURNE_DEFAULT_HERO_SLIDES } from "@shared/canvasDefaults";
 import { storage } from "./storage";
 import { logger } from "./logger";
@@ -1033,6 +1033,7 @@ ${Array.from(uniqueEntries.entries())
   app.use("/api/admin/attributes", requireAdminPageAccess("products"));
   app.use("/api/admin/site-assets", requireAdminPageAccess("landing-page"));
   app.use("/api/admin/orders", requireAdminPageAccess("orders"));
+  app.use("/api/admin/dashboard", requireAdminPageAccess("dashboard"));
   app.use("/api/admin/analytics", requireAdminPageAccess("analytics"));
   app.use("/api/admin/customers", requireAdminPageAccess("customers"));
   app.use("/api/admin/users", requireAdminPageAccess("store-users"));
@@ -1156,6 +1157,15 @@ ${Array.from(uniqueEntries.entries())
         isPurchased: true,
         thumbnailUrl: "/images/landingpage3.webp",
         description: "A full editorial homepage based on the Rare Atelier luxury sample layout.",
+      } as const;
+      const stuffyTemplateValues = {
+        name: "Stussy Clone",
+        slug: "stuffyclone",
+        tier: "premium",
+        priceNpr: 0,
+        isPurchased: true,
+        thumbnailUrl: "/images/stussy.webp",
+        description: "Minimal full-bleed landing with side-nav storefront layout.",
       } as const;
       const maisonSections = [
         {
@@ -1306,11 +1316,23 @@ ${Array.from(uniqueEntries.entries())
           },
         },
       ] as const;
+      const stuffySections = [
+        {
+          sectionType: "hero",
+          label: "Stuffy Landing",
+          orderIndex: 1,
+          isVisible: true,
+          config: {
+            variant: "stuffyclone",
+          },
+        },
+      ] as const;
 
       if (existingTemplates.length > 0) {
         let totalTemplates = existingTemplates.length;
         const existingMaison = existingTemplates.find((template) => template.slug === "maison-nocturne");
         const existingNikesh = existingTemplates.find((template) => template.slug === "nikeshdesign");
+        const existingStuffy = existingTemplates.find((template) => template.slug === "stuffyclone");
 
         if (!existingMaison) {
           const [maisonNocturne] = await db
@@ -1337,6 +1359,22 @@ ${Array.from(uniqueEntries.entries())
           await db.insert(pageSections).values(
             nikeshSections.map((section) => ({
               templateId: nikeshDesign.id,
+              ...section,
+            })),
+          );
+
+          totalTemplates += 1;
+        }
+
+        if (!existingStuffy) {
+          const [stuffyClone] = await db
+            .insert(pageTemplates)
+            .values(stuffyTemplateValues)
+            .returning();
+
+          await db.insert(pageSections).values(
+            stuffySections.map((section) => ({
+              templateId: stuffyClone.id,
               ...section,
             })),
           );
@@ -1391,6 +1429,10 @@ ${Array.from(uniqueEntries.entries())
         .insert(pageTemplates)
         .values(nikeshTemplateValues)
         .returning();
+      const [stuffyClone] = await db
+        .insert(pageTemplates)
+        .values(stuffyTemplateValues)
+        .returning();
 
       await db.insert(pageSections).values([
         { templateId: rareDarkLuxury.id, sectionType: "hero", label: "Hero", orderIndex: 1, isVisible: true, config: { variant: "dark-cinematic" } },
@@ -1418,14 +1460,18 @@ ${Array.from(uniqueEntries.entries())
           templateId: nikeshDesign.id,
           ...section,
         })),
+        ...stuffySections.map((section) => ({
+          templateId: stuffyClone.id,
+          ...section,
+        })),
       ]);
 
       await db.insert(siteSettings).values({
-        activeTemplateId: rareDarkLuxury.id,
+        activeTemplateId: stuffyClone.id,
         publishedAt: new Date(),
       });
 
-      return res.json({ seeded: true, templates: 5 });
+      return res.json({ seeded: true, templates: 6 });
     } catch (err) {
       console.error("Error in POST /api/admin/canvas/seed", err);
       return res.status(500).json({ error: "Failed to seed canvas templates" });
@@ -2707,6 +2753,10 @@ ${Array.from(uniqueEntries.entries())
           color: productVariants.color,
           stock: productVariants.stock,
           sku: productVariants.sku,
+          compareAtPrice: productVariants.compareAtPrice,
+          sellingPrice: productVariants.sellingPrice,
+          costPrice: productVariants.costPrice,
+          weight: productVariants.weight,
         })
         .from(productVariants)
         .where(eq(productVariants.productId, id))
@@ -2792,6 +2842,9 @@ ${Array.from(uniqueEntries.entries())
     deliveryProvider: z.string().optional().nullable(),
     deliveryAddress: z.string().optional().nullable(),
     promoCodeId: z.string().optional(),
+  });
+  const adminCreateOrderSchema = createOrderSchema.extend({
+    status: z.enum(["pending", "processing", "completed", "cancelled"]).optional(),
   });
 
   app.post(
@@ -4063,11 +4116,23 @@ ${Array.from(uniqueEntries.entries())
   });
 
   // Admin product routes (protected)
+  const adminProductVariantSchema = z.object({
+    color: z.string().min(1),
+    size: z.string().min(1),
+    crossedPrice: z.number().nonnegative().default(0),
+    sellingPrice: z.number().nonnegative(),
+    costPrice: z.number().nonnegative().default(0),
+    quantity: z.number().int().nonnegative().default(0),
+    sku: z.string().min(1),
+    weight: z.number().nonnegative().default(0),
+  });
+
   const adminProductSchema = z.object({
     name: z.string().min(1),
     shortDetails: z.string().optional().nullable(),
     description: z.string().optional().nullable(),
     price: z.number().positive(),
+    costPrice: z.number().int().nonnegative().optional(),
     imageUrl: z.string().optional().nullable(),
     galleryUrls: z.string().optional().nullable(),
     category: z.string().optional().nullable(),
@@ -4075,6 +4140,10 @@ ${Array.from(uniqueEntries.entries())
     stockBySize: z.record(z.string(), z.number().int().nonnegative()).optional(),
     colorOptions: z.string().optional().nullable(),
     sizeOptions: z.string().optional().nullable(),
+    variantsEnabled: z.boolean().optional().default(false),
+    continueSellingOutOfStock: z.boolean().optional().default(false),
+    variants: z.array(adminProductVariantSchema).optional().default([]),
+    colorImageMap: z.record(z.string(), z.array(z.string())).optional().nullable(),
     salePercentage: z.number().int().min(0).max(100).optional().default(0),
     saleActive: z.boolean().optional().default(false),
     originalPrice: z.number().positive().optional().nullable(),
@@ -4138,6 +4207,7 @@ ${Array.from(uniqueEntries.entries())
     productId: string;
     sizeStocks: Record<string, number>;
     sizesToSync: string[];
+    continueSellingOutOfStock?: boolean;
   }) => {
     for (const size of input.sizesToSync) {
       if (!size.trim()) continue;
@@ -4160,6 +4230,10 @@ ${Array.from(uniqueEntries.entries())
           size,
           stock: newStock,
           sku: `RR-${input.productId}-${size}`,
+          compareAtPrice: 0,
+          sellingPrice: 0,
+          costPrice: 0,
+          weight: 0,
         });
       }
     }
@@ -4175,7 +4249,51 @@ ${Array.from(uniqueEntries.entries())
       .update(products)
       .set({
         stock: totalStock,
-        isActive: totalStock > 0 ? sql`${products.isActive}` : false,
+        isActive: totalStock > 0 || input.continueSellingOutOfStock ? sql`true` : false,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, input.productId));
+  };
+
+  const syncDetailedProductVariants = async (input: {
+    productId: string;
+    variants: Array<{
+      color: string;
+      size: string;
+      crossedPrice: number;
+      sellingPrice: number;
+      costPrice: number;
+      quantity: number;
+      sku: string;
+      weight: number;
+    }>;
+    continueSellingOutOfStock?: boolean;
+  }) => {
+    await db.delete(productVariants).where(eq(productVariants.productId, input.productId));
+
+    if (input.variants.length > 0) {
+      await db.insert(productVariants).values(
+        input.variants.map((variant) => ({
+          productId: input.productId,
+          color: variant.color,
+          size: variant.size,
+          sku: variant.sku,
+          compareAtPrice: Math.max(0, Math.trunc(variant.crossedPrice ?? 0)),
+          sellingPrice: Math.max(0, Math.trunc(variant.sellingPrice ?? 0)),
+          costPrice: Math.max(0, Math.trunc(variant.costPrice ?? 0)),
+          weight: Math.max(0, Math.trunc(variant.weight ?? 0)),
+          stock: Math.max(0, Math.trunc(variant.quantity ?? 0)),
+        })),
+      );
+    }
+
+    const totalStock = input.variants.reduce((sum, variant) => sum + Math.max(0, Math.trunc(variant.quantity ?? 0)), 0);
+
+    await db
+      .update(products)
+      .set({
+        stock: totalStock,
+        isActive: totalStock > 0 || input.continueSellingOutOfStock ? true : false,
         updatedAt: new Date(),
       })
       .where(eq(products.id, input.productId));
@@ -4308,7 +4426,7 @@ ${Array.from(uniqueEntries.entries())
           shortDetails: req.body.shortDetails || null,
           description: req.body.description || null,
           price: req.body.price.toString(),
-          costPrice: 0,
+          costPrice: req.body.costPrice ?? 0,
           sku: "",
           imageUrl: req.body.imageUrl || null,
           galleryUrls: req.body.galleryUrls || null,
@@ -4316,6 +4434,7 @@ ${Array.from(uniqueEntries.entries())
           stock: req.body.stock,
           colorOptions: req.body.colorOptions || null,
           sizeOptions: req.body.sizeOptions || null,
+          colorImageMap: req.body.colorImageMap || {},
           ranking: 999,
           salePercentage: req.body.salePercentage || 0,
           saleActive: req.body.saleActive || false,
@@ -4330,11 +4449,18 @@ ${Array.from(uniqueEntries.entries())
         const sizeOptions = parseSizeOptions(req.body.sizeOptions);
         const sizeStocks = sanitizeStockBySize(req.body.stockBySize, sizeOptions);
 
-        if (sizeOptions.length > 0 || Object.keys(sizeStocks).length > 0) {
+        if ((req.body.variants ?? []).length > 0 && req.body.variantsEnabled) {
+          await syncDetailedProductVariants({
+            productId: product.id,
+            variants: req.body.variants,
+            continueSellingOutOfStock: req.body.continueSellingOutOfStock,
+          });
+        } else if (sizeOptions.length > 0 || Object.keys(sizeStocks).length > 0) {
           await syncProductVariantStocks({
             productId: product.id,
             sizeStocks,
             sizesToSync: Array.from(new Set([...sizeOptions, ...Object.keys(sizeStocks)])),
+            continueSellingOutOfStock: req.body.continueSellingOutOfStock,
           });
         }
 
@@ -4371,12 +4497,14 @@ ${Array.from(uniqueEntries.entries())
           shortDetails: req.body.shortDetails === undefined ? undefined : (req.body.shortDetails || null),
           description: req.body.description === undefined ? undefined : (req.body.description || null),
           price: req.body.price?.toString(),
+          costPrice: req.body.costPrice,
           imageUrl: req.body.imageUrl === undefined ? undefined : (req.body.imageUrl || null),
           galleryUrls: req.body.galleryUrls === undefined ? undefined : (req.body.galleryUrls || null),
           category: req.body.category === undefined ? undefined : (req.body.category || null),
           stock: req.body.stock,
           colorOptions: req.body.colorOptions === undefined ? undefined : (req.body.colorOptions || null),
           sizeOptions: req.body.sizeOptions === undefined ? undefined : (req.body.sizeOptions || null),
+          colorImageMap: req.body.colorImageMap === undefined ? undefined : (req.body.colorImageMap || {}),
           salePercentage: req.body.salePercentage,
           saleActive: req.body.saleActive,
           originalPrice: req.body.originalPrice === undefined ? undefined : (req.body.originalPrice ? req.body.originalPrice.toString() : null),
@@ -4711,8 +4839,12 @@ ${Array.from(uniqueEntries.entries())
           return res.json(summaryCache.data);
         }
 
-        const variants = await db.select().from(productVariants);
-        const productRows = await db.select().from(products);
+        const activeProductCondition = or(eq(products.isActive, true), isNull(products.isActive));
+        const productRows = await db.select().from(products).where(activeProductCondition);
+        const activeProductIds = productRows.map((product) => product.id);
+        const variants = activeProductIds.length
+          ? await db.select().from(productVariants).where(inArray(productVariants.productId, activeProductIds))
+          : [];
 
         const totalQuantity = variants.reduce(
           (sum, variant) => sum + (variant.stock ?? 0),
@@ -4724,7 +4856,8 @@ ${Array.from(uniqueEntries.entries())
             value: sql<string>`coalesce(sum(${productVariants.stock} * ${products.price}), 0)::text`,
           })
           .from(productVariants)
-          .leftJoin(products, eq(productVariants.productId, products.id));
+          .leftJoin(products, eq(productVariants.productId, products.id))
+          .where(activeProductCondition);
 
         const productTotals = productRows.map((product) => {
           const productVariantRows = variants.filter((variant) => variant.productId === product.id);
@@ -4775,7 +4908,8 @@ ${Array.from(uniqueEntries.entries())
         const search = (getQueryParam(req.query.search) ?? "").trim().toLowerCase();
         const outlet = (getQueryParam(req.query.outlet) ?? "").trim().toLowerCase();
 
-        const productRows = await db.select().from(products).orderBy(products.name);
+        const activeProductCondition = or(eq(products.isActive, true), isNull(products.isActive));
+        const productRows = await db.select().from(products).where(activeProductCondition).orderBy(products.name);
         const variantRows = await db
           .select()
           .from(productVariants)
@@ -5311,6 +5445,284 @@ ${Array.from(uniqueEntries.entries())
   );
 
   // Admin orders
+  app.post(
+    "/api/admin/orders",
+    requireAdmin,
+    validateRequest(adminCreateOrderSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const {
+          items,
+          shipping,
+          paymentMethod,
+          promoCodeId,
+          source,
+          deliveryRequired,
+          deliveryProvider,
+          deliveryAddress,
+          status,
+        } = req.body;
+
+        const orderSubtotal = items.reduce(
+          (acc: number, item: any) => acc + item.priceAtTime * item.quantity,
+          0,
+        );
+        const shippingFee = 100;
+
+        let promoCode: string | undefined;
+        let promoDiscountAmount = 0;
+
+        if (promoCodeId) {
+          const [promo] = await db
+            .select()
+            .from(promoCodes)
+            .where(eq(promoCodes.id, promoCodeId))
+            .limit(1);
+
+          const now = new Date();
+          const cartProductIds = new Set(
+            items
+              .map((it: any) => String(it.productId))
+              .filter((id: string) => id.length > 0),
+          );
+
+          const matchesApplicableProducts =
+            promo?.applicableProductIds == null
+              ? true
+              : promo.applicableProductIds.some((pid: string) =>
+                    cartProductIds.has(pid),
+                  );
+          if (
+            promo &&
+            promo.active &&
+            (!promo.expiresAt || new Date(promo.expiresAt) >= now) &&
+            promo.usedCount < promo.maxUses &&
+            matchesApplicableProducts
+          ) {
+            promoCode = promo.code;
+            promoDiscountAmount = Math.round(
+              orderSubtotal * (promo.discountPct / 100),
+            );
+
+            await db
+              .update(promoCodes)
+              .set({ usedCount: promo.usedCount + 1 })
+              .where(eq(promoCodes.id, promo.id));
+          }
+        }
+
+        const orderTotal = Math.max(
+          0,
+          orderSubtotal + shippingFee - promoDiscountAmount,
+        );
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const sequence = Math.floor(now.getTime() / 1000) % 10000;
+        const orderNumber = `UX-${year}-${sequence.toString().padStart(4, "0")}`;
+
+        await storage.upsertCustomerFromOrder(
+          shipping.email,
+          shipping.firstName,
+          shipping.lastName,
+          shipping.phone ?? null,
+        );
+
+        const resolvedItems = await Promise.all(
+          items.map(async (item: any) => {
+            const normalizedSize = (item.size || item.selectedSize || "").trim();
+            const normalizedColor = item.color?.trim() || null;
+            const requestedVariantId = item.variantId === undefined ? NaN : Number(item.variantId);
+            let resolvedVariantId = Number.isFinite(requestedVariantId) ? requestedVariantId : null;
+
+            if (!resolvedVariantId && normalizedSize) {
+              let variant:
+                | {
+                    id: number;
+                  }
+                | undefined;
+
+              if (normalizedColor) {
+                [variant] = await db
+                  .select({ id: productVariants.id })
+                  .from(productVariants)
+                  .where(
+                    and(
+                      eq(productVariants.productId, item.productId),
+                      eq(productVariants.size, normalizedSize),
+                      eq(productVariants.color, normalizedColor),
+                    ),
+                  )
+                  .limit(1);
+              }
+
+              if (!variant) {
+                [variant] = await db
+                  .select({ id: productVariants.id })
+                  .from(productVariants)
+                  .where(
+                    and(
+                      eq(productVariants.productId, item.productId),
+                      eq(productVariants.size, normalizedSize),
+                    ),
+                  )
+                  .limit(1);
+              }
+
+              resolvedVariantId = variant?.id ?? null;
+            }
+
+            return {
+              ...item,
+              normalizedSize,
+              normalizedColor,
+              resolvedVariantId,
+            };
+          }),
+        );
+
+        const order = await storage.createOrder({
+          userId: (req.user as Express.User | undefined)?.id ?? null,
+          email: shipping.email,
+          fullName: `${shipping.firstName} ${shipping.lastName}`,
+          addressLine1: shipping.address,
+          addressLine2: undefined,
+          city: shipping.city,
+          region: "",
+          locationCoordinates: (shipping.locationCoordinates ?? shipping.deliveryLocation) as string,
+          deliveryLocation: shipping.deliveryLocation,
+          postalCode: shipping.zip,
+          country: shipping.country,
+          total: orderTotal,
+          paymentMethod,
+          source: source || "admin",
+          deliveryRequired: deliveryRequired ?? true,
+          deliveryProvider: deliveryProvider ?? null,
+          deliveryAddress: deliveryAddress ?? null,
+          promoCode,
+          promoDiscountAmount,
+          items: resolvedItems.map((item) => ({
+            productId: item.productId,
+            variantId: item.resolvedVariantId,
+            size: item.normalizedSize,
+            quantity: item.quantity,
+            unitPrice: item.priceAtTime,
+          })),
+        });
+
+        if (status && status !== order.status) {
+          await storage.updateOrderStatus(order.id, status);
+        }
+
+        for (const item of resolvedItems) {
+          const productId = item.productId;
+          const size = item.normalizedSize || null;
+
+          let variantToUpdate:
+            | {
+                id: number;
+                stock: number;
+              }
+            | undefined;
+
+          if (item.resolvedVariantId) {
+            [variantToUpdate] = await db
+              .select({ id: productVariants.id, stock: productVariants.stock })
+              .from(productVariants)
+              .where(eq(productVariants.id, item.resolvedVariantId))
+              .limit(1);
+          } else if (size) {
+            if (item.normalizedColor) {
+              [variantToUpdate] = await db
+                .select({ id: productVariants.id, stock: productVariants.stock })
+                .from(productVariants)
+                .where(
+                  and(
+                    eq(productVariants.productId, productId),
+                    eq(productVariants.size, size),
+                    eq(productVariants.color, item.normalizedColor),
+                  ),
+                )
+                .limit(1);
+            }
+
+            if (!variantToUpdate) {
+              [variantToUpdate] = await db
+                .select({ id: productVariants.id, stock: productVariants.stock })
+                .from(productVariants)
+                .where(
+                  and(
+                    eq(productVariants.productId, productId),
+                    eq(productVariants.size, size),
+                  ),
+                )
+                .limit(1);
+            }
+          }
+
+          if (variantToUpdate) {
+            const newStock = Math.max(0, (variantToUpdate.stock ?? 0) - item.quantity);
+            await db
+              .update(productVariants)
+              .set({ stock: newStock, updatedAt: new Date() })
+              .where(eq(productVariants.id, variantToUpdate.id));
+          }
+
+          const allVariants = await db
+            .select()
+            .from(productVariants)
+            .where(eq(productVariants.productId, productId));
+
+          if (allVariants.length > 0) {
+            const totalStock = allVariants.reduce((sum, variant) => sum + (variant.stock ?? 0), 0);
+
+            await db
+              .update(products)
+              .set({
+                stock: totalStock,
+                isActive: totalStock > 0 ? sql`${products.isActive}` : false,
+                updatedAt: new Date(),
+              })
+              .where(eq(products.id, productId));
+          } else {
+            const existingProduct = await db
+              .select({ stock: products.stock })
+              .from(products)
+              .where(eq(products.id, productId))
+              .limit(1);
+
+            if (existingProduct.length > 0) {
+              const newStock = Math.max(0, (existingProduct[0].stock ?? 0) - item.quantity);
+              await db
+                .update(products)
+                .set({
+                  stock: newStock,
+                  isActive: newStock > 0 ? sql`${products.isActive}` : false,
+                  updatedAt: new Date(),
+                })
+                .where(eq(products.id, productId));
+            }
+          }
+        }
+
+        const fullOrder = await storage.getOrderById(order.id);
+
+        return res.status(201).json({
+          success: true,
+          data: {
+            orderNumber,
+            subtotal: orderSubtotal,
+            tax: 0,
+            total: orderTotal,
+            order: fullOrder,
+          },
+        });
+      } catch (err) {
+        handleApiError(res, err, "admin/orders/create", 500);
+      }
+    },
+  );
+
   app.get(
     "/api/admin/orders",
     requireAdmin,
@@ -5585,6 +5997,301 @@ ${Array.from(uniqueEntries.entries())
   );
 
   app.get(
+    "/api/admin/dashboard/export",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const now = new Date();
+        const last24HoursStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const reorderLevelDefault = 5;
+
+        const escapeCsv = (value: string | number | null | undefined) => {
+          const safe = value == null ? "" : String(value);
+          return `"${safe.replace(/"/g, '""')}"`;
+        };
+
+        const activeProducts = await db
+          .select({
+            id: products.id,
+            sku: products.sku,
+            name: products.name,
+            category: products.category,
+            costPrice: products.costPrice,
+            sellingPrice: products.price,
+            stock: products.stock,
+          })
+          .from(products)
+          .where(eq(products.isActive, true))
+          .orderBy(asc(products.name));
+
+        const variantStocks = await db
+          .select({
+            productId: productVariants.productId,
+            stock: sql<number>`coalesce(sum(${productVariants.stock}), 0)::int`,
+          })
+          .from(productVariants)
+          .groupBy(productVariants.productId);
+
+        const variantStockByProduct = new Map(
+          variantStocks.map((row) => [row.productId, row.stock ?? 0]),
+        );
+        const activeProductById = new Map(activeProducts.map((product) => [product.id, product]));
+
+        const purchaseRows = await db
+          .select({
+            createdAt: inventoryMovements.createdAt,
+            productId: inventoryMovements.productId,
+            productName: products.name,
+            category: products.category,
+            quantity: inventoryMovements.quantity,
+            unitCost: inventoryMovements.unitCost,
+            reference: inventoryMovements.reference,
+            channel: inventoryMovements.channel,
+            outlet: inventoryMovements.outlet,
+          })
+          .from(inventoryMovements)
+          .leftJoin(products, eq(products.id, inventoryMovements.productId))
+          .where(
+            and(
+              eq(inventoryMovements.movementType, "stock_in"),
+              gte(inventoryMovements.createdAt, last24HoursStart),
+            ),
+          )
+          .orderBy(desc(inventoryMovements.createdAt));
+
+        const salesRows = await db
+          .select({
+            createdAt: orders.createdAt,
+            orderId: orders.id,
+            source: orders.source,
+            status: orders.status,
+            productId: orderItems.productId,
+            productName: products.name,
+            category: products.category,
+            quantity: orderItems.quantity,
+            unitPrice: orderItems.unitPrice,
+            costPrice: products.costPrice,
+          })
+          .from(orderItems)
+          .innerJoin(orders, eq(orders.id, orderItems.orderId))
+          .leftJoin(products, eq(products.id, orderItems.productId))
+          .where(
+            and(
+              gte(orders.createdAt, last24HoursStart),
+              sql`${orders.status} <> 'cancelled'`,
+            ),
+          )
+          .orderBy(desc(orders.createdAt));
+
+        const totalRevenue = salesRows.reduce(
+          (sum, row) => sum + parseNumericValue(row.unitPrice) * (row.quantity ?? 0),
+          0,
+        );
+        const totalCogs = salesRows.reduce(
+          (sum, row) => sum + parseNumericValue(row.costPrice) * (row.quantity ?? 0),
+          0,
+        );
+        const totalProfit = totalRevenue - totalCogs;
+        const totalSoldUnits = salesRows.reduce((sum, row) => sum + (row.quantity ?? 0), 0);
+        const uniqueOrders = new Set(salesRows.map((row) => row.orderId));
+        const storeOrderCount = new Set(
+          salesRows
+            .filter((row) => (row.source ?? "website").toLowerCase() !== "pos")
+            .map((row) => row.orderId),
+        ).size;
+        const posOrderCount = new Set(
+          salesRows
+            .filter((row) => (row.source ?? "website").toLowerCase() === "pos")
+            .map((row) => row.orderId),
+        ).size;
+        const totalStockInQty = purchaseRows.reduce((sum, row) => sum + (row.quantity ?? 0), 0);
+        const totalStockInValue = purchaseRows.reduce(
+          (sum, row) => sum + parseNumericValue(row.unitCost) * (row.quantity ?? 0),
+          0,
+        );
+
+        const inventorySnapshot = activeProducts.map((product) => {
+          const stock = variantStockByProduct.has(product.id)
+            ? Number(variantStockByProduct.get(product.id) ?? 0)
+            : Number(product.stock ?? 0);
+          const costPrice = parseNumericValue(product.costPrice);
+          const inventoryValue = stock * costPrice;
+          const status = stock <= 0 ? "OUT" : stock <= reorderLevelDefault ? "LOW" : "OK";
+          return {
+            id: product.id,
+            sku: product.sku?.trim() || product.id,
+            name: product.name,
+            category: product.category || "General",
+            costPrice,
+            sellingPrice: parseNumericValue(product.sellingPrice),
+            stock,
+            reorderLevel: reorderLevelDefault,
+            status,
+            inventoryValue,
+          };
+        });
+
+        const totalInventoryValue = inventorySnapshot.reduce((sum, row) => sum + row.inventoryValue, 0);
+        const lowStockCount = inventorySnapshot.filter(
+          (row) => row.status === "LOW" || row.status === "OUT",
+        ).length;
+
+        const rows: string[] = [];
+        rows.push(
+          [
+            "Sheet",
+            "Metric",
+            "Date",
+            "SKU",
+            "Product Name",
+            "Category",
+            "Source",
+            "Reference",
+            "Quantity",
+            "Cost Price",
+            "Selling Price",
+            "Total Cost",
+            "Revenue",
+            "COGS",
+            "Profit",
+            "Stock",
+            "Reorder Level",
+            "Status",
+            "Inventory Value",
+          ]
+            .map(escapeCsv)
+            .join(","),
+        );
+
+        for (const product of inventorySnapshot) {
+          rows.push(
+            [
+              "Products",
+              "",
+              "",
+              product.sku,
+              product.name,
+              product.category,
+              "",
+              "",
+              "",
+              product.costPrice.toFixed(2),
+              product.sellingPrice.toFixed(2),
+              "",
+              "",
+              "",
+              "",
+              product.stock,
+              product.reorderLevel,
+              product.status,
+              product.inventoryValue.toFixed(2),
+            ]
+              .map(escapeCsv)
+              .join(","),
+          );
+        }
+
+        for (const purchase of purchaseRows) {
+          const sourceProduct = activeProductById.get(purchase.productId || "");
+          const date = purchase.createdAt ? new Date(purchase.createdAt).toISOString() : "";
+          const costPrice = parseNumericValue(purchase.unitCost);
+          const totalCost = costPrice * (purchase.quantity ?? 0);
+          rows.push(
+            [
+              "Purchases",
+              "",
+              date,
+              sourceProduct?.sku?.trim() || purchase.productId || "",
+              purchase.productName || sourceProduct?.name || "",
+              purchase.category || sourceProduct?.category || "General",
+              purchase.channel || "inventory",
+              purchase.reference || purchase.outlet || "STOCK-IN",
+              purchase.quantity ?? 0,
+              costPrice.toFixed(2),
+              "",
+              totalCost.toFixed(2),
+              "",
+              "",
+              "",
+              "",
+              "",
+              "",
+              "",
+            ]
+              .map(escapeCsv)
+              .join(","),
+          );
+        }
+
+        for (const sale of salesRows) {
+          const sourceProduct = activeProductById.get(sale.productId || "");
+          const date = sale.createdAt ? new Date(sale.createdAt).toISOString() : "";
+          const sellingPrice = parseNumericValue(sale.unitPrice);
+          const costPrice = parseNumericValue(sale.costPrice);
+          const quantity = sale.quantity ?? 0;
+          const revenue = sellingPrice * quantity;
+          const cogs = costPrice * quantity;
+          const profit = revenue - cogs;
+
+          rows.push(
+            [
+              "Sales",
+              "",
+              date,
+              sourceProduct?.sku?.trim() || sale.productId || "",
+              sale.productName || sourceProduct?.name || "",
+              sale.category || sourceProduct?.category || "General",
+              sale.source || "website",
+              sale.orderId,
+              quantity,
+              costPrice.toFixed(2),
+              sellingPrice.toFixed(2),
+              "",
+              revenue.toFixed(2),
+              cogs.toFixed(2),
+              profit.toFixed(2),
+              "",
+              "",
+              sale.status || "",
+              "",
+            ]
+              .map(escapeCsv)
+              .join(","),
+          );
+        }
+
+        rows.push(["Dashboard", "Total Revenue (24h)", now.toISOString(), "", "", "", "all", "", "", "", "", "", totalRevenue.toFixed(2), "", "", "", "", "", ""].map(escapeCsv).join(","));
+        rows.push(["Dashboard", "Total COGS (24h)", now.toISOString(), "", "", "", "all", "", "", "", "", "", "", totalCogs.toFixed(2), "", "", "", "", ""].map(escapeCsv).join(","));
+        rows.push(["Dashboard", "Total Profit (24h)", now.toISOString(), "", "", "", "all", "", "", "", "", "", "", "", totalProfit.toFixed(2), "", "", "", ""].map(escapeCsv).join(","));
+        rows.push(["Dashboard", "Total Orders (24h)", now.toISOString(), "", "", "", "all", "", uniqueOrders.size, "", "", "", "", "", "", "", "", "", ""].map(escapeCsv).join(","));
+        rows.push(["Dashboard", "Store Orders (24h)", now.toISOString(), "", "", "", "store", "", storeOrderCount, "", "", "", "", "", "", "", "", "", ""].map(escapeCsv).join(","));
+        rows.push(["Dashboard", "POS Orders (24h)", now.toISOString(), "", "", "", "pos", "", posOrderCount, "", "", "", "", "", "", "", "", "", ""].map(escapeCsv).join(","));
+        rows.push(["Dashboard", "Units Sold (24h)", now.toISOString(), "", "", "", "all", "", totalSoldUnits, "", "", "", "", "", "", "", "", "", ""].map(escapeCsv).join(","));
+        rows.push(["Dashboard", "Stock In Qty (24h)", now.toISOString(), "", "", "", "inventory", "", totalStockInQty, "", "", totalStockInValue.toFixed(2), "", "", "", "", "", "", ""].map(escapeCsv).join(","));
+        rows.push(["Dashboard", "Inventory Value", now.toISOString(), "", "", "", "inventory", "", "", "", "", "", "", "", "", "", "", "", totalInventoryValue.toFixed(2)].map(escapeCsv).join(","));
+        rows.push(["Dashboard", "Low/Out Stock SKUs", now.toISOString(), "", "", "", "inventory", "", lowStockCount, "", "", "", "", "", "", "", "", "", ""].map(escapeCsv).join(","));
+
+        rows.push(["Formula Model", "Lookup Pattern", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 'IFERROR(VLOOKUP(SKU,Products!A:F,col,FALSE),"")'].map(escapeCsv).join(","));
+        rows.push(["Formula Model", "Live Stock Pattern", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "SUMIF(Purchases!B:B,SKU,Purchases!D:D)-SUMIF(Sales!B:B,SKU,Sales!D:D)"].map(escapeCsv).join(","));
+        rows.push(["Formula Model", "Blank Guard Pattern", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 'IF(cell="","",formula)'].map(escapeCsv).join(","));
+
+        const csv = rows.join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="rare-backend-24h-${now.toISOString().slice(0, 10)}.csv"`,
+        );
+        return res.send(csv);
+      } catch (err) {
+        console.error("Error in GET /api/admin/dashboard/export", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to export dashboard report" });
+      }
+    },
+  );
+
+  app.get(
     "/api/admin/orders/export",
     requireAdmin,
     async (_req: Request, res: Response) => {
@@ -5602,9 +6309,7 @@ ${Array.from(uniqueEntries.entries())
         for (const order of allOrders) {
           const items = (order as unknown as { items?: Array<unknown> }).items;
           const itemsCount = Array.isArray(items) ? items.length : 0;
-          const date = order.createdAt
-            ? new Date(order.createdAt).toISOString()
-            : "";
+          const date = order.createdAt ? new Date(order.createdAt).toISOString() : "";
 
           rows.push(
             [
@@ -5621,10 +6326,7 @@ ${Array.from(uniqueEntries.entries())
 
         const csv = rows.join("\n");
         res.setHeader("Content-Type", "text/csv");
-        res.setHeader(
-          "Content-Disposition",
-          'attachment; filename="orders.csv"',
-        );
+        res.setHeader("Content-Disposition", 'attachment; filename="orders.csv"');
         return res.send(csv);
       } catch (err) {
         console.error("Error in GET /api/admin/orders/export", err);
@@ -5922,6 +6624,9 @@ ${Array.from(uniqueEntries.entries())
     async (req: Request, res: Response) => {
       try {
         const actor = req.user as Express.User | undefined;
+        if (!canManageStoreUsers(actor)) {
+          return res.status(403).json({ success: false, error: "Only superadmin/admin users can manage store users" });
+        }
         const isRootActor = actor?.role?.toLowerCase() === "superadmin";
         const users = await storage.getStoreUsers();
         const filtered = users
@@ -5948,11 +6653,14 @@ ${Array.from(uniqueEntries.entries())
     createStoreUserHandler({ storage, sendStoreUserWelcomeEmail }),
   );
 
-  const updateStoreUserRoleEnum = z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff"]);
+  const updateStoreUserRoleEnum = z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff", "cook", "sales", "marketing"]);
   const privilegedAdminRoles = new Set(["superadmin", "owner", "admin"]);
+  const storeUserManagementRoles = new Set(["superadmin", "admin"]);
   const isSuperAdmin = (role: string | null | undefined) => role?.toLowerCase() === "superadmin";
   const canManagePrivilegedAdminRoles = (actor: Express.User | undefined) =>
     isSuperAdmin(actor?.role);
+  const canManageStoreUsers = (actor: Express.User | undefined) =>
+    storeUserManagementRoles.has(actor?.role?.toLowerCase() ?? "");
 
   const updateStoreUserSchema = z
     .object({
@@ -5986,6 +6694,9 @@ ${Array.from(uniqueEntries.entries())
       try {
         const { role, email_notifications } = req.body;
         const actor = req.user as Express.User | undefined;
+        if (!canManageStoreUsers(actor)) {
+          return res.status(403).json({ success: false, error: "Only superadmin/admin users can manage store users" });
+        }
         const target = await storage.getUserById(id);
         if (!target) {
           return res.status(404).json({ success: false, error: "User not found" });
@@ -6037,6 +6748,9 @@ ${Array.from(uniqueEntries.entries())
       }
 
       const actor = req.user as Express.User | undefined;
+      if (!canManageStoreUsers(actor)) {
+        return res.status(403).json({ success: false, error: "Only superadmin/admin users can manage store users" });
+      }
       if (actor && actor.id === id) {
         return res.status(400).json({ success: false, error: "Cannot delete yourself" });
       }
@@ -6075,6 +6789,9 @@ ${Array.from(uniqueEntries.entries())
 
       try {
         const actor = req.user as Express.User | undefined;
+        if (!canManageStoreUsers(actor)) {
+          return res.status(403).json({ success: false, error: "Only superadmin/admin users can view store-user profiles" });
+        }
         const targetUser = await storage.getUserById(id);
 
         if (!targetUser) {
@@ -6189,13 +6906,21 @@ ${Array.from(uniqueEntries.entries())
 
       try {
         const actor = req.user as Express.User | undefined;
-        if (!canManagePrivilegedAdminRoles(actor)) {
-          return res.status(403).json({ success: false, error: "Only superadmin users can edit store-user profiles" });
+        if (!canManageStoreUsers(actor)) {
+          return res.status(403).json({ success: false, error: "Only superadmin/admin users can edit store-user profiles" });
         }
 
         const targetUser = await storage.getUserById(id);
         if (!targetUser) {
           return res.status(404).json({ success: false, error: "User not found" });
+        }
+
+        const targetRole = targetUser.role?.toLowerCase() ?? "";
+        if (!canManagePrivilegedAdminRoles(actor) && privilegedAdminRoles.has(targetRole)) {
+          return res.status(403).json({
+            success: false,
+            error: "Only superadmin users can manage owner/admin/superadmin users",
+          });
         }
 
         await ensureAdminProfileSettingsTable();
@@ -6238,8 +6963,8 @@ ${Array.from(uniqueEntries.entries())
             loginAlerts: payload.loginAlerts ?? existingSettings?.loginAlerts ?? true,
             pageAccessOverrides:
               payload.pageAccessOverrides !== undefined
-                ? normalizeAdminPageList(payload.pageAccessOverrides)
-                : normalizeAdminPageList(existingSettings?.pageAccessOverrides),
+                ? sanitizeAdminPageOverrides(targetUser.role, payload.pageAccessOverrides)
+                : sanitizeAdminPageOverrides(targetUser.role, existingSettings?.pageAccessOverrides),
             updatedAt: sql`now()`,
           })
           .where(eq(adminProfileSettings.userId, id));
@@ -7040,7 +7765,7 @@ ${Array.from(uniqueEntries.entries())
   const inviteUserSchema = z.object({
     name: z.string().min(1),
     email: z.string().email(),
-    role: z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff"]),
+    role: z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff", "cook", "sales", "marketing"]),
   });
 
   app.post(
@@ -7052,6 +7777,9 @@ ${Array.from(uniqueEntries.entries())
       try {
         const { name, email, role } = req.body;
         const actor = req.user as Express.User | undefined;
+        if (!canManageStoreUsers(actor)) {
+          return res.status(403).json({ success: false, error: "Only superadmin/admin users can manage store users" });
+        }
         if (!canManagePrivilegedAdminRoles(actor) && privilegedAdminRoles.has(role.toLowerCase())) {
           return res.status(403).json({
             success: false,

@@ -113,6 +113,10 @@ export const products = pgTable("products", {
   sku: varchar("sku", { length: 100 }).default(""),
   imageUrl: text("image_url"),
   galleryUrls: text("gallery_urls"), // JSON array of image URLs
+  colorImageMap: jsonb("color_image_map")
+    .$type<Record<string, string[]>>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   category: text("category"),
   stock: integer("stock").notNull().default(0),
   colorOptions: text("color_options"), // JSON array of color names
@@ -521,6 +525,10 @@ export const productVariants = pgTable("product_variants", {
   size: varchar("size", { length: 10 }).notNull(),
   color: varchar("color", { length: 50 }).default(""),
   sku: varchar("sku", { length: 100 }).default(""),
+  compareAtPrice: integer("compare_at_price").notNull().default(0),
+  sellingPrice: integer("selling_price").notNull().default(0),
+  costPrice: integer("cost_price").notNull().default(0),
+  weight: integer("weight").notNull().default(0),
   stock: integer("stock").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface BrandedLoaderProps {
@@ -7,51 +6,54 @@ interface BrandedLoaderProps {
 }
 
 export function BrandedLoader({ fullScreen = false, className }: BrandedLoaderProps) {
-  const brandName = "RARE ATELIER";
-  
   return (
-    <div className={cn(
-      fullScreen 
-        ? "fixed inset-0 z-50 bg-background flex flex-col items-center justify-center p-4" 
-        : "w-full py-16 flex flex-col items-center justify-center p-4",
-      className
-    )}>
-      <div className="flex justify-center mb-6 h-10 items-center">
-        <motion.span
-          initial={{ opacity: 0, y: 15, letterSpacing: "0.8em", filter: "blur(10px)" }}
-          animate={{ opacity: 1, y: 0, letterSpacing: "0.3em", filter: "blur(0px)" }}
-          transition={{
-            duration: 1.2,
-            ease: [0.22, 1, 0.36, 1],
-          }}
-          className="text-lg md:text-2xl font-bold tracking-[0.3em] uppercase font-serif inline-block text-[#2C3E2D] dark:text-foreground"
+    <div
+      className={cn(
+        fullScreen
+          ? "fixed inset-0 z-50 flex items-center justify-center bg-background p-4"
+          : "flex w-full items-center justify-center py-16 p-4",
+        className,
+      )}
+    >
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div
+          className="whitespace-nowrap text-sm font-semibold uppercase tracking-[0.42em] text-foreground md:text-base"
+          style={{ fontFamily: '"Archivo Narrow", "Inter", sans-serif' }}
+          aria-hidden="true"
         >
-          {brandName}
-        </motion.span>
-      </div>
-      
-      <div className="loader-bar-container w-40 md:w-48 h-[1px] bg-muted/20 overflow-hidden relative">
-        <motion.div
-          initial={{ left: "-100%" }}
-          animate={{ left: "100%" }}
-          transition={{ 
-            duration: 1.8, 
-            repeat: Infinity, 
-            ease: "easeInOut" 
-          }}
-          className="absolute top-0 h-full w-full bg-gradient-to-r from-transparent via-primary/40 to-transparent"
-        />
-      </div>
-      
-      <div className="mt-5 flex items-center justify-center overflow-hidden">
-        <motion.span 
-          animate={{ opacity: [0.3, 0.7, 0.3] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-          className="text-[9px] md:text-[10px] uppercase tracking-[0.4em] text-muted-foreground/60 font-black font-sans"
+          RARE ATELIER
+        </div>
+        <div className="h-[2px] w-40 overflow-hidden rounded-full bg-foreground/12 md:w-48">
+          <div className="loader-official-bar h-full w-full rounded-full bg-foreground/80" />
+        </div>
+        <div
+          className="text-[10px] font-medium uppercase tracking-[0.28em] text-muted-foreground"
+          style={{ fontFamily: '"Inter", sans-serif' }}
         >
-          Curating
-        </motion.span>
+          Loading
+        </div>
       </div>
+      <style>{`
+        .loader-official-bar {
+          transform-origin: left center;
+          animation: loader-official-progress 1.25s ease-in-out infinite;
+        }
+
+        @keyframes loader-official-progress {
+          0% {
+            transform: scaleX(0.18);
+            opacity: 0.45;
+          }
+          50% {
+            transform: scaleX(0.78);
+            opacity: 1;
+          }
+          100% {
+            transform: scaleX(0.28);
+            opacity: 0.6;
+          }
+        }
+      `}</style>
     </div>
   );
 }

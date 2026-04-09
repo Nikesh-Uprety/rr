@@ -1,11 +1,13 @@
 import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { fetchHomeFeaturedProducts, fetchPageConfig, fetchProducts, type ProductApi } from "@/lib/api";
 import { useScroll, useTransform, motion, AnimatePresence } from "framer-motion";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, ArrowUpRight, Facebook, Instagram } from "lucide-react";
 import HeroSection from "@/components/home/HeroSection";
 import { ScrollProgress } from "@/components/ScrollProgress";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
+import { useThemeStore } from "@/store/theme";
 
 const QuoteSection = lazy(() => import("@/components/home/QuoteSection"));
 const FeaturedCollection = lazy(() => import("@/components/home/FeaturedCollection"));
@@ -161,6 +163,7 @@ function DeferredSection({
 }
 
 export default function Home() {
+  const theme = useThemeStore((state) => state.theme);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -242,12 +245,13 @@ export default function Home() {
     return newArrivalsSource.slice(0, 4);
   }, [newArrivalsSource]);
 
+  const shouldHardRefreshConfig = previewTemplateId !== null;
   const { data: pageConfig, isLoading: pageConfigLoading } = useQuery({
     queryKey: ["page-config", previewTemplateId],
     queryFn: () => fetchPageConfig(previewTemplateId),
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: shouldHardRefreshConfig ? 0 : 5 * 60 * 1000,
+    refetchOnMount: shouldHardRefreshConfig ? "always" : false,
+    refetchOnWindowFocus: shouldHardRefreshConfig,
   });
 
   // Device detection
@@ -303,16 +307,28 @@ export default function Home() {
     exploreCollectionImage || (campaignAssets[0]?.imageUrl ?? "/images/explore.webp");
 
   // Finish pre-loader only when data is ready (Hydration-First)
-  useEffect(() => {
-    // Don't block the whole page on product queries/assets.
-    // Reveal once the page config is ready; the rest can stream in progressively.
-    const canRevealPage = !pageConfigLoading;
+  const hasFinishedLoadingRef = useRef(false);
 
-    if (canRevealPage) {
-      if (typeof (window as any).finishLoading === 'function') {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (hasFinishedLoadingRef.current) return;
+
+    const finish = () => {
+      if (hasFinishedLoadingRef.current) return;
+      if (typeof (window as any).finishLoading === "function") {
         (window as any).finishLoading();
       }
+      hasFinishedLoadingRef.current = true;
+    };
+
+    // If config is ready, finish immediately. Otherwise, don't keep the user waiting.
+    if (!pageConfigLoading) {
+      finish();
+      return;
     }
+
+    const timeout = window.setTimeout(finish, 350);
+    return () => window.clearTimeout(timeout);
   }, [pageConfigLoading]);
 
   // Preload static campaign images
@@ -485,6 +501,7 @@ export default function Home() {
   const templateSlug = pageConfig?.template?.slug;
   const isMaisonNocturne = templateSlug === "maison-nocturne";
   const isNikeshDesign = templateSlug === "nikeshdesign";
+  const isStuffyClone = templateSlug === "stuffyclone";
   const sortedSections = (
     pageConfigLoading
       ? []
@@ -673,6 +690,183 @@ export default function Home() {
       default:
         return null;
     }
+  }
+
+  if (isStuffyClone) {
+    const isDarkTheme = theme === "dark";
+    const landingForeground = "#ffffff";
+    const landingTextShadow = isDarkTheme
+      ? "0 3px 18px rgba(0,0,0,0.34), 0 0 16px rgba(255,255,255,0.12)"
+      : "0 4px 18px rgba(0,0,0,0.26), 0 0 18px rgba(255,255,255,0.32)";
+    const socialHoverShadow = isDarkTheme
+      ? "drop-shadow(0 6px 18px rgba(0,0,0,0.3)) drop-shadow(0 0 12px rgba(255,255,255,0.14))"
+      : "drop-shadow(0 6px 18px rgba(0,0,0,0.22)) drop-shadow(0 0 12px rgba(255,255,255,0.26))";
+
+    return (
+      <div className="relative h-screen h-[100svh] w-full overflow-hidden bg-black" style={{ color: landingForeground }}>
+        <StorefrontSeo
+          title="Rare Atelier | Stussy Clone"
+          description="A minimal landing experience for the StuffyClone template."
+          canonicalPath="/"
+          image="/images/stussy.webp"
+          structuredData={{
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            name: "Rare Atelier",
+            url: typeof window !== "undefined" ? window.location.origin : "/",
+          }}
+        />
+        <div className="relative h-full w-full overflow-hidden">
+          <img
+            src="/images/stussy.webp"
+            alt="Stussy Clone Landing"
+            className="absolute inset-0 h-full w-full object-cover"
+            sizes="100vw"
+            style={{ transform: "translateZ(0)" }}
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
+          />
+          <div
+            className="relative z-10 flex h-full box-border flex-col"
+            style={{
+              paddingTop: "max(env(safe-area-inset-top), 0.75rem)",
+              paddingRight: "max(env(safe-area-inset-right), 0.75rem)",
+              paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)",
+              paddingLeft: "max(env(safe-area-inset-left), 0.75rem)",
+            }}
+          >
+            <div className="flex flex-1 items-center justify-center px-5 sm:px-8 md:px-10">
+              <div className="w-full max-w-[min(88vw,40rem)] px-4 py-6 text-center sm:px-8 sm:py-8">
+                <div className="flex justify-center">
+                  <img
+                    src="/images/newproductpagelogo-removebg-preview.png"
+                    alt="Rare Atelier"
+                    className="h-auto w-full max-w-[34rem] object-contain"
+                    style={{
+                      filter: isDarkTheme
+                        ? "brightness(0) invert(1) drop-shadow(0 0 22px rgba(255,255,255,0.42)) drop-shadow(0 0 38px rgba(255,255,255,0.18))"
+                        : "brightness(0) invert(1) drop-shadow(0 4px 14px rgba(0,0,0,0.24)) drop-shadow(0 0 20px rgba(255,255,255,0.24))",
+                    }}
+                  />
+                </div>
+                <ul
+                  className="mt-10 space-y-5 text-[clamp(1rem,0.55rem+1.2vw,1.55rem)] uppercase tracking-[0.24em] sm:space-y-6 sm:tracking-[0.32em]"
+                  style={{
+                    fontFamily: "'Archivo Narrow', 'Arial Narrow', sans-serif",
+                    fontWeight: 700,
+                    textShadow: landingTextShadow,
+                  }}
+                >
+                  <li>
+                    <Link
+                      href="/products"
+                      className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
+                      style={{ color: landingForeground }}
+                    >
+                      Shop
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/new-collection"
+                      className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
+                      style={{ color: landingForeground }}
+                    >
+                      Collection
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/atelier"
+                      className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
+                      style={{ color: landingForeground }}
+                    >
+                      Atelier
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/cart"
+                      className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
+                      style={{ color: landingForeground }}
+                    >
+                      Cart
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/atelier#contact"
+                      className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
+                      style={{ color: landingForeground }}
+                    >
+                      Support
+                    </Link>
+                  </li>
+                </ul>
+                <div className="mt-8 flex items-center justify-center gap-5">
+                  <a
+                    href="https://www.instagram.com/rareofficial.au/"
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Instagram"
+                    className="inline-flex items-center justify-center transition-all duration-300 hover:-translate-y-0.5 hover:opacity-80"
+                    style={{ color: landingForeground, filter: socialHoverShadow }}
+                  >
+                    <Instagram className="h-5 w-5" />
+                  </a>
+                  <a
+                    href="https://www.tiktok.com/@rare.np"
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="TikTok"
+                    className="inline-flex items-center justify-center transition-all duration-300 hover:-translate-y-0.5 hover:opacity-80"
+                    style={{ color: landingForeground, filter: socialHoverShadow }}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                      className="h-5 w-5 fill-current"
+                    >
+                      <path d="M16.7 5.4c.8.9 1.9 1.5 3.1 1.6v2.8c-1.6-.1-3.1-.7-4.3-1.7v6.4c0 3-2.4 5.4-5.4 5.4S4.7 17.5 4.7 14.5c0-3 2.4-5.4 5.4-5.4.3 0 .6 0 .9.1v2.9c-.3-.1-.6-.2-.9-.2-1.4 0-2.6 1.1-2.6 2.6s1.1 2.6 2.6 2.6 2.6-1.1 2.6-2.6V3.8h2.8c0 .6.2 1.2.6 1.6z" />
+                    </svg>
+                  </a>
+                  <a
+                    href="https://www.facebook.com/rarenp"
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Facebook"
+                    className="inline-flex items-center justify-center transition-all duration-300 hover:-translate-y-0.5 hover:opacity-80"
+                    style={{ color: landingForeground, filter: socialHoverShadow }}
+                  >
+                    <Facebook className="h-5 w-5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+            <div
+              className="pointer-events-auto absolute bottom-6 right-5 sm:right-6 md:bottom-8 md:right-8"
+              style={{
+                bottom: "max(env(safe-area-inset-bottom), 1.5rem)",
+              }}
+            >
+              <Link
+                href="/new-collection"
+                className="inline-flex h-14 w-14 items-center justify-center rounded-full border backdrop-blur-md transition-transform duration-300 hover:-translate-y-1 sm:h-16 sm:w-16"
+                style={{
+                  color: landingForeground,
+                  borderColor: isDarkTheme ? "rgba(255,255,255,0.4)" : "rgba(17,17,17,0.28)",
+                  background: isDarkTheme ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.42)",
+                }}
+                aria-label="Go to new collection"
+              >
+                <ArrowUpRight className="h-6 w-6" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

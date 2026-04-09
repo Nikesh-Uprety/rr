@@ -13,6 +13,9 @@ describe("auth policy", () => {
     expect(canAccessAdminPanel("manager")).toBe(true);
     expect(canAccessAdminPanel("staff")).toBe(true);
     expect(canAccessAdminPanel("csr")).toBe(true);
+    expect(canAccessAdminPanel("sales")).toBe(true);
+    expect(canAccessAdminPanel("marketing")).toBe(true);
+    expect(canAccessAdminPanel("cook")).toBe(true);
     expect(canAccessAdminPanel("ADMIN")).toBe(true);
     expect(canAccessAdminPanel("customer")).toBe(false);
     expect(canAccessAdminPanel(undefined)).toBe(false);
@@ -27,6 +30,9 @@ describe("auth policy", () => {
     expect(canAccessAdminPage("staff", "marketing")).toBe(false);
     expect(canAccessAdminPage("csr", "customers")).toBe(true);
     expect(canAccessAdminPage("csr", "products")).toBe(false);
+    expect(canAccessAdminPage("sales", "orders")).toBe(true);
+    expect(canAccessAdminPage("marketing", "analytics")).toBe(true);
+    expect(canAccessAdminPage("cook", "orders")).toBe(true);
     expect(getAdminAllowedPages("csr")).toEqual([
       "dashboard",
       "profile",
@@ -36,6 +42,13 @@ describe("auth policy", () => {
       "customers",
       "bills",
     ]);
+  });
+
+  it("does not allow page overrides to escalate restricted roles", () => {
+    expect(getAdminAllowedPages("staff", ["store-users", "marketing"]).includes("store-users")).toBe(false);
+    expect(getAdminAllowedPages("staff", ["marketing"]).includes("marketing")).toBe(true);
+    expect(getAdminAllowedPages("admin", ["store-users"]).includes("store-users")).toBe(true);
+    expect(getAdminAllowedPages("customer", ["dashboard"]).length).toBe(0);
   });
 
   it("requires a two-factor challenge for first-time setup or enabled 2FA", () => {

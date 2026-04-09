@@ -18,7 +18,7 @@ export const verify2FASchema = z.object({
   code: z.string().min(4).max(6),
 });
 
-const storeUserRoleEnum = z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff"]);
+const storeUserRoleEnum = z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff", "cook", "sales", "marketing"]);
 
 export const createStoreUserSchema = z.object({
   name: z.string().min(1).max(100),
@@ -32,9 +32,12 @@ export const createStoreUserSchema = z.object({
 type StorageLike = typeof storageLib;
 type PassportLike = typeof passportLib;
 const PRIVILEGED_ADMIN_ROLES = new Set(["superadmin", "owner", "admin"]);
+const STORE_USER_MANAGEMENT_ROLES = new Set(["superadmin", "admin"]);
 const isSuperAdminRole = (role: string | null | undefined) => role?.toLowerCase() === "superadmin";
 const canManagePrivilegedAdminRoles = (user: Express.User | undefined) =>
   isSuperAdminRole(user?.role);
+const canManageStoreUsers = (user: Express.User | undefined) =>
+  STORE_USER_MANAGEMENT_ROLES.has(user?.role?.toLowerCase() ?? "");
 
 export function createLoginHandler(deps?: {
   storage?: StorageLike;
@@ -214,6 +217,13 @@ export function createStoreUserHandler(deps?: {
 
       const { name, email, password, role, phoneNumber, profileImageUrl } = validation.data;
       const actor = req.user as Express.User | undefined;
+
+      if (!canManageStoreUsers(actor)) {
+        return res.status(403).json({
+          success: false,
+          error: "Only superadmin/admin users can manage store users",
+        });
+      }
 
       if (!canManagePrivilegedAdminRoles(actor) && PRIVILEGED_ADMIN_ROLES.has(role)) {
         return res.status(403).json({

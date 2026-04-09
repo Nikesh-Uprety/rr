@@ -6,7 +6,7 @@ import { useThemeStore } from "@/store/theme";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronLeft, FileText, Minus, Plus, ShieldCheck, Truck, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { fetchProductById, fetchProducts, type ProductApi, type ProductSizeChart } from "@/lib/api";
+import { fetchProductById, fetchProducts, fetchPageConfig, type ProductApi, type ProductSizeChart } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
@@ -92,6 +92,17 @@ function normalizeColorLabel(value: string | null | undefined): string {
   return parseColorOption(value ?? "").label.trim().toLowerCase();
 }
 
+function normalizeVariantId(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) {
+      return Number(trimmed);
+    }
+  }
+  return undefined;
+}
+
 const SHIRT_SIZE_CHART: ProductSizeChart = {
   image: "/images/sizecharts/shirt.svg",
   units: "cm",
@@ -175,6 +186,19 @@ export default function ProductDetail() {
   const closeCartSidebar = useCartStore((state) => state.closeCartSidebar);
 
   const productId = params?.id ?? "";
+  const previewTemplateId = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
+    return rawValue && /^\d+$/.test(rawValue) ? rawValue : null;
+  }, []);
+  const { data: pageConfig } = useQuery({
+    queryKey: ["page-config", previewTemplateId],
+    queryFn: () => fetchPageConfig(previewTemplateId),
+    staleTime: previewTemplateId !== null ? 0 : 5 * 60 * 1000,
+    refetchOnMount: previewTemplateId !== null ? "always" : false,
+    refetchOnWindowFocus: previewTemplateId !== null,
+  });
+  const isStuffyClone = pageConfig?.template?.slug === "stuffyclone";
 
   const { data: product, isLoading } = useQuery<ProductApi | null>({
     queryKey: ["products", productId],
@@ -197,6 +221,7 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [hoveredColor, setHoveredColor] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
@@ -220,6 +245,16 @@ export default function ProductDetail() {
     () => colors.map((color) => ({ value: color, ...parseColorOption(color) })),
     [colors],
   );
+  const effectiveColor = hoveredColor ?? selectedColor ?? (colors[0] ?? null);
+  const colorImageMap = product?.colorImageMap ?? {};
+  const normalizedColorImageMap = useMemo(() => {
+    return Object.entries(colorImageMap).reduce<Record<string, string[]>>((acc, [key, value]) => {
+      if (Array.isArray(value)) {
+        acc[normalizeColorLabel(key)] = value.filter(Boolean);
+      }
+      return acc;
+    }, {});
+  }, [colorImageMap]);
   const stockBySize = product?.stockBySize ?? {};
   const configuredSizes = useMemo(
     () => parseJsonArray(product?.sizeOptions ?? undefined),
@@ -247,10 +282,16 @@ export default function ProductDetail() {
   }, [configuredSizes, product?.variants, stockBySize]);
   const galleryUrls = useMemo(() => parseJsonArray(product?.galleryUrls ?? undefined), [product?.galleryUrls]);
   const mainImageUrl = product?.imageUrl ?? "";
+  const activeColorImages = useMemo(() => {
+    if (!effectiveColor) return [];
+    return normalizedColorImageMap[normalizeColorLabel(effectiveColor)] ?? [];
+  }, [effectiveColor, normalizedColorImageMap]);
   const allImages = useMemo(() => {
-    const list = mainImageUrl ? [mainImageUrl, ...galleryUrls] : [...galleryUrls];
+    const baseList = mainImageUrl ? [mainImageUrl, ...galleryUrls] : [...galleryUrls];
+    const colorList = activeColorImages.filter(Boolean);
+    const list = colorList.length ? [...colorList, ...baseList.filter((url) => !colorList.includes(url))] : baseList;
     return list.length ? list : [""];
-  }, [mainImageUrl, galleryUrls]);
+  }, [mainImageUrl, galleryUrls, activeColorImages]);
   const productSizeChart = useMemo(() => resolveSizeChart(product ?? null), [product]);
   const backToShopHref = useMemo(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -305,6 +346,14 @@ export default function ProductDetail() {
     desktopReelTargetProgressRef.current = 0;
     desktopRenderedProgressRef.current = 0;
   }, [product?.id, allImages.length, isMobileOrTablet]);
+
+  useEffect(() => {
+    if (!effectiveColor) return;
+    setSelectedImageIndex(0);
+    setDesktopReelProgress(0);
+    desktopReelTargetProgressRef.current = 0;
+    desktopRenderedProgressRef.current = 0;
+  }, [effectiveColor, activeColorImages.length]);
 
   useEffect(() => {
     if (!isGalleryOpen) return;
@@ -497,7 +546,6 @@ export default function ProductDetail() {
     }
   }, [activeDesktopPreviewIndex, isGalleryOpen, isMobileOrTablet, selectedImageIndex]);
 
-  const effectiveColor = selectedColor ?? (colors[0] ?? null);
   const effectiveSize = selectedSize;
   const selectedVariant = useMemo(() => {
     if (!effectiveSize) return null;
@@ -580,14 +628,14 @@ export default function ProductDetail() {
     sku: product.id,
     images: allImages.filter(Boolean),
     variants: (product.variants ?? []).map((variant) => ({
-      id: variant.id,
+      id: normalizeVariantId(variant.id),
       size: variant.size,
       color: parseColorOption(variant.color ?? "Default").label,
     })),
   });
 
   const buildVariantPayload = () => ({
-    id: selectedVariant?.id,
+    id: normalizeVariantId(selectedVariant?.id),
     size: effectiveSize ?? "One Size",
     color: parseColorOption(effectiveColor ?? "Default").label,
   });
@@ -695,7 +743,7 @@ export default function ProductDetail() {
   const compactBreadcrumbProductLabel = product.name.toUpperCase();
 
   return (
-    <div className="relative w-full px-3 pb-16 pt-0 sm:px-6 lg:px-8 xl:px-10">
+    <div className={`relative w-full pb-16 pt-0 ${isStuffyClone ? "min-h-screen bg-white text-neutral-950 dark:bg-[#050505] dark:text-white" : "px-3 sm:px-6 lg:px-8 xl:px-10"}`}>
       <StorefrontSeo
         title={`${product.name} | Rare Atelier`}
         description={
@@ -709,77 +757,146 @@ export default function ProductDetail() {
         structuredData={structuredData}
       />
 
-      <div className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2 sm:top-4">
-        <Link href="/" className="pointer-events-auto inline-flex items-center justify-center" aria-label="Go to homepage">
-          <img
-            src="/images/logo.webp"
-            alt="Rare Atelier"
-            className="h-14 w-auto object-contain mix-blend-difference sm:h-16 lg:h-20"
-            style={{ filter: "brightness(0) invert(1)" }}
-          />
-        </Link>
-      </div>
-
-      <div className="pointer-events-none absolute left-3 top-4 z-40 max-w-[calc(100vw-8.5rem)] sm:left-6 sm:top-5 lg:left-8 xl:left-10">
-        <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 overflow-hidden rounded-full border border-black/10 bg-white/88 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-black shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-black/62 dark:text-white">
-          <Link href="/" className="shrink-0 transition-opacity hover:opacity-65">
-            Home
-          </Link>
-          <span className="opacity-45">{">"}</span>
-          <Link href={backToShopHref} className="shrink-0 transition-opacity hover:opacity-65">
-            Shop
-          </Link>
-          <span className="opacity-45">{">"}</span>
-          <span className="min-w-0 max-w-[12ch] truncate sm:max-w-[18ch] lg:max-w-[26ch]">
-            {compactBreadcrumbProductLabel}
-          </span>
+      {!isStuffyClone ? (
+        <div className="pointer-events-none absolute left-3 top-4 z-40 max-w-[calc(100vw-8.5rem)] sm:left-6 sm:top-5 lg:left-8 xl:left-10">
+          <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 overflow-hidden rounded-full border border-black/10 bg-white/92 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-black shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-black/62 dark:text-white">
+            <Link href="/" className="shrink-0 transition-opacity hover:opacity-65">
+              Home
+            </Link>
+            <span className="opacity-45">{">"}</span>
+            <Link href={backToShopHref} className="shrink-0 transition-opacity hover:opacity-65">
+              Shop
+            </Link>
+            <span className="opacity-45">{">"}</span>
+            <span className="min-w-0 max-w-[12ch] truncate sm:max-w-[18ch] lg:max-w-[26ch]">
+              {compactBreadcrumbProductLabel}
+            </span>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div
         ref={productStageRef}
         className="relative lg:min-h-screen"
       >
-        <div className="grid gap-8 lg:h-screen lg:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.9fr)_minmax(300px,1fr)] lg:items-start lg:gap-8 xl:gap-10">
-        <aside className="space-y-5 lg:py-24">
+        <div
+          className={`grid gap-8 lg:h-screen lg:items-start lg:gap-8 xl:gap-10 ${
+            isStuffyClone
+              ? "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]"
+              : "lg:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.9fr)_minmax(300px,1fr)]"
+          }`}
+        >
+        <aside className={`space-y-5 ${isStuffyClone ? "order-2 px-4 sm:px-6 lg:order-2 lg:px-0 lg:py-24 text-neutral-950 dark:text-white" : "lg:py-24"}`}>
           <h1
             style={{
               fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: "24px",
               lineHeight: "36px",
               color: "var(--brand-product-detail)",
             }}
-            className="uppercase tracking-tight"
+            className={`font-bold uppercase tracking-tight ${isStuffyClone ? "text-black dark:text-white" : ""}`}
           >
             {product.name}
           </h1>
 
           {product.category ? (
-            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+            <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>
               {product.category}
             </p>
           ) : null}
 
-          {product.shortDetails ? <p className="text-sm leading-relaxed text-muted-foreground">{product.shortDetails}</p> : null}
+          {product.shortDetails ? <p className={`text-sm leading-relaxed ${isStuffyClone ? "text-neutral-700 dark:text-neutral-200" : "text-muted-foreground"}`}>{product.shortDetails}</p> : null}
+
+          {colorOptions.length > 0 ? (
+            <div>
+              <p className={`mb-3 text-[10px] font-bold uppercase tracking-[0.2em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>Color</p>
+              {isStuffyClone ? (
+                <div className="flex flex-wrap gap-4">
+                  {colorOptions.map((color) => {
+                    const previewImages = normalizedColorImageMap[normalizeColorLabel(color.value)] ?? [];
+                    const previewImage = previewImages[0] ?? "";
+                    const isActive = normalizeColorLabel(effectiveColor ?? "") === normalizeColorLabel(color.value);
+                    return (
+                      <button
+                        key={color.value}
+                        type="button"
+                        onClick={() => setSelectedColor(color.value)}
+                        onMouseEnter={() => setHoveredColor(color.value)}
+                        onMouseLeave={() => setHoveredColor(null)}
+                        className={`flex flex-col items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-all ${
+                          isActive
+                            ? "border-neutral-950 bg-neutral-950/5 text-neutral-950 dark:border-white dark:bg-white/10 dark:text-white"
+                            : "border-neutral-200 text-neutral-700 hover:border-neutral-950 hover:text-neutral-950 dark:border-white/10 dark:text-neutral-300 dark:hover:border-white/50 dark:hover:text-white"
+                        }`}
+                        aria-label={`Select ${color.label} color`}
+                      >
+                        {previewImage ? (
+                          <span className={`h-12 w-12 overflow-hidden rounded-full border ${isStuffyClone ? "border-neutral-200 dark:border-white/15" : "border-border"}`}>
+                            <img src={previewImage} alt={color.label} className="h-full w-full object-cover" />
+                          </span>
+                        ) : (
+                          <span
+                            className="h-5 w-5 rounded-sm border border-black/10 shadow-sm"
+                            style={{
+                              background:
+                                color.swatch ??
+                                "linear-gradient(135deg, rgba(120,120,120,0.15), rgba(120,120,120,0.35))",
+                            }}
+                          />
+                        )}
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.18em]">{color.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {colorOptions.map((color) => (
+                    <button
+                      key={color.value}
+                      type="button"
+                      onClick={() => setSelectedColor(color.value)}
+                      className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-all ${
+                        effectiveColor === color.value
+                          ? "border-neutral-950 bg-neutral-950/5 text-neutral-950 dark:border-white dark:bg-white/10 dark:text-white"
+                          : "border-neutral-200 text-neutral-700 hover:border-neutral-950 hover:text-neutral-950 dark:border-white/10 dark:text-neutral-300 dark:hover:border-white/50 dark:hover:text-white"
+                      }`}
+                      aria-label={`Select ${color.label} color`}
+                    >
+                      <span
+                        className="h-5 w-5 rounded-sm border border-black/10 shadow-sm"
+                        style={{
+                          background:
+                            color.swatch ??
+                            "linear-gradient(135deg, rgba(120,120,120,0.15), rgba(120,120,120,0.35))",
+                        }}
+                      />
+                      <span>{color.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
 
           <p
             style={{
               fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: "24px",
               lineHeight: "36px",
               color: "var(--brand-product-detail)",
             }}
-            className="flex flex-col items-start gap-1"
+            className={`flex flex-col items-start gap-1 font-bold ${isStuffyClone ? "text-black dark:text-white" : ""}`}
           >
             {product.saleActive && Number(product.salePercentage) > 0 ? (
               <>
                 <span className="flex items-center gap-3">
-                  <span className="font-black text-primary">
+                  <span className={`font-black ${isStuffyClone ? "text-black dark:text-white" : "text-primary"}`}>
                     {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
                   </span>
-                  <span className="text-base font-medium text-muted-foreground line-through opacity-60">
+                  <span className={`text-base font-semibold line-through opacity-60 ${isStuffyClone ? "text-neutral-700 dark:text-neutral-400" : "text-muted-foreground"}`}>
                     {formatPrice(product.price)}
                   </span>
                 </span>
@@ -792,37 +909,37 @@ export default function ProductDetail() {
             )}
           </p>
 
-          <div className="space-y-2 border-t border-border pt-5">
-            <details open className="group rounded-md border border-border/80 bg-background/70 px-3 py-2 transition-colors duration-200 open:border-foreground/20">
+          <div className={`space-y-2 border-t pt-5 ${isStuffyClone ? "border-neutral-200 dark:border-white/10" : "border-border"}`}>
+            <details open className={`group rounded-md border px-3 py-2 transition-colors duration-200 ${isStuffyClone ? "border-neutral-200 bg-white open:border-neutral-900/20 dark:border-white/10 dark:bg-[#0f0f0f] dark:open:border-white/20" : "border-border/80 bg-background/70 open:border-foreground/20"}`}>
               <summary className="list-none cursor-pointer">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground transition-colors duration-200 group-open:text-foreground" />
-                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground transition-colors duration-200 group-open:text-foreground">
+                    <FileText className={`h-4 w-4 transition-colors duration-200 ${isStuffyClone ? "text-neutral-500 group-open:text-neutral-950 dark:text-neutral-400 dark:group-open:text-white" : "text-muted-foreground group-open:text-foreground"}`} />
+                    <span className={`text-[11px] font-bold uppercase tracking-[0.2em] transition-colors duration-200 ${isStuffyClone ? "text-neutral-500 group-open:text-neutral-950 dark:text-neutral-400 dark:group-open:text-white" : "text-muted-foreground group-open:text-foreground"}`}>
                       Description
                     </span>
                   </div>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-all duration-300 group-open:rotate-180 group-open:text-foreground" />
+                  <ChevronDown className={`h-4 w-4 transition-all duration-300 group-open:rotate-180 ${isStuffyClone ? "text-neutral-500 group-open:text-neutral-950 dark:text-neutral-400 dark:group-open:text-white" : "text-muted-foreground group-open:text-foreground"}`} />
                 </div>
               </summary>
-              <div className="pt-3 pb-1 text-[15px] leading-7 text-foreground/90">
+              <div className={`pt-3 pb-1 text-[15px] leading-7 ${isStuffyClone ? "text-neutral-800 dark:text-neutral-100" : "text-foreground/90"}`}>
                 {product.description || "This piece is crafted in limited runs with a clean, tailored streetwear silhouette."}
               </div>
             </details>
 
-            <details className="group rounded-md border border-border/80 bg-background/70 px-3 py-2 transition-colors duration-200 open:border-foreground/20">
+            <details className={`group rounded-md border px-3 py-2 transition-colors duration-200 ${isStuffyClone ? "border-neutral-200 bg-white open:border-neutral-900/20 dark:border-white/10 dark:bg-[#0f0f0f] dark:open:border-white/20" : "border-border/80 bg-background/70 open:border-foreground/20"}`}>
               <summary className="list-none cursor-pointer">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-muted-foreground transition-colors duration-200 group-open:text-foreground" />
-                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground transition-colors duration-200 group-open:text-foreground">
+                    <ShieldCheck className={`h-4 w-4 transition-colors duration-200 ${isStuffyClone ? "text-neutral-500 group-open:text-neutral-950 dark:text-neutral-400 dark:group-open:text-white" : "text-muted-foreground group-open:text-foreground"}`} />
+                    <span className={`text-[11px] font-bold uppercase tracking-[0.2em] transition-colors duration-200 ${isStuffyClone ? "text-neutral-500 group-open:text-neutral-950 dark:text-neutral-400 dark:group-open:text-white" : "text-muted-foreground group-open:text-foreground"}`}>
                       Product Details
                     </span>
                   </div>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-all duration-300 group-open:rotate-180 group-open:text-foreground" />
+                  <ChevronDown className={`h-4 w-4 transition-all duration-300 group-open:rotate-180 ${isStuffyClone ? "text-neutral-500 group-open:text-neutral-950 dark:text-neutral-400 dark:group-open:text-white" : "text-muted-foreground group-open:text-foreground"}`} />
                 </div>
               </summary>
-              <ul className="space-y-2 pt-3 pb-1 text-[14px] leading-7 text-muted-foreground">
+              <ul className={`space-y-2 pt-3 pb-1 text-[14px] leading-7 ${isStuffyClone ? "text-neutral-700 dark:text-neutral-200" : "text-muted-foreground"}`}>
                 <li className="flex items-start gap-2">
                   <span className="mt-[9px] h-1.5 w-1.5 rounded-full bg-foreground/50" />
                   <span>Limited-run production with refined finishing.</span>
@@ -838,19 +955,19 @@ export default function ProductDetail() {
               </ul>
             </details>
 
-            <details className="group rounded-md border border-border/80 bg-background/70 px-3 py-2 transition-colors duration-200 open:border-foreground/20">
+            <details className={`group rounded-md border px-3 py-2 transition-colors duration-200 ${isStuffyClone ? "border-neutral-200 bg-white open:border-neutral-900/20 dark:border-white/10 dark:bg-[#0f0f0f] dark:open:border-white/20" : "border-border/80 bg-background/70 open:border-foreground/20"}`}>
               <summary className="list-none cursor-pointer">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
-                    <Truck className="h-4 w-4 text-muted-foreground transition-colors duration-200 group-open:text-foreground" />
-                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground transition-colors duration-200 group-open:text-foreground">
+                    <Truck className={`h-4 w-4 transition-colors duration-200 ${isStuffyClone ? "text-neutral-500 group-open:text-neutral-950 dark:text-neutral-400 dark:group-open:text-white" : "text-muted-foreground group-open:text-foreground"}`} />
+                    <span className={`text-[11px] font-bold uppercase tracking-[0.2em] transition-colors duration-200 ${isStuffyClone ? "text-neutral-500 group-open:text-neutral-950 dark:text-neutral-400 dark:group-open:text-white" : "text-muted-foreground group-open:text-foreground"}`}>
                       Shipping & Returns
                     </span>
                   </div>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-all duration-300 group-open:rotate-180 group-open:text-foreground" />
+                  <ChevronDown className={`h-4 w-4 transition-all duration-300 group-open:rotate-180 ${isStuffyClone ? "text-neutral-500 group-open:text-neutral-950 dark:text-neutral-400 dark:group-open:text-white" : "text-muted-foreground group-open:text-foreground"}`} />
                 </div>
               </summary>
-              <div className="space-y-2 pt-3 pb-1 text-[14px] leading-7 text-muted-foreground">
+              <div className={`space-y-2 pt-3 pb-1 text-[14px] leading-7 ${isStuffyClone ? "text-neutral-700 dark:text-neutral-200" : "text-muted-foreground"}`}>
                 <p>Shipping across Nepal in 2-5 business days.</p>
                 <p>Easy exchange support for size issues when stock is available.</p>
               </div>
@@ -858,10 +975,14 @@ export default function ProductDetail() {
           </div>
         </aside>
 
-        <section className="space-y-4 lg:min-w-0 lg:py-0">
+        <section className={`space-y-4 lg:min-w-0 lg:py-0 ${isStuffyClone ? "order-1 lg:order-1" : ""}`}>
           <div className="relative min-w-0">
             <div
-              className="relative h-[72vh] min-h-[520px] overflow-hidden rounded-sm border border-border/60 bg-black/5 sm:h-[76vh] lg:h-screen dark:border-white/10 dark:bg-black/35"
+              className={`relative h-[72vh] min-h-[520px] overflow-hidden sm:h-[76vh] lg:h-screen ${
+                isStuffyClone
+                  ? "bg-[#f5f5f0] dark:bg-[#0b0f14]"
+                  : "rounded-sm border border-border/60 bg-black/5 dark:border-white/10 dark:bg-black/35"
+              }`}
               onClick={() => {
                 if (didSwipeRef.current) {
                   didSwipeRef.current = false;
@@ -897,8 +1018,6 @@ export default function ProductDetail() {
                   <span>
                     {String(activeDesktopPreviewIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
                   </span>
-                  <span className="h-3 w-px bg-white/25" />
-                  <span className="text-white/80">Scroll to move through images</span>
                 </div>
               ) : null}
 
@@ -1007,7 +1126,7 @@ export default function ProductDetail() {
                     </button>
                   ))}
                 </div>
-                <p className="mt-2 text-center text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                <p className={`mt-2 text-center text-[10px] font-semibold uppercase tracking-[0.24em] ${isStuffyClone ? "text-neutral-500 dark:text-neutral-400" : "text-muted-foreground"}`}>
                   Tap a preview or swipe the image
                 </p>
               </div>
@@ -1015,54 +1134,13 @@ export default function ProductDetail() {
           </div>
         </section>
 
-        <aside className="space-y-6 lg:py-24">
-          <div className="flex justify-end">
-            <Link
-              href={backToShopHref}
-              className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-neutral-700 transition-all hover:-translate-y-0.5 hover:border-neutral-900 hover:text-neutral-900 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-200 dark:hover:border-neutral-100 dark:hover:text-neutral-100"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              <span>Back to shop</span>
-            </Link>
-          </div>
-
-          {colorOptions.length > 0 ? (
-            <div>
-              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Color</p>
-              <div className="flex flex-wrap gap-3">
-                {colorOptions.map((color) => (
-                  <button
-                    key={color.value}
-                    type="button"
-                    onClick={() => setSelectedColor(color.value)}
-                    className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-all ${
-                      effectiveColor === color.value
-                        ? "border-foreground bg-foreground/5 text-foreground"
-                        : "border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground"
-                    }`}
-                    aria-label={`Select ${color.label} color`}
-                  >
-                    <span
-                      className="h-5 w-5 rounded-sm border border-black/10 shadow-sm"
-                      style={{
-                        background:
-                          color.swatch ??
-                          "linear-gradient(135deg, rgba(120,120,120,0.15), rgba(120,120,120,0.35))",
-                      }}
-                    />
-                    <span>{color.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
+        <aside className={`space-y-6 ${isStuffyClone ? "order-3 px-4 sm:px-6 lg:order-3 lg:px-0 lg:py-24 text-neutral-950 dark:text-white" : "lg:py-24"}`}>
           <div>
-            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Size</p>
+            <p className={`mb-3 text-[10px] font-bold uppercase tracking-[0.2em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>Size</p>
             <div className="mb-3 flex justify-start">
               <button
                 onClick={() => setShowSizeGuide(true)}
-                className="flex items-center gap-1.5 text-sm font-semibold text-foreground underline decoration-foreground underline-offset-4 transition-opacity duration-200 hover:opacity-70"
+                className={`flex items-center gap-1.5 text-sm font-semibold underline underline-offset-4 transition-opacity duration-200 hover:opacity-70 ${isStuffyClone ? "text-neutral-950 decoration-neutral-950 dark:text-white dark:decoration-white" : "text-foreground decoration-foreground"}`}
               >
                 <svg
                   width="13"
@@ -1097,15 +1175,15 @@ export default function ProductDetail() {
                         isSelected
                           ? "border-foreground bg-foreground text-background"
                           : isOutOfStock
-                            ? "cursor-not-allowed border-border bg-muted/30 text-muted-foreground/40"
-                            : "cursor-pointer border-border hover:border-foreground"
+                            ? "cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400 dark:border-white/10 dark:bg-white/5 dark:text-neutral-500"
+                            : "cursor-pointer border-neutral-300 hover:border-neutral-950 dark:border-white/15 dark:hover:border-white"
                       }`}
                     >
                       {size}
                       {isOutOfStock ? (
                         <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
                           <svg
-                            className="absolute inset-0 h-full w-full text-muted-foreground/30"
+                            className={`absolute inset-0 h-full w-full ${isStuffyClone ? "text-neutral-400/40 dark:text-neutral-500/40" : "text-muted-foreground/30"}`}
                             viewBox="0 0 48 48"
                             preserveAspectRatio="none"
                           >
@@ -1116,7 +1194,7 @@ export default function ProductDetail() {
                     </button>
 
                     {isOutOfStock ? (
-                      <span className="text-center text-[10px] leading-tight text-muted-foreground/60">
+                      <span className={`text-center text-[10px] leading-tight ${isStuffyClone ? "text-neutral-500 dark:text-neutral-400" : "text-muted-foreground/60"}`}>
                         Out of
                         <br />
                         stock
@@ -1154,8 +1232,8 @@ export default function ProductDetail() {
           </div>
 
           <div>
-            <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Quantity</p>
-            <div className="flex w-fit items-center rounded-sm border border-gray-200 dark:border-gray-700">
+            <p className={`mb-3 text-[10px] font-bold uppercase tracking-[0.2em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>Quantity</p>
+            <div className={`flex w-fit items-center rounded-sm border ${isStuffyClone ? "border-neutral-200 dark:border-white/15" : "border-gray-200 dark:border-gray-700"}`}>
               <button
                 type="button"
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -1169,7 +1247,7 @@ export default function ProductDetail() {
                 max={selectedVariantStock ?? 1}
                 value={quantity}
                 onChange={(event) => setQuantity(Math.max(1, Math.min(selectedVariantStock ?? 1, Number(event.target.value) || 1)))}
-                className="w-12 bg-transparent text-center text-sm outline-none"
+                className={`w-12 bg-transparent text-center text-sm outline-none ${isStuffyClone ? "text-neutral-950 dark:text-white" : ""}`}
               />
               <button
                 type="button"
@@ -1186,7 +1264,7 @@ export default function ProductDetail() {
               data-testid="product-add-to-bag"
               onClick={handleAddToCart}
               disabled={!selectedSize || selectedVariantStock === 0}
-              className="h-14 w-full rounded-none bg-black text-xs font-bold uppercase tracking-[0.2em] text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-14 w-full rounded-none bg-black text-xs font-bold uppercase tracking-[0.2em] text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
             >
               {!selectedSize
                 ? "Select a size"
@@ -1199,7 +1277,7 @@ export default function ProductDetail() {
               variant="outline"
               onClick={handleBuyNow}
               disabled={!selectedSize || selectedVariantStock === 0}
-              className="h-14 w-full rounded-none border-zinc-900 text-xs font-bold uppercase tracking-[0.2em] text-zinc-900 transition-all hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-100 dark:hover:text-zinc-900"
+              className="h-14 w-full rounded-none border-zinc-900 text-xs font-bold uppercase tracking-[0.2em] text-zinc-900 transition-all hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
             >
               Buy Now
             </Button>
@@ -1221,8 +1299,8 @@ export default function ProductDetail() {
         ) : null}
       </Suspense>
 
-      <div className="mt-24 pt-16 border-t border-gray-100">
-        <h2 className="text-xl font-black uppercase tracking-tighter text-center mb-12">
+      <div className={`mt-24 border-t pt-16 ${isStuffyClone ? "border-neutral-200 dark:border-white/10" : "border-gray-100"}`}>
+        <h2 className={`mb-12 text-center text-xl font-black uppercase tracking-tighter ${isStuffyClone ? "text-neutral-950 dark:text-white" : ""}`}>
           You May Also Like
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
@@ -1235,7 +1313,7 @@ export default function ProductDetail() {
                   window.scrollTo(0, 0);
               }}
             >
-              <div className="aspect-[3/4] overflow-hidden bg-neutral-100 dark:bg-neutral-900 mb-4 relative rounded-sm">
+              <div className="relative mb-4 aspect-[3/4] overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-900">
                 <img
                   src={p.imageUrl ?? ""}
                   alt={p.name}
@@ -1243,17 +1321,17 @@ export default function ProductDetail() {
                   className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
                 />
               </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold truncate uppercase tracking-tight">{p.name}</h3>
+              <div className={`space-y-1 ${isStuffyClone ? "text-neutral-950 dark:text-white" : ""}`}>
+                <h3 className={`truncate text-sm font-bold uppercase tracking-tight ${isStuffyClone ? "text-neutral-950 dark:text-white" : ""}`}>{p.name}</h3>
                 <div className="flex items-center gap-2">
-                  <p className={`text-xs uppercase tracking-widest ${p.saleActive ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+                  <p className={`text-xs uppercase tracking-widest ${p.saleActive ? 'text-primary font-bold' : isStuffyClone ? 'text-neutral-600 dark:text-neutral-300' : 'text-muted-foreground'}`}>
                     {p.saleActive && Number(p.salePercentage) > 0 
                       ? formatPrice(Number(p.price) * (1 - Number(p.salePercentage) / 100))
                       : formatPrice(p.price)
                     }
                   </p>
                   {p.saleActive && Number(p.salePercentage) > 0 && (
-                    <p className="text-[10px] text-muted-foreground line-through opacity-60">
+                    <p className={`text-[10px] line-through opacity-60 ${isStuffyClone ? "text-neutral-500 dark:text-neutral-400" : "text-muted-foreground"}`}>
                       {formatPrice(p.price)}
                     </p>
                   )}

@@ -189,21 +189,39 @@ function orderByDefaults(values: string[], defaults: readonly string[]): string[
   });
 }
 
+const variantSchema = z.object({
+  id: z.string(),
+  color: z.string(),
+  size: z.string(),
+  crossedPrice: z.coerce.number().min(0).default(0),
+  sellingPrice: z.coerce.number().min(0).default(0),
+  costPrice: z.coerce.number().min(0).default(0),
+  weight: z.coerce.number().min(0).default(0),
+  quantity: z.coerce.number().min(0).default(0),
+  sku: z.string().min(1),
+});
+
 const productSchema = z.object({
   name: z.string().min(2, "Name required"),
   shortDetails: z.string().optional(),
   description: z.string().optional(),
   category: z.string().optional(),
   price: z.coerce.number().min(1, "Price required"),
+  costPrice: z.coerce.number().min(0).default(0),
   stockStatus: z.enum(["in_stock", "out_of_stock"]),
   stock: z.coerce.number().min(0).default(0),
   stockBySize: z.record(z.string(), z.coerce.number().min(0)).default({}),
   imageUrl: z.string().optional(),
   galleryUrlsText: z.string().optional(),
-  colorOptions: z.array(z.string()),
-  sizeOptions: z.array(z.string()),
+  colorOptions: z.array(z.string()).default([]),
+  sizeOptions: z.array(z.string()).default([]),
+  variantsEnabled: z.boolean().default(false),
+  variantColorHexMap: z.record(z.string(), z.string()).default({}),
+  variants: z.array(variantSchema).default([]),
+  continueSellingOutOfStock: z.boolean().default(false),
   salePercentage: z.coerce.number().min(0).max(100).default(0),
   saleActive: z.boolean().default(false),
+  colorImageMap: z.record(z.string(), z.array(z.string())).optional().default({}),
   homeFeatured: z.boolean().default(false),
   homeFeaturedImageIndex: z.coerce.number().default(2),
   isNewArrival: z.boolean().default(false),
@@ -231,7 +249,7 @@ export default function AdminProducts() {
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [attrSheetOpen, setAttrSheetOpen] = useState(false);
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
-  const [mediaLibraryTarget, setMediaLibraryTarget] = useState<'add-main' | 'add-gallery' | 'edit-main' | 'edit-gallery' | null>(null);
+  const [mediaLibraryTarget, setMediaLibraryTarget] = useState<string | null>(null);
   const [moveCategoryOpen, setMoveCategoryOpen] = useState(false);
   const [moveSelectionIds, setMoveSelectionIds] = useState<Set<string>>(new Set());
   const [moveMode, setMoveMode] = useState<"existing" | "new">("existing");
@@ -376,6 +394,7 @@ export default function AdminProducts() {
       description: "",
       category: "",
       price: 0,
+      costPrice: 0,
       stockStatus: "in_stock",
       stock: 0,
       stockBySize: {},
@@ -383,8 +402,13 @@ export default function AdminProducts() {
       galleryUrlsText: "",
       colorOptions: [],
       sizeOptions: [],
+      variantsEnabled: false,
+      variantColorHexMap: {},
+      variants: [],
+      continueSellingOutOfStock: false,
       salePercentage: 0,
       saleActive: false,
+      colorImageMap: {},
       homeFeatured: false,
       homeFeaturedImageIndex: 2,
     },
@@ -398,6 +422,7 @@ export default function AdminProducts() {
       description: "",
       category: "",
       price: 0,
+      costPrice: 0,
       stockStatus: "in_stock",
       stock: 0,
       stockBySize: {},
@@ -405,14 +430,21 @@ export default function AdminProducts() {
       galleryUrlsText: "",
       colorOptions: [],
       sizeOptions: [],
+      variantsEnabled: false,
+      variantColorHexMap: {},
+      variants: [],
+      continueSellingOutOfStock: false,
       salePercentage: 0,
       saleActive: false,
+      colorImageMap: {},
       homeFeatured: false,
       homeFeaturedImageIndex: 2,
     },
   });
   const editSelectedSizes = uniqueNormalizedValues(editForm.watch("sizeOptions") || []);
+  const editSelectedColors = uniqueNormalizedValues(editForm.watch("colorOptions") || []);
   const editStockBySize = editForm.watch("stockBySize") || {};
+  const editColorImageMap = editForm.watch("colorImageMap") || {};
 
   // Sync default category when categories load
   useEffect(() => {
@@ -431,6 +463,7 @@ export default function AdminProducts() {
       description: "",
       category: firstSlug,
       price: 0,
+      costPrice: 0,
       stockStatus: "in_stock",
       stock: 0,
       stockBySize: {},
@@ -438,8 +471,13 @@ export default function AdminProducts() {
       galleryUrlsText: "",
       colorOptions: [],
       sizeOptions: [],
+      variantsEnabled: false,
+      variantColorHexMap: {},
+      variants: [],
+      continueSellingOutOfStock: false,
       salePercentage: 0,
       saleActive: false,
+      colorImageMap: {},
     });
     setAddPendingGalleryImages([]);
     setGalleryUploadStatus(null);
@@ -472,6 +510,7 @@ export default function AdminProducts() {
         description: editProduct.description ?? "",
         category: categorySlug,
         price: Number(editProduct.price),
+        costPrice: Number(editProduct.costPrice ?? 0),
         stockStatus: editProduct.stock === 0 ? "out_of_stock" : "in_stock",
         stock: editProduct.stock,
         stockBySize: buildStockBySizeDraft(editProduct),
@@ -479,8 +518,23 @@ export default function AdminProducts() {
         galleryUrlsText: galleryUrls.join("\n"),
         colorOptions,
         sizeOptions,
+        variantsEnabled: (editProduct.variants?.length ?? 0) > 0,
+        variantColorHexMap: {},
+        variants: (editProduct.variants ?? []).map((variant) => ({
+          id: String(variant.id),
+          color: variant.color ?? "",
+          size: variant.size,
+          crossedPrice: Number(variant.compareAtPrice ?? 0),
+          sellingPrice: Number(variant.sellingPrice ?? editProduct.price ?? 0),
+          costPrice: Number(variant.costPrice ?? editProduct.costPrice ?? 0),
+          weight: Number(variant.weight ?? 0),
+          quantity: Number(variant.stock ?? 0),
+          sku: variant.sku ?? "",
+        })),
+        continueSellingOutOfStock: false,
         salePercentage: editProduct.salePercentage ?? 0,
         saleActive: editProduct.saleActive ?? false,
+        colorImageMap: editProduct.colorImageMap ?? {},
         homeFeatured: editProduct.homeFeatured ?? false,
         homeFeaturedImageIndex: editProduct.homeFeaturedImageIndex ?? 2,
         isNewArrival: editProduct.isNewArrival ?? false,
@@ -574,26 +628,56 @@ export default function AdminProducts() {
       }
 
       const galleryUrls = [...existingGalleryUrls, ...uploadedUrls];
+      const normalizedVariants = values.variantsEnabled
+        ? values.variants.map((variant) => ({
+            color: variant.color,
+            size: variant.size,
+            crossedPrice: Number(variant.crossedPrice ?? 0),
+            sellingPrice: Number(variant.sellingPrice ?? values.price ?? 0),
+            costPrice: Number(variant.costPrice ?? values.costPrice ?? 0),
+            quantity: Number(variant.quantity ?? 0),
+            sku: variant.sku,
+            weight: Number(variant.weight ?? 0),
+          }))
+        : [];
+      const variantStockBySize = normalizedVariants.reduce<Record<string, number>>((draft, variant) => {
+        draft[variant.size] = (draft[variant.size] ?? 0) + variant.quantity;
+        return draft;
+      }, {});
       const { sizeStocks } = buildInventorySyncPayload({
         stockStatus: values.stockStatus,
         currentSizes: values.sizeOptions,
-        currentStockBySize: values.stockBySize,
+        currentStockBySize: values.variantsEnabled ? variantStockBySize : values.stockBySize,
       });
+      const basePrice = normalizedVariants.length
+        ? Math.min(...normalizedVariants.map((variant) => variant.sellingPrice))
+        : values.price;
+      const baseCostPrice = normalizedVariants.length
+        ? Math.min(...normalizedVariants.map((variant) => variant.costPrice))
+        : (values.costPrice ?? 0);
+      const totalStock = normalizedVariants.length
+        ? normalizedVariants.reduce((sum, variant) => sum + variant.quantity, 0)
+        : stock;
 
       const createdProduct = await createAdminProduct({
         name: values.name,
         shortDetails: values.shortDetails || undefined,
         description: values.description ?? "",
-        price: values.price,
+        price: basePrice,
+        costPrice: baseCostPrice,
         imageUrl: values.imageUrl?.trim() || null,
         galleryUrls: galleryUrls.length ? JSON.stringify(galleryUrls) : undefined,
         category: values.category || categories[0]?.slug || "",
-        stock,
+        stock: totalStock,
         stockBySize: sizeStocks,
         colorOptions: values.colorOptions.length ? JSON.stringify(values.colorOptions) : undefined,
         sizeOptions: values.sizeOptions.length ? JSON.stringify(values.sizeOptions) : undefined,
+        variantsEnabled: values.variantsEnabled,
+        variants: normalizedVariants,
+        continueSellingOutOfStock: values.continueSellingOutOfStock,
         salePercentage: values.salePercentage,
         saleActive: values.saleActive,
+        colorImageMap: values.colorImageMap ?? {},
       });
 
       return createdProduct;
@@ -694,6 +778,7 @@ export default function AdminProducts() {
         shortDetails: values.shortDetails || undefined,
         description: values.description ?? "",
         price: values.price,
+        costPrice: values.costPrice ?? 0,
         imageUrl: values.imageUrl?.trim() || null,
         galleryUrls: galleryUrls.length ? JSON.stringify(galleryUrls) : undefined,
         category:
@@ -707,6 +792,7 @@ export default function AdminProducts() {
         sizeOptions: values.sizeOptions.length ? JSON.stringify(values.sizeOptions) : undefined,
         salePercentage: values.salePercentage,
         saleActive: values.saleActive,
+        colorImageMap: values.colorImageMap ?? {},
       });
 
       return updatedProduct;
@@ -1003,6 +1089,10 @@ export default function AdminProducts() {
   };
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const isColorMediaTarget =
+    !!mediaLibraryTarget && (mediaLibraryTarget.startsWith("add-color:") || mediaLibraryTarget.startsWith("edit-color:"));
+  const colorMediaKey = isColorMediaTarget ? mediaLibraryTarget.split(":").slice(1).join(":") : "";
+  const colorMediaForm = mediaLibraryTarget?.startsWith("add-") ? addForm : editForm;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -1064,7 +1154,7 @@ export default function AdminProducts() {
         open={mediaLibraryOpen}
         onOpenChange={setMediaLibraryOpen}
         mode={
-          mediaLibraryTarget === "add-gallery" || mediaLibraryTarget === "edit-gallery"
+          mediaLibraryTarget === "add-gallery" || mediaLibraryTarget === "edit-gallery" || isColorMediaTarget
             ? "multiple"
             : "single"
         }
@@ -1086,6 +1176,8 @@ export default function AdminProducts() {
                   .split(/\n/)
                   .map((u) => u.trim())
                   .filter(Boolean)
+              : isColorMediaTarget
+                ? ((colorMediaForm?.watch("colorImageMap")?.[colorMediaKey] ?? []) as string[])
               : undefined
         }
         onSelect={(url) => {
@@ -1116,6 +1208,12 @@ export default function AdminProducts() {
               .filter(Boolean);
             const merged = [...current, ...urls.filter((u) => !current.includes(u))];
             editForm.setValue("galleryUrlsText", merged.join("\n"), { shouldValidate: true, shouldDirty: true });
+          } else if (isColorMediaTarget) {
+            const currentMap = (colorMediaForm?.getValues("colorImageMap") ?? {}) as Record<string, string[]>;
+            const existing = currentMap[colorMediaKey] ?? [];
+            const merged = [...existing, ...urls.filter((u) => !existing.includes(u))];
+            const nextMap = { ...currentMap, [colorMediaKey]: merged };
+            colorMediaForm?.setValue("colorImageMap", nextMap, { shouldValidate: true, shouldDirty: true });
           }
         }}
       />
@@ -2211,6 +2309,24 @@ export default function AdminProducts() {
                           </FormItem>
                         )}
                       />
+                      <FormField
+                        control={editForm.control}
+                        name="costPrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Cost Price (NPR)</FormLabel>
+                            <FormControl>
+                              <PriceInput
+                                min={0}
+                                value={field.value}
+                                onChange={(val) => field.onChange(val)}
+                                placeholder="0"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
                       {/* Sale Section for Edit */}
                       <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 space-y-4">
@@ -2677,6 +2793,82 @@ export default function AdminProducts() {
                             value={galleryUploadStatus.progress}
                             label={`Uploading ${galleryUploadStatus.completed}/${galleryUploadStatus.total}`}
                           />
+                        </div>
+                      )}
+
+                      {editSelectedColors.length > 0 && (
+                        <div className="pt-4">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground">Color Images</p>
+                          <div className="mt-3 space-y-3">
+                            {editSelectedColors.map((color) => {
+                              const urls = (editColorImageMap[color] || []) as string[];
+                              return (
+                                <div key={color} className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-[11px] font-semibold text-muted-foreground">
+                                      {color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, "")}
+                                    </p>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-[10px]"
+                                      onClick={() => {
+                                        setMediaLibraryTarget(`edit-color:${color}`);
+                                        setMediaLibraryOpen(true);
+                                      }}
+                                    >
+                                      <FolderInput className="mr-1.5 h-3 w-3" /> Add
+                                    </Button>
+                                  </div>
+                                  <Textarea
+                                    rows={2}
+                                    className="mt-2 text-xs"
+                                    placeholder="Paste image URLs (one per line)"
+                                    value={urls.join("\n")}
+                                    onChange={(event) => {
+                                      const nextUrls = event.target.value
+                                        .split(/\n/)
+                                        .map((u) => u.trim())
+                                        .filter(Boolean);
+                                      const nextMap = { ...(editColorImageMap as Record<string, string[]>) };
+                                      if (nextUrls.length) {
+                                        nextMap[color] = nextUrls;
+                                      } else {
+                                        delete nextMap[color];
+                                      }
+                                      editForm.setValue("colorImageMap", nextMap, { shouldDirty: true });
+                                    }}
+                                  />
+                                  {urls.length > 0 ? (
+                                    <div className="mt-2 grid grid-cols-4 gap-2">
+                                      {urls.map((url, index) => (
+                                        <div key={`${color}-${index}`} className="group relative aspect-square overflow-hidden rounded-md border border-border">
+                                          <img src={url} alt="" className="h-full w-full object-cover" />
+                                          <button
+                                            type="button"
+                                            className="absolute right-1 top-1 rounded-full bg-black/70 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                                            onClick={() => {
+                                              const nextUrls = urls.filter((_, i) => i !== index);
+                                              const nextMap = { ...(editColorImageMap as Record<string, string[]>) };
+                                              if (nextUrls.length) {
+                                                nextMap[color] = nextUrls;
+                                              } else {
+                                                delete nextMap[color];
+                                              }
+                                              editForm.setValue("colorImageMap", nextMap, { shouldDirty: true });
+                                            }}
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </div>

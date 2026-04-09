@@ -141,6 +141,12 @@ export function getRoleLabel(role: string | null | undefined): string {
       return "CSR";
     case "staff":
       return "Staff";
+    case "sales":
+      return "Sales";
+    case "marketing":
+      return "Marketing";
+    case "cook":
+      return "Cook";
     default:
       return "Customer";
   }

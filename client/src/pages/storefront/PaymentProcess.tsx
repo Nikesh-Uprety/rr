@@ -5,13 +5,19 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
+  cacheLatestOrder,
+  cancelOrder,
+  clearPendingCheckout,
+  createCheckoutSession,
+  createOrder,
   fetchOrderById,
   fetchPaymentQrConfig,
   getCachedLatestOrder,
-  uploadPaymentProof,
-  updateOrderPaymentMethod,
-  createCheckoutSession,
+  getPendingCheckout,
   simulateStripePaymentSuccess,
+  updateOrderPaymentMethod,
+  updatePendingCheckoutPaymentMethod,
+  uploadPaymentProof,
 } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import {
@@ -26,6 +32,7 @@ import {
   Download,
 } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { useCartStore } from "@/store/cart";
 
 function useSearchQuery() {
   if (typeof window === "undefined") return new URLSearchParams();
@@ -39,6 +46,8 @@ const FALLBACK_PAYMENT_QR = {
   fonepay:
     "https://cdn11.bigcommerce.com/s-tgrcca6nho/images/stencil/original/products/65305/136311/Quick-Scan-Pay-Stand-Scan1_136310__37301.1758003923.jpg",
 } as const;
+
+const CHECKOUT_FORM_KEY = "ra-checkout-form-data";
 
 const PAYMENT_METHOD_SWITCH_OPTIONS = [
   { id: "esewa", label: "eSewa" },
@@ -54,8 +63,15 @@ export default function PaymentProcess() {
   const method = query.get("method") ?? "esewa";
   const stripeStatus = query.get("stripe_status");
   const { toast } = useToast();
-  const [order, setOrder] = useState<Awaited<ReturnType<typeof fetchOrderById>>>(() => getCachedLatestOrder(orderId));
-  const [isResolved, setIsResolved] = useState(() => !!getCachedLatestOrder(orderId));
+  const clearCart = useCartStore((state) => state.clearCart);
+  const pendingCheckout = getPendingCheckout();
+  const hasPendingManualOrder = !orderId && !!pendingCheckout?.orderInput?.items?.length;
+  const [order, setOrder] = useState<Awaited<ReturnType<typeof fetchOrderById>>>(() =>
+    orderId ? getCachedLatestOrder(orderId) : null,
+  );
+  const [isResolved, setIsResolved] = useState(() =>
+    orderId ? !!getCachedLatestOrder(orderId) : true,
+  );
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const [redirectingToStripe, setRedirectingToStripe] = useState(false);
@@ -117,11 +133,13 @@ export default function PaymentProcess() {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !orderId) return;
+    if (!file) return;
+
     if (!file.type.startsWith("image/")) {
       toast({ title: "Please upload an image file (PNG, JPG)", variant: "destructive" });
       return;
     }
+
     if (file.size > MAX_FILE_SIZE_BYTES) {
       toast({
         title: `File too large. Maximum size is ${MAX_FILE_SIZE_MB} MB. Please use a smaller image.`,
@@ -130,6 +148,7 @@ export default function PaymentProcess() {
       e.target.value = "";
       return;
     }
+
     setUploading(true);
     try {
       const base64 = await new Promise<string>((resolve, reject) => {
@@ -138,8 +157,65 @@ export default function PaymentProcess() {
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
+
+      if (!orderId) {
+        if (!pendingCheckout?.orderInput?.items?.length) {
+          toast({ title: "Checkout session expired. Please start again.", variant: "destructive" });
+          setLocation("/checkout");
+          return;
+        }
+
+        const createResult = await createOrder(pendingCheckout.orderInput);
+        if (!createResult.success || !createResult.data) {
+          toast({ title: createResult.error || "Failed to create order", variant: "destructive" });
+          return;
+        }
+
+        const createdOrder = createResult.data.order;
+        const uploadResult = await uploadPaymentProof(createdOrder.id, base64);
+
+        if (!uploadResult.success) {
+          try {
+            await cancelOrder(createdOrder.id);
+          } catch {
+            // Ignore cleanup failures and keep destructive feedback below.
+          }
+
+          toast({
+            title: uploadResult.error || "Payment upload failed, so the order was not saved.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        cacheLatestOrder(createdOrder);
+        clearPendingCheckout();
+        clearCart();
+        try {
+          localStorage.removeItem(CHECKOUT_FORM_KEY);
+        } catch {
+          // Ignore storage errors.
+        }
+
+        setOrder(createdOrder);
+        setUploaded(true);
+        toast({ title: "Payment screenshot uploaded. Order created successfully." });
+
+        setTimeout(() => {
+          setLocation(`/order-confirmation/${createdOrder.id}`);
+        }, 1400);
+        return;
+      }
+
       const result = await uploadPaymentProof(orderId, base64);
       if (result.success) {
+        clearCart();
+        clearPendingCheckout();
+        try {
+          localStorage.removeItem(CHECKOUT_FORM_KEY);
+        } catch {
+          // Ignore storage errors.
+        }
         setUploaded(true);
         toast({ title: "Payment screenshot uploaded. We will verify shortly." });
         setTimeout(() => {
@@ -204,10 +280,27 @@ export default function PaymentProcess() {
   const handleChangePaymentMethod = async (
     nextMethod: "esewa" | "khalti" | "fonepay" | "stripe",
   ) => {
-    if (!orderId || nextMethod === method) return;
+    if (nextMethod === method) return;
 
     setSwitchingPaymentMethod(nextMethod);
     try {
+      if (!orderId) {
+        updatePendingCheckoutPaymentMethod(nextMethod);
+        const nextLabel =
+          PAYMENT_METHOD_SWITCH_OPTIONS.find((option) => option.id === nextMethod)?.label ??
+          nextMethod;
+
+        if (nextMethod === "stripe") {
+          toast({ title: `Switched to ${nextLabel}. Complete checkout to pay by card.` });
+          setLocation("/checkout?returning=1");
+          return;
+        }
+
+        toast({ title: `Payment method changed to ${nextLabel}` });
+        setLocation(`/checkout/payment?method=${nextMethod}`);
+        return;
+      }
+
       const result = await updateOrderPaymentMethod(orderId, nextMethod);
       if (!result.success) {
         toast({ title: result.error || "Failed to change payment method", variant: "destructive" });
@@ -226,7 +319,10 @@ export default function PaymentProcess() {
     }
   };
 
-  if (!orderId) {
+  const orderTotal = Number(order?.total ?? pendingCheckout?.total ?? 0);
+  const confirmationOrderId = order?.id ?? orderId;
+
+  if (!orderId && !hasPendingManualOrder) {
     return (
       <div className="container mx-auto px-4 py-12 text-center sm:py-16">
         <p className="text-muted-foreground">Invalid payment link.</p>
@@ -237,7 +333,7 @@ export default function PaymentProcess() {
     );
   }
 
-  if (!isResolved && !order) {
+  if (!isResolved && orderId && !order) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
         <BrandedLoader />
@@ -245,7 +341,7 @@ export default function PaymentProcess() {
     );
   }
 
-  if (!order) {
+  if (orderId && !order) {
     return (
       <div className="container mx-auto px-4 py-12 text-center sm:py-16">
         <p className="text-muted-foreground">We could not load this order.</p>
@@ -256,7 +352,18 @@ export default function PaymentProcess() {
     );
   }
 
-  if (method === "stripe") {
+  if (method === "stripe" && !orderId) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center sm:py-16">
+        <p className="text-muted-foreground">Card payment starts from checkout for now.</p>
+        <Button asChild className="mt-6 rounded-none">
+          <Link href="/checkout?returning=1">Back to Checkout</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  if (method === "stripe" && order) {
     return (
       <div className="container mx-auto max-w-3xl px-4 pb-12 pt-4 sm:pb-16 sm:pt-6">
         <div className="mb-6 space-y-2">
@@ -282,10 +389,10 @@ export default function PaymentProcess() {
           Pay by Card
         </h1>
         <p className="mb-8 text-sm text-muted-foreground">
-          Order total: {formatPrice(Number(order.total))}
+          Order total: {formatPrice(orderTotal)}
         </p>
 
-        <div className="mb-8 border border-gray-200 bg-gradient-to-br from-slate-50 to-gray-50 p-5 sm:p-8">
+        <div className="mb-8 border border-gray-200 bg-gradient-to-br from-slate-50 to-gray-50 p-5 sm:p-8 dark:border-zinc-700 dark:from-zinc-900 dark:to-zinc-950">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-14 h-9 flex items-center justify-center overflow-hidden">
               <img
@@ -295,24 +402,24 @@ export default function PaymentProcess() {
               />
             </div>
             <div>
-              <p className="text-sm font-bold uppercase tracking-wider text-gray-900">Secure Card Payment</p>
+              <p className="text-sm font-bold uppercase tracking-wider text-gray-900 dark:text-zinc-100">Secure Card Payment</p>
               <p className="text-xs text-muted-foreground">Powered by Stripe</p>
             </div>
           </div>
 
-          <div className="mb-4 border border-gray-200 bg-white p-5 sm:p-6">
+          <div className="mb-4 border border-gray-200 bg-white p-5 sm:p-6 dark:border-zinc-700 dark:bg-zinc-900">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Amount</span>
-              <span className="text-lg font-black">{formatPrice(Number(order.total))}</span>
+              <span className="text-lg font-black">{formatPrice(orderTotal)}</span>
             </div>
             <p className="text-xs text-muted-foreground">
               You will be charged in USD at the current exchange rate.
             </p>
           </div>
 
-          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200">
+          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 dark:bg-blue-950/30 dark:border-blue-900/70">
             <AlertCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-blue-700">
+            <p className="text-xs text-blue-700 dark:text-blue-300">
               {isLocalTesting
                 ? "Local testing mode: Stripe redirect is skipped and your payment will be marked successful instantly."
                 : "You will be redirected to Stripe&apos;s secure checkout page to enter your card details. After payment, you will be redirected back here."}
@@ -340,7 +447,7 @@ export default function PaymentProcess() {
           )}
         </Button>
 
-        <div className="mt-8 grid gap-2 border-t border-gray-100 pt-6 sm:grid-cols-2">
+        <div className="mt-8 grid gap-2 border-t border-gray-100 dark:border-zinc-800 pt-6 sm:grid-cols-2">
           <Button asChild variant="outline" className="h-11 rounded-none text-xs">
             <Link href="/checkout?returning=1">← Back to Checkout</Link>
           </Button>
@@ -432,14 +539,14 @@ export default function PaymentProcess() {
         {title}
       </h1>
       <p className="text-muted-foreground text-sm mb-8">
-        Order total: {formatPrice(Number(order.total))}
+        Order total: {formatPrice(orderTotal)}
       </p>
 
-      <div className="mb-8 flex flex-col items-center border border-gray-200 bg-gray-50 p-5 sm:p-8">
+      <div className="mb-8 flex flex-col items-center border border-gray-200 bg-gray-50 p-5 sm:p-8 dark:border-zinc-700 dark:bg-zinc-900">
         {normalizedMethod === "bank" ? (
           <div className="w-full text-center space-y-4">
-            <h3 className="font-bold text-lg uppercase tracking-widest text-black">Bank Details</h3>
-            <div className="bg-white p-6 border border-gray-200 rounded-none text-left space-y-3">
+            <h3 className="font-bold text-lg uppercase tracking-widest text-black dark:text-zinc-100">Bank Details</h3>
+            <div className="bg-white p-6 border border-gray-200 rounded-none text-left space-y-3 dark:bg-zinc-950 dark:border-zinc-700">
               <p className="text-sm"><strong className="font-bold uppercase tracking-wide">Bank Name:</strong> Global IME Bank</p>
               <p className="text-sm"><strong className="font-bold uppercase tracking-wide">Account Name:</strong> Nikesh Uprety</p>
               <p className="text-sm"><strong className="font-bold uppercase tracking-wide">Account N.O:</strong> 01234567890123</p>
@@ -467,7 +574,7 @@ export default function PaymentProcess() {
               </p>
             </div>
             <div
-              className="group relative h-52 w-52 cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-white p-2 sm:h-64 sm:w-64"
+              className="group relative h-52 w-52 cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-white p-2 sm:h-64 sm:w-64 dark:border-zinc-700 dark:bg-zinc-950"
               onClick={() => setQrPreviewOpen(true)}
             >
               <img
@@ -537,12 +644,12 @@ export default function PaymentProcess() {
         />
         {uploaded ? (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 border border-green-200 bg-green-50 text-green-800 rounded-none">
+            <div className="flex items-center gap-3 p-4 border border-green-200 bg-green-50 text-green-800 rounded-none dark:border-green-900/70 dark:bg-green-950/30 dark:text-green-300">
               <CheckCircle2 className="w-5 h-5 shrink-0" />
               <span className="text-sm font-medium">Screenshot uploaded. Click below to confirm and complete your order.</span>
             </div>
             <Button
-              onClick={() => setLocation(`/order-confirmation/${orderId}`)}
+              onClick={() => setLocation(`/order-confirmation/${confirmationOrderId}`)}
               className="w-full h-14 bg-black text-white rounded-none uppercase tracking-widest text-xs font-bold"
             >
               <CheckCircle2 className="w-5 h-5 mr-2" />
@@ -554,7 +661,7 @@ export default function PaymentProcess() {
             type="button"
             data-testid="payment-proof-trigger"
             variant="outline"
-            className="w-full h-14 rounded-none border-2 border-dashed border-gray-300"
+            className="w-full h-14 rounded-none border-2 border-dashed border-gray-300 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-100"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
           >
@@ -570,7 +677,7 @@ export default function PaymentProcess() {
         )}
       </div>
 
-      <div className="mt-12 grid gap-3 border-t border-gray-100 pt-8 sm:grid-cols-[1fr_auto]">
+      <div className="mt-12 grid gap-3 border-t border-gray-100 dark:border-zinc-800 pt-8 sm:grid-cols-[1fr_auto]">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {PAYMENT_METHOD_SWITCH_OPTIONS.filter((option) => option.id !== method).map((option) => (
             <Button
@@ -616,8 +723,8 @@ export default function PaymentProcess() {
               >
                 <X className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
               </button>
-              <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl">
-                <div className="aspect-square w-full bg-white">
+              <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl dark:bg-zinc-900">
+                <div className="aspect-square w-full bg-white dark:bg-zinc-950">
                   <img
                     src={resolvedQrImageSrc}
                     alt={`${paymentLabel} QR Code Full Size`}

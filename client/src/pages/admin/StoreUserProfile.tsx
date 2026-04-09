@@ -29,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { ADMIN_PAGE_KEYS } from "@shared/auth-policy";
+import { ADMIN_PAGE_KEYS, sanitizeAdminPageOverrides, type AdminPageKey } from "@shared/auth-policy";
 
 type StoreUserOverview = {
   profile: {
@@ -117,7 +117,7 @@ type EditableStoreUserProfile = {
   timezone: string;
   department: string;
   emailNotifications: boolean;
-  pageAccessOverrides: string[];
+  pageAccessOverrides: AdminPageKey[];
 };
 
 function formatNpr(value: string) {
@@ -171,7 +171,7 @@ function buildEditableProfile(overview: StoreUserOverview): EditableStoreUserPro
     timezone: overview.profile.timezone || "Asia/Kathmandu",
     department: overview.profile.department || "",
     emailNotifications: overview.profile.emailNotifications,
-    pageAccessOverrides: [...overview.accessOverrides],
+    pageAccessOverrides: sanitizeAdminPageOverrides(overview.profile.role, overview.accessOverrides),
   };
 }
 
@@ -239,6 +239,16 @@ export default function StoreUserProfile() {
     if (!overview || !editForm) return false;
     return JSON.stringify(editForm) !== JSON.stringify(buildEditableProfile(overview));
   }, [editForm, overview]);
+
+  const visibleAccessPages = useMemo(
+    () => sanitizeAdminPageOverrides(overview?.profile.role, [...ADMIN_PAGE_KEYS]),
+    [overview?.profile.role],
+  );
+
+  const sanitizedAccessOverrides = useMemo(
+    () => sanitizeAdminPageOverrides(overview?.profile.role, overview?.accessOverrides),
+    [overview?.accessOverrides, overview?.profile.role],
+  );
 
   if (overviewQuery.isLoading) {
     return (
@@ -633,8 +643,8 @@ export default function StoreUserProfile() {
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Manage Access</p>
                   <div className="mt-3 grid gap-2">
-                    {ADMIN_PAGE_KEYS.map((pageKey) => {
-                      const inherited = overview.accessScope.includes(pageKey) && !overview.accessOverrides.includes(pageKey);
+                    {visibleAccessPages.map((pageKey) => {
+                      const inherited = overview.accessScope.includes(pageKey) && !sanitizedAccessOverrides.includes(pageKey);
                       const checked = inherited || editForm.pageAccessOverrides.includes(pageKey);
                       return (
                         <div

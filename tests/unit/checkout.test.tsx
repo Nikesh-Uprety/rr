@@ -32,6 +32,8 @@ const mockCartState = {
 const createOrderMock = vi.fn();
 const validatePromoCodeMock = vi.fn();
 const cacheLatestOrderMock = vi.fn();
+const cachePendingCheckoutMock = vi.fn();
+const clearPendingCheckoutMock = vi.fn();
 const useCartStoreMock = vi.fn(() => mockCartState);
 
 vi.mock("wouter", () => ({
@@ -51,6 +53,8 @@ vi.mock("@/lib/api", () => ({
   createOrder: (...args: unknown[]) => createOrderMock(...args),
   validatePromoCode: (...args: unknown[]) => validatePromoCodeMock(...args),
   cacheLatestOrder: (...args: unknown[]) => cacheLatestOrderMock(...args),
+  cachePendingCheckout: (...args: unknown[]) => cachePendingCheckoutMock(...args),
+  clearPendingCheckout: (...args: unknown[]) => clearPendingCheckoutMock(...args),
 }));
 
 const SAVED_FORM_DATA = {
@@ -75,6 +79,8 @@ describe("Checkout", () => {
     createOrderMock.mockReset();
     validatePromoCodeMock.mockReset();
     cacheLatestOrderMock.mockReset();
+    cachePendingCheckoutMock.mockReset();
+    clearPendingCheckoutMock.mockReset();
     useCartStoreMock.mockImplementation(() => mockCartState);
     localStorage.clear();
     vi.restoreAllMocks();
@@ -143,21 +149,14 @@ describe("Checkout", () => {
     await waitFor(() => {
       expect(createOrderMock).toHaveBeenCalled();
       expect(cacheLatestOrderMock).toHaveBeenCalledWith({ id: "order-1" });
+      expect(clearPendingCheckoutMock).toHaveBeenCalled();
       expect(clearCartMock).toHaveBeenCalled();
       expect(setLocationMock).toHaveBeenCalledWith("/order-confirmation/order-1");
     });
   });
 
-  it("routes online payment orders to the payment page", async () => {
+  it("routes online payment orders to the payment page without creating order", async () => {
     const user = userEvent.setup();
-    createOrderMock.mockResolvedValueOnce({
-      success: true,
-      data: {
-        orderNumber: "ORD-2",
-        total: 3300,
-        order: { id: "order-2" },
-      },
-    });
 
     const esewaData = { ...SAVED_FORM_DATA, paymentMethod: "esewa" };
     localStorage.setItem("ra-checkout-form-data", JSON.stringify(esewaData));
@@ -167,8 +166,9 @@ describe("Checkout", () => {
     await user.click(screen.getByTestId("checkout-submit"));
 
     await waitFor(() => {
-      expect(cacheLatestOrderMock).toHaveBeenCalledWith({ id: "order-2" });
-      expect(setLocationMock).toHaveBeenCalledWith("/checkout/payment?orderId=order-2&method=esewa");
+      expect(createOrderMock).not.toHaveBeenCalled();
+      expect(cachePendingCheckoutMock).toHaveBeenCalled();
+      expect(setLocationMock).toHaveBeenCalledWith("/checkout/payment?method=esewa");
     });
   });
 });

@@ -1,26 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { Helmet } from "react-helmet-async";
+import { Link } from "wouter";
+import { ArrowRight } from "lucide-react";
+import { useThemeStore } from "@/store/theme";
 import ContactInfo from "@/components/home/ContactSection";
+import OurServices from "@/components/home/OurServices";
+
+const ATELIER_HERO_IMAGE = "/images/about.webp";
 
 export default function Contact() {
-  const conceptSectionRef = useRef<HTMLElement | null>(null);
-  const [isConceptVisible, setIsConceptVisible] = useState(false);
-
-  useEffect(() => {
-    const node = conceptSectionRef.current;
-    if (!node) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setIsConceptVisible(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.2 },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
+  const { theme } = useThemeStore();
+  const isDark = theme === "dark";
 
   useEffect(() => {
     const scrollToContact = () => {
@@ -32,87 +22,111 @@ export default function Contact() {
         }, 100);
       }
     };
+
     scrollToContact();
     window.addEventListener("hashchange", scrollToContact);
     return () => window.removeEventListener("hashchange", scrollToContact);
   }, []);
 
   return (
-    <div className="flex-1">
+    <div className={`flex-1 ${isDark ? "bg-[#050505] text-white" : "bg-white text-neutral-950"}`}>
       <Helmet>
         <title>ATELIER | Rare Atelier</title>
       </Helmet>
 
-      {/* Hero Section */}
-      <section className="relative overflow-hidden border-b border-[var(--border)]">
+      <section className="relative min-h-[100svh] overflow-hidden">
+        <img
+          src={ATELIER_HERO_IMAGE}
+          alt="Rare Atelier services"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+        />
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: "url('/images/about.webp')",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            animation: "atelier-ken-burns 28s ease-in-out infinite alternate",
+            background: isDark
+              ? "linear-gradient(180deg, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.62) 100%)"
+              : "linear-gradient(180deg, rgba(12,12,12,0.22) 0%, rgba(12,12,12,0.48) 100%)",
           }}
         />
-        <div className="absolute inset-0 bg-black/45 dark:bg-black/60" />
-        <div className="relative h-[72vh] min-h-[520px] md:h-[88vh] md:min-h-[760px]" />
-      </section>
 
-      {/* Concept Section with Parallax Background */}
-      <section
-        ref={conceptSectionRef}
-        className="relative overflow-hidden border-b border-[var(--border)]"
-      >
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: "url('/images/concept.webp')",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            backgroundAttachment: "fixed",
-          }}
-        />
-        <div
-          className={`relative z-10 h-[60vh] min-h-[400px] md:h-[70vh] transition-all duration-1000 ${
-            isConceptVisible ? "opacity-100" : "opacity-0"
-          }`}
-        />
-      </section>
-
-      {/* Concept Text Section */}
-      <section className="py-24 md:py-32 bg-background border-b border-[var(--border)]">
-        <div className="container mx-auto px-4 max-w-6xl">
-          <div className="max-w-4xl mx-auto text-center">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground font-semibold mb-6">
-              The Concept
+        <div className="relative z-10 flex min-h-[100svh] items-end px-4 pb-16 pt-32 sm:px-6 sm:pb-20 lg:px-10 lg:pb-24">
+          <div className="max-w-[760px]">
+            <p
+              className={`mb-5 text-[10px] font-semibold uppercase tracking-[0.34em] ${
+                isDark ? "text-white/70" : "text-white/80"
+              }`}
+            >
+              Our Services
             </p>
-            <h2 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight uppercase mb-8 leading-tight">
+            <h1 className="text-5xl font-black uppercase leading-none tracking-tight text-white sm:text-6xl lg:text-8xl">
               Rare Atelier
-            </h2>
-            <p className="text-lg md:text-xl lg:text-2xl text-muted-foreground leading-relaxed max-w-3xl mx-auto font-light">
-              Rare Atelier is a luxury streetwear label from Nepal, creating limited pieces where
-              local memory meets a modern global silhouette. Each garment is cut with intent,
-              built in small runs, and released as an object of meaning as much as design.
+            </h1>
+            <p className="mt-5 max-w-2xl text-sm leading-7 text-white/85 sm:text-base">
+              A simple atelier page for service, support, and direct communication. Explore our core
+              services below, then get in touch for fit help, exchanges, or order support.
             </p>
-            <div className="mt-12 w-24 h-1 bg-muted-foreground/30 mx-auto rounded-full" />
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                href="#services"
+                className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[11px] font-bold uppercase tracking-[0.22em] text-black transition-transform hover:-translate-y-0.5"
+                onClick={(event) => {
+                  event.preventDefault();
+                  document.getElementById("services")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                Explore Services
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="#contact"
+                className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-6 py-3 text-[11px] font-bold uppercase tracking-[0.22em] text-white backdrop-blur-sm transition-transform hover:-translate-y-0.5"
+                onClick={(event) => {
+                  event.preventDefault();
+                  document.getElementById("contact")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                Get In Touch
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Contact Section */}
-      <section id="contact" className="py-24 bg-background">
-        <div className="container mx-auto px-4 max-w-6xl">
+      <section
+        id="services"
+        className={`border-y ${
+          isDark ? "border-white/10 bg-[#050505]" : "border-black/10 bg-white"
+        }`}
+      >
+        <OurServices />
+      </section>
+
+      <section
+        id="contact"
+        className={`px-4 py-20 sm:px-6 lg:px-10 lg:py-24 ${
+          isDark ? "bg-[#050505]" : "bg-white"
+        }`}
+      >
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-10 max-w-3xl">
+            <p
+              className={`mb-4 text-[10px] font-semibold uppercase tracking-[0.34em] ${
+                isDark ? "text-white/55" : "text-neutral-500"
+              }`}
+            >
+              Contact
+            </p>
+            <h2 className={`text-3xl font-black uppercase tracking-tight sm:text-5xl ${isDark ? "text-white" : "text-neutral-950"}`}>
+              Get In Touch
+            </h2>
+            <p className={`mt-4 text-sm leading-7 sm:text-base ${isDark ? "text-white/75" : "text-neutral-600"}`}>
+              Reach out for support with orders, exchanges, delivery questions, sizing, or any other
+              Rare Atelier assistance.
+            </p>
+          </div>
           <ContactInfo showMap />
         </div>
       </section>
-
-      <style>{`
-        @keyframes atelier-ken-burns {
-          0% { transform: scale(1.02) translate3d(0, 0, 0); }
-          50% { transform: scale(1.08) translate3d(-1.5%, -1.5%, 0); }
-          100% { transform: scale(1.12) translate3d(1.5%, 1%, 0); }
-        }
-      `}</style>
     </div>
   );
 }

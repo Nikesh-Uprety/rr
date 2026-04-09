@@ -96,7 +96,7 @@ export default function QuoteSection({ config }: QuoteSectionProps) {
           }}
         >
           <img
-            src="/images/logo.webp"
+            src="/images/newproductpagelogo.png"
             alt=""
             className="h-24 w-auto opacity-[0.08] saturate-0 dark:opacity-[0.12] dark:brightness-0 dark:invert sm:h-32 md:h-40 lg:h-48"
             aria-hidden

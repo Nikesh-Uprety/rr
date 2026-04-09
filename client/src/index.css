@@ -43,46 +43,48 @@
   --admin-font-family: 'Inter', sans-serif;
   --admin-font-size: 15px;
   --admin-font-letter-spacing: 0.01em;
-  --bg: #f3eee6;
-  --bg2: #ece4d8;
-  --fg: #181411;
-  --fg-dim: rgba(24, 20, 17, 0.56);
-  --fg-ghost: rgba(24, 20, 17, 0.08);
+  --bg: #ffffff;
+  --bg2: #ffffff;
+  --fg: #000000;
+  --fg-dim: rgba(0, 0, 0, 0.62);
+  --fg-ghost: rgba(0, 0, 0, 0.08);
   --gold: #b99356;
   --gold-dim: rgba(185, 147, 86, 0.16);
-  --border: rgba(24, 20, 17, 0.12);
+  --border: rgba(0, 0, 0, 0.12);
   --font-display: 'Playfair Display', Georgia, serif;
   --font-body: 'DM Sans', sans-serif;
   --font-mono: 'DM Mono', monospace;
   --nav-h: 68px;
   --ease: cubic-bezier(.4,0,.2,1);
   --background: 0 0% 100%;
-  --foreground: 0 0% 10%;
+  --color-background: #FFFFFF;
+  --foreground: 0 0% 0%;
+  --color-foreground: #000000;
   
-  --card: 0 0% 98%;
-  --card-foreground: 0 0% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
   
   --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 10%;
+  --popover-foreground: 0 0% 0%;
   
-  --primary: 0 0% 9%;
+  --primary: 0 0% 0%;
   --primary-foreground: 0 0% 98%;
   
   --secondary: 0 0% 96%;
-  --secondary-foreground: 0 0% 9%;
+  --secondary-foreground: 0 0% 0%;
   
   --muted: 0 0% 96%;
-  --muted-foreground: 0 0% 45%;
+  --muted-foreground: 0 0% 35%;
   
   --accent: 0 0% 96%;
-  --accent-foreground: 0 0% 9%;
+  --accent-foreground: 0 0% 0%;
   
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
   
-  --border: 0 0% 90%;
-  --input: 0 0% 90%;
-  --ring: 0 0% 9%;
+  --border: 0 0% 86%;
+  --input: 0 0% 88%;
+  --ring: 0 0% 0%;
   
   --radius: 0px;
   
@@ -182,7 +184,9 @@
   --gold-dim: rgba(201, 169, 110, 0.18);
   --border: rgba(232, 228, 219, 0.12);
   --background: 20 12% 9%;
+  --color-background: #111111;
   --foreground: 0 0% 98%;
+  --color-foreground: #FAFAFA;
   
   --card: 0 0% 9%;
   --card-foreground: 0 0% 98%;

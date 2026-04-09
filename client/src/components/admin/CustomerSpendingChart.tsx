@@ -28,21 +28,21 @@ const TIME_RANGE_LABELS: Record<TimeRange, string> = {
 };
 
 const BAR_GRADIENTS = [
-  { from: "#2C5234", to: "#4ADE80" },
-  { from: "#3B6B45", to: "#5CDB95" },
-  { from: "#4A8456", to: "#6EE7A7" },
-  { from: "#599D67", to: "#80F0B8" },
-  { from: "#68B678", to: "#92F5C4" },
-  { from: "#77CF89", to: "#A5FAD0" },
-  { from: "#86E89A", to: "#B8FEDC" },
-  { from: "#2C5234", to: "#4ADE80" },
-  { from: "#3B6B45", to: "#5CDB95" },
-  { from: "#4A8456", to: "#6EE7A7" },
-  { from: "#599D67", to: "#80F0B8" },
-  { from: "#68B678", to: "#92F5C4" },
-  { from: "#77CF89", to: "#A5FAD0" },
-  { from: "#86E89A", to: "#B8FEDC" },
-  { from: "#2C5234", to: "#4ADE80" },
+  { from: "#1D4ED8", to: "#38BDF8" }, // blue -> sky
+  { from: "#0EA5E9", to: "#22C55E" }, // sky -> green
+  { from: "#14B8A6", to: "#60A5FA" }, // teal -> blue
+  { from: "#8B5CF6", to: "#EC4899" }, // violet -> pink
+  { from: "#F97316", to: "#F59E0B" }, // orange -> amber
+  { from: "#E11D48", to: "#FB7185" }, // rose -> pink
+  { from: "#22C55E", to: "#A3E635" }, // green -> lime
+  { from: "#06B6D4", to: "#3B82F6" }, // cyan -> blue
+  { from: "#3B82F6", to: "#A78BFA" }, // blue -> violet
+  { from: "#10B981", to: "#34D399" }, // emerald
+  { from: "#F59E0B", to: "#FDE047" }, // amber -> yellow
+  { from: "#6366F1", to: "#38BDF8" }, // indigo -> sky
+  { from: "#0EA5E9", to: "#A78BFA" }, // sky -> violet
+  { from: "#22C55E", to: "#38BDF8" }, // green -> sky
+  { from: "#F97316", to: "#EC4899" }, // orange -> pink
 ];
 
 function CustomerAvatarTick({ x, y, payload, customers }: any) {
@@ -137,9 +137,9 @@ function OrdersRangeBarChart({ data, height }: { data: any[]; height: number }) 
   const isDark = theme === "dark";
 
   const tierColors = {
-    top: isDark ? "#d4a843" : "#2C5234",
-    mid: isDark ? "#7fbf8a" : "#4A8456",
-    rest: isDark ? "#9fc5a6" : "#77CF89",
+    top: isDark ? "#f5c04f" : "#7C3AED",
+    mid: isDark ? "#38bdf8" : "#0EA5E9",
+    rest: isDark ? "#34d399" : "#10B981",
   };
 
   const dataset = data.map((item, index) => {
@@ -404,7 +404,7 @@ export default function CustomerSpendingChart({
               <defs>
                 {chartData.map((_, i) => (
                   <linearGradient key={`revGrad-${i}`} id={`revGrad-${i}`} x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor={BAR_GRADIENTS[i % BAR_GRADIENTS.length].from} stopOpacity={0.25} />
+                    <stop offset="0%" stopColor={BAR_GRADIENTS[i % BAR_GRADIENTS.length].from} stopOpacity={0.38} />
                     <stop offset="100%" stopColor={BAR_GRADIENTS[i % BAR_GRADIENTS.length].to} stopOpacity={1} />
                   </linearGradient>
                 ))}

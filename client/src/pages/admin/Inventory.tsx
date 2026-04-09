@@ -16,6 +16,7 @@ import {
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Pagination } from "@/components/admin/Pagination";
 import {
   Dialog,
@@ -95,6 +96,33 @@ const INVENTORY_TABS: {
   { id: "movements", label: "Stock Movements", icon: ArrowUpRight },
   { id: "settings", label: "Settings", icon: Settings2 },
 ];
+
+
+function LoadingMetricValue({
+  toneClassName,
+  prefix = "",
+  digits = 5,
+}: {
+  toneClassName?: string;
+  prefix?: string;
+  digits?: number;
+}) {
+  const [value, setValue] = useState(() => Array.from({ length: digits }, (_, index) => String((index * 3 + 4) % 10)).join(""));
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setValue(Array.from({ length: digits }, () => Math.floor(Math.random() * 10).toString()).join(""));
+    }, 90);
+    return () => window.clearInterval(interval);
+  }, [digits]);
+
+  return (
+    <span className={cn("inline-flex min-h-[1em] items-center font-mono tabular-nums animate-pulse", toneClassName)}>
+      {prefix ? <span className="mr-1">{prefix}</span> : null}
+      {value}
+    </span>
+  );
+}
 
 export default function Inventory() {
   const [location, setLocation] = useLocation();
@@ -666,7 +694,7 @@ export default function Inventory() {
                     </div>
                     <p className="mt-6 text-sm font-medium text-muted-foreground">{card.label}</p>
                     <p className={cn("mt-2 text-3xl font-semibold tracking-tight", card.tone)}>
-                      {summaryLoading ? "..." : card.value}
+                      {summaryLoading ? <LoadingMetricValue toneClassName={card.tone} prefix={card.label.toLowerCase().includes("value") || card.label.toLowerCase().includes("cost") ? "रू" : ""} digits={card.label === "Total SKUs" ? 4 : 5} /> : card.value}
                     </p>
                     <p className="mt-2 text-xs text-muted-foreground">{card.subLabel}</p>
                   </div>
@@ -682,7 +710,7 @@ export default function Inventory() {
           {topSummaryCards.map((card) => (
             <div key={card.label} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{card.label}</p>
-              <p className={cn("mt-3 text-2xl font-semibold", card.tone)}>{summaryLoading ? "..." : card.value}</p>
+              <p className={cn("mt-3 text-2xl font-semibold", card.tone)}>{summaryLoading ? <LoadingMetricValue toneClassName={card.tone} prefix={card.label.toLowerCase().includes("value") || card.label.toLowerCase().includes("cost") ? "रू" : ""} digits={card.label === "Total SKUs" ? 4 : 5} /> : card.value}</p>
               <p className="mt-2 text-xs text-muted-foreground">{card.subLabel}</p>
             </div>
           ))}
@@ -703,17 +731,17 @@ export default function Inventory() {
             <div className="mt-5 grid gap-3 md:grid-cols-3">
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-emerald-700">In stock</p>
-                <p className="mt-2 text-2xl font-semibold text-emerald-800">{summary.inStockCount}</p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-800">{summaryLoading ? <LoadingMetricValue toneClassName="text-emerald-800" digits={4} /> : summary.inStockCount}</p>
                 <p className="mt-1 text-xs text-emerald-700/80">Items ready for selling right now</p>
               </div>
               <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-amber-700">Low stock</p>
-                <p className="mt-2 text-2xl font-semibold text-amber-800">{summary.lowStockCount}</p>
+                <p className="mt-2 text-2xl font-semibold text-amber-800">{summaryLoading ? <LoadingMetricValue toneClassName="text-amber-800" digits={4} /> : summary.lowStockCount}</p>
                 <p className="mt-1 text-xs text-amber-700/80">Good candidates for a fast replenishment</p>
               </div>
               <div className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-rose-700">Out of stock</p>
-                <p className="mt-2 text-2xl font-semibold text-rose-800">{summary.criticalStockCount}</p>
+                <p className="mt-2 text-2xl font-semibold text-rose-800">{summaryLoading ? <LoadingMetricValue toneClassName="text-rose-800" digits={4} /> : summary.criticalStockCount}</p>
                 <p className="mt-1 text-xs text-rose-700/80">Needs immediate action to restore availability</p>
               </div>
             </div>
@@ -872,7 +900,15 @@ export default function Inventory() {
             <div className="space-y-3">
               {inventoryQuery.isLoading
                 ? Array.from({ length: 5 }).map((_, index) => (
-                    <div key={index} className="h-36 animate-pulse rounded-2xl border border-border bg-muted/50" />
+                    <div key={index} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                      <Skeleton className="h-5 w-36" />
+                      <Skeleton className="mt-4 h-4 w-24" />
+                      <Skeleton className="mt-3 h-10 w-full rounded-xl" />
+                      <div className="mt-4 grid grid-cols-2 gap-3">
+                        <Skeleton className="h-9 rounded-xl" />
+                        <Skeleton className="h-9 rounded-xl" />
+                      </div>
+                    </div>
                   ))
                 : inventoryItems.map((item) => (
                     <InventoryCard
@@ -912,9 +948,21 @@ export default function Inventory() {
                       {inventoryQuery.isLoading
                         ? Array.from({ length: 8 }).map((_, index) => (
                             <tr key={index} className="border-t border-border">
-                              <td className="px-4 py-4" colSpan={7}>
-                                <div className="h-10 animate-pulse rounded-xl bg-muted" />
+                              <td className="px-4 py-4">
+                                <div className="flex items-center gap-3">
+                                  <Skeleton className="h-10 w-10 rounded-xl" />
+                                  <div className="space-y-2">
+                                    <Skeleton className="h-4 w-40" />
+                                    <Skeleton className="h-3 w-24" />
+                                  </div>
+                                </div>
                               </td>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-20" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-16" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-20" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-12" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
                             </tr>
                           ))
                         : paginatedInventory.map((item) => (

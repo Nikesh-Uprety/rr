@@ -1,0 +1,5 @@
+ALTER TABLE product_variants
+  ADD COLUMN IF NOT EXISTS compare_at_price integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS selling_price integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS cost_price integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS weight integer NOT NULL DEFAULT 0;

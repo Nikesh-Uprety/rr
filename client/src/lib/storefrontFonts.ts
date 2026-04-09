@@ -1,5 +1,7 @@
+const HELVETICA_STACK = "'RR Helvetica', 'Helvetica Neue', Helvetica, Arial, sans-serif";
+
 export const STOREFRONT_FONT_OPTIONS = [
-  { id: "inter", label: "Inter", description: "Clean sans for fast UI validation." },
+  { id: "inter", label: "Helvetica", description: "Bundled Helvetica family applied across the storefront." },
   { id: "roboto-slab", label: "Roboto Slab", description: "Editorial serif weight for hierarchy testing." },
   { id: "space-grotesk", label: "Space Grotesk", description: "Sharper modern product feel." },
   { id: "ibm-plex-sans", label: "IBM Plex Sans", description: "Structured SaaS-style reading rhythm." },
@@ -12,10 +14,10 @@ export const STOREFRONT_FONT_FAMILIES: Record<
   { display: string; body: string; mono: string; preview: string }
 > = {
   inter: {
-    display: "'Playfair Display', Georgia, serif",
-    body: "'Inter', sans-serif",
-    mono: "'DM Mono', monospace",
-    preview: "'Inter', ui-sans-serif, system-ui, sans-serif",
+    display: HELVETICA_STACK,
+    body: HELVETICA_STACK,
+    mono: HELVETICA_STACK,
+    preview: HELVETICA_STACK,
   },
   "roboto-slab": {
     display: "'Roboto Slab', 'Playfair Display', serif",

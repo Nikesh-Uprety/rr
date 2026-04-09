@@ -354,7 +354,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
   const shouldShowFooter = !isStuffyLanding;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="storefront-shell min-h-screen bg-background flex flex-col">
       {shouldShowNavbar ? <Navbar /> : null}
       {isCommerceFlow && commerceBreadcrumb ? (
         <div className="w-full border-b border-border/60 bg-background/95">

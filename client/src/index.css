@@ -1,8 +1,61 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Only 3 font families needed: Inter, Playfair Display, Space Mono */
-/* These are preloaded in index.html */
+@font-face {
+  font-family: "RR Helvetica";
+  src: url("./assets/fonts/helvetica/Helvetica-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RR Helvetica";
+  src: url("./assets/fonts/helvetica/Helvetica.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RR Helvetica";
+  src: url("./assets/fonts/helvetica/Helvetica-Oblique.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RR Helvetica";
+  src: url("./assets/fonts/helvetica/Helvetica-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RR Helvetica";
+  src: url("./assets/fonts/helvetica/Helvetica-BoldOblique.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RR Helvetica Compressed";
+  src: url("./assets/fonts/helvetica/Helvetica-Compressed.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "RR Helvetica Rounded";
+  src: url("./assets/fonts/helvetica/Helvetica-Rounded-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant warm (&:is(.warm *));
@@ -51,9 +104,9 @@
   --gold: #b99356;
   --gold-dim: rgba(185, 147, 86, 0.16);
   --border: rgba(0, 0, 0, 0.12);
-  --font-display: 'Playfair Display', Georgia, serif;
-  --font-body: 'DM Sans', sans-serif;
-  --font-mono: 'DM Mono', monospace;
+  --font-display: 'RR Helvetica', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-body: 'RR Helvetica', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-mono: 'RR Helvetica', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --nav-h: 68px;
   --ease: cubic-bezier(.4,0,.2,1);
   --background: 0 0% 100%;
@@ -316,6 +369,22 @@
 
   body.app-ready {
     @apply transition-colors duration-300;
+  }
+
+  .storefront-shell {
+    font-family: var(--font-body);
+  }
+
+  .storefront-shell :is(h1, h2, h3, h4, h5, h6, .font-serif) {
+    font-family: var(--font-display);
+  }
+
+  .storefront-shell :is(code, kbd, pre, samp, .font-mono) {
+    font-family: var(--font-mono);
+  }
+
+  .storefront-shell :is(button, input, textarea, select) {
+    font: inherit;
   }
   
   h1, h2, h3, h4, h5, h6, .font-serif {

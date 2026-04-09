@@ -143,18 +143,6 @@ export default function LegalPlaceholder() {
           className={`px-4 py-16 sm:px-6 lg:px-10 lg:py-20 ${isDark ? "bg-[#050505]" : "bg-white"}`}
         >
           <div className="mx-auto max-w-6xl">
-            <div className="mb-10 max-w-3xl">
-              <p className={`mb-4 text-[10px] font-semibold uppercase tracking-[0.34em] ${isDark ? "text-white/55" : "text-neutral-500"}`}>
-                Support
-              </p>
-              <h2 className={`text-3xl font-black uppercase tracking-tight sm:text-5xl ${isDark ? "text-white" : "text-neutral-950"}`}>
-                Get In Touch
-              </h2>
-              <p className={`mt-4 text-sm leading-7 sm:text-base ${isDark ? "text-white/75" : "text-neutral-600"}`}>
-                Reach out for support with orders, delivery, exchanges, fit questions, or any other
-                Customer Care assistance.
-              </p>
-            </div>
             <ContactInfo showMap />
           </div>
         </section>

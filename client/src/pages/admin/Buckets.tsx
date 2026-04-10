@@ -259,6 +259,12 @@ export default function AdminBucketsPage() {
     return assets.find((asset) => asset.id === selectedAssetId) ?? null;
   }, [assets, selectedAssetId]);
 
+  const getAssetThumbnailUrl = (asset?: AdminImageAsset | null) =>
+    asset?.thumbnailUrl ?? asset?.url ?? "";
+
+  const getAssetPreviewUrl = (asset?: AdminImageAsset | null) =>
+    asset?.previewUrl ?? asset?.url ?? "";
+
   const getDisplayName = (value?: string | null) => {
     if (!value) return "untitled";
     const base = value.split("/").pop() || value;
@@ -1163,7 +1169,7 @@ export default function AdminBucketsPage() {
                     >
                       <div className="relative aspect-square cursor-pointer">
                         <img
-                          src={asset.url ?? ""}
+                          src={getAssetThumbnailUrl(asset)}
                           alt={displayName}
                           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                           loading="lazy"
@@ -1280,7 +1286,7 @@ export default function AdminBucketsPage() {
                         </label>
                         <div className="h-12 w-12 overflow-hidden rounded-xl bg-muted">
                           <img
-                            src={asset.url ?? ""}
+                            src={getAssetThumbnailUrl(asset)}
                             alt={displayName}
                             className="h-full w-full object-cover"
                             loading="lazy"
@@ -1368,7 +1374,7 @@ export default function AdminBucketsPage() {
               <div className="space-y-4">
                 <div className="overflow-hidden rounded-2xl border border-border bg-muted">
                   <img
-                    src={selectedAsset.url ?? ""}
+                    src={getAssetPreviewUrl(selectedAsset)}
                     alt={selectedAsset.filename ?? "Asset preview"}
                     className="h-48 w-full object-cover"
                     decoding="async"

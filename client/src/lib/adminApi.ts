@@ -188,6 +188,9 @@ export async function deletePlatform(key: string): Promise<void> {
 export interface AdminImageAsset {
   id: string;
   url: string | null;
+  thumbnailUrl?: string | null;
+  previewUrl?: string | null;
+  downloadUrl?: string | null;
   provider: string;
   category: string;
   publicId: string | null;

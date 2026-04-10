@@ -28,6 +28,16 @@ if (cloudinaryUrl) {
 
 export { cloudinary };
 
+type CloudinaryDeliveryOptions = {
+  width?: number;
+  height?: number;
+  crop?: string;
+  gravity?: string;
+  quality?: string;
+  fetchFormat?: string;
+  dpr?: string;
+};
+
 function normalizeCloudinaryError(error: unknown, fallbackMessage: string): Error {
   if (error instanceof Error) return error;
   if (typeof error === "string") return new Error(error);
@@ -153,6 +163,34 @@ export async function uploadMediaToCloudinary(
       },
     );
     uploadStream.end(buffer);
+  });
+}
+
+export function buildCloudinaryDeliveryUrl(
+  publicId: string,
+  options?: CloudinaryDeliveryOptions,
+): string | null {
+  if (!publicId) return null;
+
+  const cloudName = cloudinary.config().cloud_name;
+  if (!cloudName) {
+    return null;
+  }
+
+  const transformation: Record<string, string | number> = {
+    crop: options?.crop ?? "limit",
+    quality: options?.quality ?? "auto:good",
+    fetch_format: options?.fetchFormat ?? "auto",
+    dpr: options?.dpr ?? "auto",
+  };
+
+  if (options?.width) transformation.width = options.width;
+  if (options?.height) transformation.height = options.height;
+  if (options?.gravity) transformation.gravity = options.gravity;
+
+  return cloudinary.url(publicId, {
+    secure: true,
+    transformation: [transformation],
   });
 }
 

@@ -90,6 +90,7 @@ import { ensureAdminProfileAccessStorage, getAdminPageAccessOverrides, getEffect
 import {
   uploadToCloudinary,
   deleteFromCloudinary,
+  buildCloudinaryDeliveryUrl,
   uploadMediaToCloudinary,
   uploadPaymentProofToCloudinary,
 } from "./lib/cloudinary";
@@ -97,6 +98,7 @@ import {
   importPublicDriveFolderToTigris,
   importPublicDriveProductsToCatalog,
 } from "./lib/publicGoogleDrive";
+import { tryNormalizeStoredObjectUrl } from "./s3-upload";
 
 const UPLOADS_DIR = resolveUploadsDir();
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
@@ -532,46 +534,75 @@ async function ensureMediaAssetsCompatibility() {
       !columns.has("expires_at") ? "expires_at" : null,
     ].filter((value): value is string => Boolean(value));
 
-    if (missingColumns.length === 0) {
-      return;
-    }
+    if (missingColumns.length > 0) {
+      logger.warn(
+        "media_assets compatibility columns missing; applying lightweight schema patch",
+        undefined,
+        undefined,
+        { missingColumns },
+      );
 
-    logger.warn(
-      "media_assets compatibility columns missing; applying lightweight schema patch",
-      undefined,
-      undefined,
-      { missingColumns },
-    );
-
-    await db.execute(sql`
-      alter table media_assets
-      add column if not exists folder_path text,
-      add column if not exists asset_type text default 'file',
-      add column if not exists expires_at timestamp with time zone
-    `);
-    await db.execute(sql`
-      update media_assets
-      set asset_type = 'file'
-      where asset_type is null or length(trim(asset_type)) = 0
-    `);
-    await db.execute(sql`
-      alter table media_assets
-      alter column asset_type set default 'file'
-    `);
-
-    const nullAssetTypeRows = await db.execute(sql`
-      select count(*)::int as count
-      from media_assets
-      where asset_type is null
-    `);
-    const countRow = nullAssetTypeRows.rows[0] as { count?: number | string } | undefined;
-    const nullCount = Number(countRow?.count ?? 0);
-
-    if (nullCount === 0) {
       await db.execute(sql`
         alter table media_assets
-        alter column asset_type set not null
+        add column if not exists folder_path text,
+        add column if not exists asset_type text default 'file',
+        add column if not exists expires_at timestamp with time zone
       `);
+      await db.execute(sql`
+        update media_assets
+        set asset_type = 'file'
+        where asset_type is null or length(trim(asset_type)) = 0
+      `);
+      await db.execute(sql`
+        alter table media_assets
+        alter column asset_type set default 'file'
+      `);
+
+      const nullAssetTypeRows = await db.execute(sql`
+        select count(*)::int as count
+        from media_assets
+        where asset_type is null
+      `);
+      const countRow = nullAssetTypeRows.rows[0] as { count?: number | string } | undefined;
+      const nullCount = Number(countRow?.count ?? 0);
+
+      if (nullCount === 0) {
+        await db.execute(sql`
+          alter table media_assets
+          alter column asset_type set not null
+        `);
+      }
+    }
+
+    const performanceStatements = [
+      sql`create index concurrently if not exists media_assets_listing_idx on media_assets (asset_type, category, provider, folder_path, created_at desc)`,
+      sql`create index concurrently if not exists media_assets_root_listing_idx on media_assets (asset_type, category, provider, created_at desc) where folder_path is null`,
+      sql`create index concurrently if not exists media_assets_folder_lookup_idx on media_assets (category, provider, asset_type, folder_path)`,
+      sql`create index concurrently if not exists media_assets_name_sort_idx on media_assets (asset_type, category, provider, folder_path, lower(filename))`,
+      sql`create index concurrently if not exists media_assets_size_sort_idx on media_assets (asset_type, category, provider, folder_path, bytes)`,
+      sql`create index concurrently if not exists media_assets_expiry_idx on media_assets (expires_at)`,
+    ];
+
+    for (const statement of performanceStatements) {
+      await db.execute(statement);
+    }
+
+    try {
+      await db.execute(sql`create extension if not exists pg_trgm`);
+      const trigramStatements = [
+        sql`create index concurrently if not exists media_assets_filename_trgm_idx on media_assets using gin (filename gin_trgm_ops)`,
+        sql`create index concurrently if not exists media_assets_public_id_trgm_idx on media_assets using gin (public_id gin_trgm_ops)`,
+      ];
+
+      for (const statement of trigramStatements) {
+        await db.execute(statement);
+      }
+    } catch (error) {
+      logger.warn(
+        "pg_trgm extension unavailable; skipping media search trigram indexes",
+        undefined,
+        error,
+      );
     }
   })().catch((error) => {
     mediaAssetsCompatEnsured = null;
@@ -592,6 +623,71 @@ function sanitizeUploadFilename(name: string) {
     .replace(/^-+|-+$/g, "");
   const safeBody = body || "image";
   return `${safeBody}${ext || ".jpg"}`;
+}
+
+type AdminMediaAssetRecord = {
+  id: string;
+  url: string | null;
+  provider: string;
+  category: string;
+  publicId: string | null;
+  filename: string | null;
+  bytes: number | null;
+  width: number | null;
+  height: number | null;
+  folderPath: string | null;
+  assetType: string | null;
+  expiresAt: Date | null;
+  createdAt: Date | null;
+};
+
+function normalizeAdminMediaAssetUrl(url: string | null): string | null {
+  if (!url) return null;
+  return tryNormalizeStoredObjectUrl(url) ?? url;
+}
+
+function buildAdminMediaAssetThumbnailUrl(asset: AdminMediaAssetRecord): string | null {
+  const normalizedUrl = normalizeAdminMediaAssetUrl(asset.url);
+  if (asset.provider === "cloudinary" && asset.publicId) {
+    return (
+      buildCloudinaryDeliveryUrl(asset.publicId, {
+        width: 480,
+        height: 480,
+        crop: "fill",
+        gravity: "auto",
+        quality: "auto:good",
+      }) ?? normalizedUrl
+    );
+  }
+
+  return normalizedUrl;
+}
+
+function buildAdminMediaAssetPreviewUrl(asset: AdminMediaAssetRecord): string | null {
+  const normalizedUrl = normalizeAdminMediaAssetUrl(asset.url);
+  if (asset.provider === "cloudinary" && asset.publicId) {
+    return (
+      buildCloudinaryDeliveryUrl(asset.publicId, {
+        width: 1400,
+        crop: "limit",
+        quality: "auto:good",
+      }) ?? normalizedUrl
+    );
+  }
+
+  return normalizedUrl;
+}
+
+function serializeAdminMediaAsset(asset: AdminMediaAssetRecord) {
+  const normalizedUrl = normalizeAdminMediaAssetUrl(asset.url);
+
+  return {
+    ...asset,
+    url: normalizedUrl,
+    thumbnailUrl: buildAdminMediaAssetThumbnailUrl(asset),
+    previewUrl: buildAdminMediaAssetPreviewUrl(asset),
+    downloadUrl: normalizedUrl,
+  };
 }
 function ensurePaymentProofUploadsDir() {
   if (!fs.existsSync(PAYMENT_PROOFS_DIR)) {
@@ -9707,7 +9803,7 @@ ${Array.from(uniqueEntries.entries())
     try {
       const category = getQueryParam(req.query.category);
       const provider = getQueryParam(req.query.provider);
-      const search = getQueryParam(req.query.search);
+      const search = getQueryParam(req.query.search)?.trim() ?? "";
       const folderPathParam = getQueryParam(req.query.folderPath);
       const assetTypeParam = getQueryParam(req.query.assetType);
       const expiredParam = getQueryParam(req.query.expired);
@@ -9744,11 +9840,17 @@ ${Array.from(uniqueEntries.entries())
 
       if (search) {
         const q = `%${search}%`;
-        const searchCondition = or(
+        const searchConditions = [
           ilike(mediaAssets.filename, q),
           ilike(mediaAssets.url, q),
           ilike(mediaAssets.publicId, q),
-        );
+        ];
+
+        if (!/[/:.?]/.test(search)) {
+          searchConditions.splice(1, 1);
+        }
+
+        const searchCondition = or(...searchConditions);
         if (searchCondition) {
           conditions.push(searchCondition);
         }
@@ -9762,11 +9864,6 @@ ${Array.from(uniqueEntries.entries())
 
       const where = and(...conditions);
 
-      const [countRow] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(mediaAssets)
-        .where(where);
-
       const sortColumn =
         sortBy === "name"
           ? sql`lower(${mediaAssets.filename})`
@@ -9774,15 +9871,39 @@ ${Array.from(uniqueEntries.entries())
             ? mediaAssets.bytes
             : mediaAssets.createdAt;
 
+      const mediaAssetSelection = {
+        id: mediaAssets.id,
+        url: mediaAssets.url,
+        provider: mediaAssets.provider,
+        category: mediaAssets.category,
+        publicId: mediaAssets.publicId,
+        filename: mediaAssets.filename,
+        bytes: mediaAssets.bytes,
+        width: mediaAssets.width,
+        height: mediaAssets.height,
+        folderPath: mediaAssets.folderPath,
+        assetType: mediaAssets.assetType,
+        expiresAt: mediaAssets.expiresAt,
+        createdAt: mediaAssets.createdAt,
+      };
+
       const rows = await db
-        .select()
+        .select({
+          ...mediaAssetSelection,
+          totalCount: sql<number>`count(*) over()`,
+        })
         .from(mediaAssets)
         .where(where)
         .orderBy(sortDir === "asc" ? asc(sortColumn) : desc(sortColumn))
         .limit(limit)
         .offset(offset);
 
-      return res.json({ success: true, data: rows, total: Number(countRow?.count ?? 0) });
+      const total = rows.length > 0 ? Number(rows[0]?.totalCount ?? 0) : 0;
+      const data = rows.map(({ totalCount: _totalCount, ...asset }) =>
+        serializeAdminMediaAsset(asset as AdminMediaAssetRecord),
+      );
+
+      return res.json({ success: true, data, total });
     } catch (err) {
       handleApiError(res, err, "GET /api/admin/images");
     }

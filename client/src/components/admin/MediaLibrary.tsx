@@ -88,6 +88,8 @@ export function MediaLibrary({
           return local.map((item) => ({
             id: item.relPath,
             url: item.url,
+            thumbnailUrl: item.url,
+            previewUrl: item.url,
             provider: "local",
             category: "local",
             publicId: null,
@@ -106,6 +108,8 @@ export function MediaLibrary({
           return local.map((item) => ({
             id: item.relPath,
             url: item.url,
+            thumbnailUrl: item.url,
+            previewUrl: item.url,
             provider: "local",
             category: "local",
             publicId: null,
@@ -153,6 +157,7 @@ export function MediaLibrary({
         .map((asset) => ({
           id: asset.id,
           url: asset.url,
+          thumbnailUrl: asset.thumbnailUrl ?? asset.url,
           filename: asset.filename ?? asset.url.split("/").pop() ?? "image",
           category: asset.category || "uncategorized",
           provider: asset.provider || "unknown",
@@ -290,13 +295,14 @@ export function MediaLibrary({
                       )}
                     >
                       <img
-                        src={img.url}
+                        src={img.thumbnailUrl ?? img.url}
                         alt=""
                         className={cn(
                           "h-full w-full object-cover transition-transform duration-300 group-hover:scale-105",
                           isSelected && "opacity-90",
                         )}
                         loading="lazy"
+                        decoding="async"
                       />
                       {isSelected && (
                         <div className="absolute inset-0 flex items-center justify-center bg-primary/10">

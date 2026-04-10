@@ -17,7 +17,7 @@ import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import Footer from "@/components/layout/Footer";
 import { TopLoadingBar } from "@/components/layout/TopLoadingBar";
 import CartSidebar from "@/components/layout/CartSidebar";
-import { fetchCategories, fetchPageConfig, fetchProducts } from "@/lib/api";
+import { fetchPageConfig, fetchProducts } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Wifi, WifiOff } from "lucide-react";
 import SentryTest from "@/components/SentryTest";
@@ -29,6 +29,7 @@ import {
 
 const loadHomePage = () => import("@/pages/storefront/Home");
 const loadProductsPage = () => import("@/pages/storefront/Products");
+const loadGalleryPage = () => import("@/pages/storefront/Gallery");
 const loadProductDetailPage = () => import("@/pages/storefront/ProductDetail");
 const loadNewCollectionPage = () => import("@/pages/storefront/NewCollection");
 const loadAtelierPage = () => import("@/pages/storefront/Contact");
@@ -65,6 +66,7 @@ const loadViewBillPage = () => import("@/pages/storefront/ViewBill");
 
 const Home = lazy(loadHomePage);
 const Products = lazy(loadProductsPage);
+const Gallery = lazy(loadGalleryPage);
 const ProductDetail = lazy(loadProductDetailPage);
 const NewCollection = lazy(loadNewCollectionPage);
 const Contact = lazy(loadAtelierPage);
@@ -208,6 +210,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
 
   if (cleanPath === "/" || cleanPath === "") return loadHomePage();
   if (cleanPath === "/products" || cleanPath === "/shop") return loadProductsPage();
+  if (cleanPath === "/gallery") return loadGalleryPage();
   if (cleanPath.startsWith("/product/")) return loadProductDetailPage();
   if (cleanPath === "/new-collection") return loadNewCollectionPage();
   if (cleanPath === "/atelier") return loadAtelierPage();
@@ -254,15 +257,17 @@ function preloadRouteData(path: string): Promise<unknown> {
   if (cleanPath === "/products" || cleanPath === "/shop") {
     return Promise.allSettled([
       queryClient.prefetchQuery({
-        queryKey: ["categories"],
-        queryFn: fetchCategories,
+        queryKey: ["products", { category: undefined, page: 1, limit: 24 }],
+        queryFn: () => fetchProducts({ page: 1, limit: 24 }),
       }),
+    ]);
+  }
+
+  if (cleanPath === "/gallery") {
+    return Promise.allSettled([
       queryClient.prefetchQuery({
-        queryKey: [
-          "products",
-          { category: undefined, search: undefined, sortBy: "newest", page: 1 },
-        ],
-        queryFn: () => fetchProducts({ page: 1 }).then(r => r.products),
+        queryKey: ["products", "gallery", { page: 1, limit: 18 }],
+        queryFn: () => fetchProducts({ page: 1, limit: 18 }),
       }),
     ]);
   }
@@ -585,6 +590,11 @@ function AppRoutes() {
       <Route path="/products">
         <StorefrontLayout>
           <Products />
+        </StorefrontLayout>
+      </Route>
+      <Route path="/gallery">
+        <StorefrontLayout>
+          <Gallery />
         </StorefrontLayout>
       </Route>
       <Route path="/shop">
@@ -1027,6 +1037,7 @@ function App() {
       }
 
       void loadProductsPage();
+      void loadGalleryPage();
       void loadProductDetailPage();
       void loadNewCollectionPage();
       void loadAtelierPage();

@@ -146,7 +146,7 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
   }, []);
 
   const goShop = () => setLocation("/shop");
-  const goNewCollection = () => setLocation("/new-collection");
+  const goGallery = () => setLocation("/gallery");
   const goAtelierContact = () => {
     setLocation("/atelier");
     queueMicrotask(() => {
@@ -160,9 +160,9 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
       case "shop":
         goShop();
         return;
-      case "/new-collection":
-      case "new-collection":
-        goNewCollection();
+      case "/gallery":
+      case "gallery":
+        goGallery();
         return;
       case "atelier-contact":
       case "/atelier#contact":
@@ -202,8 +202,8 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
         {
           title: "Made In Nepal",
           text: "All our products are handmade locally, supporting Nepali creators",
-          buttonLabel: "See Products",
-          target: "/new-collection",
+          buttonLabel: "View Gallery",
+          target: "/gallery",
         },
         {
           title: "Easy Exchange",

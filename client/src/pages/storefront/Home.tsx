@@ -784,11 +784,11 @@ export default function Home() {
                   </li>
                   <li>
                     <Link
-                      href="/new-collection"
+                      href="/gallery"
                       className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
                       style={{ color: landingForeground }}
                     >
-                      Collection
+                      Gallery
                     </Link>
                   </li>
                   <li>
@@ -866,14 +866,14 @@ export default function Home() {
               }}
             >
               <Link
-                href="/new-collection"
+                href="/gallery"
                 className="inline-flex h-14 w-14 items-center justify-center rounded-full border backdrop-blur-md transition-transform duration-300 hover:-translate-y-1 sm:h-16 sm:w-16"
                 style={{
                   color: landingForeground,
                   borderColor: isDarkTheme ? "rgba(255,255,255,0.4)" : "rgba(17,17,17,0.28)",
                   background: isDarkTheme ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.42)",
                 }}
-                aria-label="Go to new collection"
+                aria-label="Go to gallery"
               >
                 <ArrowUpRight className="h-6 w-6" />
               </Link>

@@ -46,8 +46,8 @@ const DEFAULT_NIKESH_SLIDES = [
     headline: "Street Atelier",
     eyebrow: "Where craft meets the city",
     body: "Where craft meets the city",
-    ctaLabel: "View Collection",
-    ctaHref: "/new-collection",
+    ctaLabel: "View Gallery",
+    ctaHref: "/gallery",
   },
   {
     tag: "Footwear",

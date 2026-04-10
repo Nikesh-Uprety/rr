@@ -81,13 +81,17 @@ export default function Navbar() {
   const isStorefront = !location.startsWith("/admin");
   const isHomeRoute = location === "/";
   const isAtelierRoute = location === "/atelier";
+  const isProductsRoute = location === "/products";
   const isProductDetailRoute = /^\/product\/[^/]+/.test(location);
   const isStuffyProductDetail = isStuffyClone && isProductDetailRoute;
+  const isStuffyProductsRoute = isStuffyClone && isProductsRoute;
   const isHeroRoute = isHomeRoute || isAtelierRoute;
   const isInnerStorefrontRoute = isStorefront && !isHeroRoute;
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] = useState(false);
   const isTransparentState = !hasScrolledPastThreshold;
-  const shouldUseChrome = hasScrolledPastThreshold || isInnerStorefrontRoute;
+  const shouldUseChrome = isProductsRoute
+    ? hasScrolledPastThreshold
+    : hasScrolledPastThreshold || isInnerStorefrontRoute;
   const useHeroContrastState = isTransparentState && isHeroRoute;
   const isDark = theme === "dark";
   const dashboardPath = user
@@ -185,7 +189,7 @@ export default function Navbar() {
     if (isStuffyClone) {
       return [
         { name: "Shop", href: "/products" },
-        { name: "Collection", href: "/new-collection" },
+        { name: "Gallery", href: "/gallery" },
         { name: "Our Services", href: "/atelier" },
         { name: "FAQ", href: "/shipping" },
         { name: "Customer Care", href: "/refund" },
@@ -197,7 +201,7 @@ export default function Navbar() {
     return [
       { name: "Home", href: "/" },
       { name: "Shop", href: "/products" },
-      { name: "Collection", href: "/new-collection" },
+      { name: "Gallery", href: "/gallery" },
       { name: "Atelier", href: "/atelier" },
     ];
   }, [isStuffyClone]);
@@ -217,25 +221,25 @@ export default function Navbar() {
         subtitle: "Quickly jump to key storefront experiences from one clean overview.",
         links: [
           { label: "Shop Essentials", href: "/products", description: "Browse all products", icon: Shirt },
-          { label: "Featured Collection", href: "/new-collection", description: "Explore latest curated drops", icon: Layers },
+          { label: "Brand Gallery", href: "/gallery", description: "Explore campaign and collab media", icon: Sparkles },
           { label: "Atelier Contact", href: "/atelier", description: "Talk to our team", icon: PhoneCall },
           { label: "View Bag", href: "/cart", description: "Review selected items", icon: ShoppingBag },
         ],
       },
       "/products": {
         title: "Shop",
-        subtitle: "Filter by category, size, stock, and discover products faster.",
+        subtitle: "A faster, cleaner product grid built for quick scanning.",
         links: [
           { label: "All Products", href: "/products", description: "Complete catalog", icon: Compass },
-          { label: "New Collection", href: "/new-collection", description: "Latest editorial set", icon: Sparkles },
+          { label: "Brand Gallery", href: "/gallery", description: "Campaign and collab imagery", icon: Sparkles },
           { label: "Go To Cart", href: "/cart", description: "Continue checkout journey", icon: ShoppingBag },
         ],
       },
-      "/new-collection": {
-        title: "Collection",
-        subtitle: "Editorial narratives and focused product storytelling.",
+      "/gallery": {
+        title: "Gallery",
+        subtitle: "Campaign frames, collab motion, and the wider Rare Atelier visual world.",
         links: [
-          { label: "Collection Story", href: "/new-collection", description: "View current collection", icon: Layers },
+          { label: "Editorial Gallery", href: "/gallery", description: "View the brand archive", icon: Layers },
           { label: "Shop Products", href: "/products", description: "Return to full catalog", icon: Shirt },
           { label: "Contact Atelier", href: "/atelier", description: "Ask about fit and delivery", icon: PhoneCall },
         ],
@@ -246,7 +250,7 @@ export default function Navbar() {
         links: [
           { label: "Contact Page", href: "/atelier", description: "Reach us directly", icon: PhoneCall },
           { label: "Browse Shop", href: "/products", description: "Continue shopping", icon: Shirt },
-          { label: "New Collection", href: "/new-collection", description: "Discover latest drop", icon: Sparkles },
+          { label: "Brand Gallery", href: "/gallery", description: "View campaign visuals", icon: Sparkles },
         ],
       },
     }),
@@ -305,13 +309,17 @@ export default function Navbar() {
 
   const announcementItems = [...ANNOUNCEMENT_ITEMS, ...ANNOUNCEMENT_ITEMS];
   const announceHeight = announceRef.current?.offsetHeight ?? 28;
-  const forceSolidLightNavbar = isInnerStorefrontRoute;
+  const forceSolidLightNavbar = isInnerStorefrontRoute && !isProductsRoute;
+  const useProductsGlassChrome = isProductsRoute;
+  const productsNavPaddingClass = "px-3 pr-1 sm:px-4 sm:pr-2 lg:px-6 xl:px-7 2xl:px-8";
   const isHeroMegaOpen = isHeroRoute && !hasScrolledPastThreshold && Boolean(activeMegaNavHref);
   const isStuffyLanding = isStuffyClone && location === "/";
   const shouldUseDarkStuffyChrome = isStuffyClone && theme === "dark";
   const navForegroundColor = isHeroMegaOpen
     ? "#111111"
     : forceSolidLightNavbar
+    ? "#111111"
+    : useProductsGlassChrome
     ? "#111111"
     : useHeroContrastState
       ? "#ffffff"
@@ -327,6 +335,8 @@ export default function Navbar() {
         borderColor: "rgba(0,0,0,0.08)",
         boxShadow: "0 1px 0 rgba(0,0,0,0.05)",
       }
+    : useProductsGlassChrome
+    ? getGlassChrome("light", { active: shouldUseChrome })
     : forceSolidLightNavbar
     ? getInnerPageChrome(isDark)
     : getGlassChrome(isDark ? "light" : "dark", { active: shouldUseChrome });
@@ -584,11 +594,17 @@ export default function Navbar() {
   if (isStuffyClone) {
     const chromeColor = isStuffyLanding
       ? "rgba(255,255,255,0.96)"
+      : isStuffyProductsRoute
+        ? "rgba(17,17,17,0.94)"
       : theme === "dark"
         ? "rgba(255,255,255,0.92)"
         : "rgba(17,17,17,0.92)";
     const chromeBg = isStuffyLanding
       ? "transparent"
+      : isStuffyProductsRoute && !isScrolled
+        ? "transparent"
+      : isStuffyProductsRoute
+        ? "linear-gradient(135deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.68) 50%, rgba(248,246,242,0.62) 100%)"
       : isStuffyProductDetail && !isScrolled
         ? "transparent"
       : isStuffyProductDetail
@@ -600,6 +616,10 @@ export default function Navbar() {
         : "#ffffff";
     const chromeBorder = isStuffyLanding
       ? "transparent"
+      : isStuffyProductsRoute && !isScrolled
+        ? "transparent"
+      : isStuffyProductsRoute
+        ? "rgba(17,17,17,0.08)"
       : isStuffyProductDetail && !isScrolled
         ? "transparent"
       : isStuffyProductDetail
@@ -609,9 +629,16 @@ export default function Navbar() {
       : theme === "dark"
         ? "rgba(255,255,255,0.10)"
         : "rgba(17,17,17,0.10)";
-    const chromeBackdrop = isStuffyLanding || (isStuffyProductDetail && !isScrolled) ? "none" : "blur(14px)";
+    const chromeBackdrop =
+      isStuffyLanding || (isStuffyProductDetail && !isScrolled) || (isStuffyProductsRoute && !isScrolled)
+        ? "none"
+        : "blur(18px) saturate(150%)";
     const landingControlBackground = isStuffyLanding
       ? "transparent"
+      : isStuffyProductsRoute
+      ? isScrolled
+        ? "rgba(255,255,255,0.62)"
+        : "rgba(255,255,255,0.42)"
       : isStuffyProductDetail
       ? theme === "dark"
         ? "rgba(15,23,42,0.18)"
@@ -621,11 +648,15 @@ export default function Navbar() {
         : "#ffffff";
     const landingControlBorder = isStuffyLanding
       ? "transparent"
+      : isStuffyProductsRoute
+        ? "rgba(17,17,17,0.10)"
       : theme === "dark"
         ? "rgba(255,255,255,0.10)"
         : "rgba(17,17,17,0.10)";
     const landingControlShadow = isStuffyLanding
       ? "none"
+      : isStuffyProductsRoute
+      ? "0 12px 34px rgba(15,23,42,0.08)"
       : theme === "dark"
       ? "0 12px 30px rgba(0,0,0,0.24)"
       : "0 12px 30px rgba(15,23,42,0.08)";
@@ -635,50 +666,49 @@ export default function Navbar() {
         {mobileMenu}
         <header className="fixed inset-x-0 top-0 z-[110] pointer-events-auto">
           <div
-            className="relative flex w-full items-center justify-between gap-3 px-4 py-4 sm:px-6 md:px-8"
+            className={`grid w-full items-center gap-3 py-4 ${isStuffyProductsRoute ? productsNavPaddingClass : "px-4 sm:px-6 md:px-8"}`}
             style={{
+              gridTemplateColumns: "minmax(0,1fr) auto minmax(0,1fr)",
               background: chromeBg,
               borderBottom: `1px solid ${chromeBorder}`,
               backdropFilter: chromeBackdrop,
+              WebkitBackdropFilter: chromeBackdrop,
               paddingTop: "max(env(safe-area-inset-top), 1rem)",
               paddingRight: "max(env(safe-area-inset-right), 2px)",
               paddingLeft: "max(env(safe-area-inset-left), 2px)",
             }}
             
           >
-            <button
-              type="button"
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="group inline-flex min-h-11 items-center gap-3 rounded-full px-3 py-2 text-[13px] font-bold uppercase tracking-[0.28em] transition-opacity hover:opacity-80 sm:px-4 sm:text-[14px]"
-              style={{
-                color: chromeColor,
-                fontFamily: '"Archivo Narrow", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
-                background: landingControlBackground,
-                border: `1px solid ${landingControlBorder}`,
-                boxShadow: landingControlShadow,
-              }}
-              aria-label="Open menu"
-            >
-              <span className="flex w-5 flex-col gap-1.5" aria-hidden="true">
-                <span className="h-px w-3 bg-current transition-all duration-300 ease-out group-hover:w-5" />
-                <span className="h-px w-5 bg-current transition-all duration-300 ease-out" />
-                <span className="h-px w-4 self-end bg-current transition-all duration-300 ease-out group-hover:w-2" />
-              </span>
-              <span>Menu</span>
-            </button>
+            <div className="flex items-center justify-start">
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(true)}
+                className="group inline-flex min-h-11 items-center gap-3 rounded-full px-3 py-2 text-[13px] font-bold uppercase tracking-[0.28em] transition-opacity hover:opacity-80 sm:px-4 sm:text-[14px]"
+                style={{
+                  color: chromeColor,
+                  fontFamily: '"Archivo Narrow", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+                  background: landingControlBackground,
+                  border: `1px solid ${landingControlBorder}`,
+                  boxShadow: landingControlShadow,
+                }}
+                aria-label="Open menu"
+              >
+                <span className="flex w-5 flex-col gap-1.5" aria-hidden="true">
+                  <span className="h-px w-3 bg-current transition-all duration-300 ease-out group-hover:w-5" />
+                  <span className="h-px w-5 bg-current transition-all duration-300 ease-out" />
+                  <span className="h-px w-4 self-end bg-current transition-all duration-300 ease-out group-hover:w-2" />
+                </span>
+                <span>Menu</span>
+              </button>
+            </div>
 
-            <div
-              className="pointer-events-none absolute inset-x-0 top-0 flex justify-center px-20 sm:px-28 md:px-36"
-              style={{
-                paddingTop: "max(env(safe-area-inset-top), 1rem)",
-              }}
-            >
+            <div className="flex items-center justify-center">
               {isStuffyLanding ? null : (
-                <Link href="/" className="pointer-events-auto inline-flex items-center justify-center">
+                <Link href="/" className="inline-flex items-center justify-center">
                   <img
                     src={STOREFRONT_HEADER_LOGO}
                     alt="Rare Atelier"
-                    className="h-auto w-[6.6rem] object-contain sm:w-[6.9rem]"
+                    className="h-auto w-[5.7rem] object-contain sm:w-[6rem]"
                     style={{
                       filter: getStorefrontLogoFilter({
                         branding: null,
@@ -691,7 +721,7 @@ export default function Navbar() {
               )}
             </div>
 
-            <div className="ml-auto flex items-center justify-end gap-2 sm:gap-2.5">
+            <div className="flex items-center justify-end gap-2 sm:gap-2.5">
               <div className="[&>div>div]:border-none [&>div>div]:bg-transparent">
                 <SearchBar iconColor={chromeColor} minimal={isStuffyLanding && theme !== "dark"} />
               </div>
@@ -715,14 +745,18 @@ export default function Navbar() {
           transform: isNavHidden ? "translateY(-115%)" : "translateY(0)",
           background: navChrome.background,
           backdropFilter: navChrome.backdropFilter,
+          WebkitBackdropFilter: navChrome.WebkitBackdropFilter,
           borderBottom: `1px solid ${navChrome.borderColor}`,
           boxShadow: navChrome.boxShadow,
         }}
       >
-        <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
+        <div className={isProductsRoute ? productsNavPaddingClass : "mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8"}>
           <div
             className="grid items-center gap-4 py-4"
-            style={{ gridTemplateColumns: "1fr auto 1fr", minHeight: "var(--nav-h)" }}
+            style={{
+              gridTemplateColumns: "minmax(0,1fr) auto minmax(0,1fr)",
+              minHeight: "var(--nav-h)",
+            }}
           >
             <div className="hidden items-center gap-6 lg:flex">
               {navLinks.map((item) => (
@@ -780,11 +814,11 @@ export default function Navbar() {
               </button>
             </div>
 
-            <Link href="/" className="flex justify-self-center items-center justify-center pt-1 text-center">
+            <Link href="/" className="flex items-center justify-center justify-self-center text-center">
               <img
                 src={STOREFRONT_HEADER_LOGO}
                 alt="Rare Atelier"
-                className="mx-auto h-auto w-[6.6rem] object-contain sm:w-[6.9rem]"
+                className="mx-auto h-auto w-[5.7rem] object-contain sm:w-[6rem]"
                 style={{
                   filter: getStorefrontLogoFilter({
                     branding: null,

@@ -1,32 +1,20 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownWideNarrow, ExternalLink, Palette, Ruler, Sparkles, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { fetchProducts, fetchCategories, fetchPageConfig, type ProductApi } from "@/lib/api";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+import { fetchPageConfig, fetchProducts, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
-import { StorefrontBreadcrumbs } from "@/components/product/StorefrontBreadcrumbs";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useThemeStore } from "@/store/theme";
-import { canAccessAdminPanel } from "@shared/auth-policy";
-import { getDefaultAdminPath } from "@/lib/adminAccess";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
-function parseJsonArray(s: string | null | undefined): string[] {
-  if (!s || !s.trim()) return [];
+function parseJsonArray(value: string | null | undefined): string[] {
+  if (!value?.trim()) return [];
+
   try {
-    const a = JSON.parse(s);
-    return Array.isArray(a)
-      ? a.filter((x): x is string => typeof x === "string")
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
       : [];
   } catch {
     return [];
@@ -111,48 +99,25 @@ function getHoverImage(product: ProductApi): string {
   return (gallery[1] ?? main) as string;
 }
 
-const SORT_LABELS: Record<string, string> = {
-  newest: "Newest",
-  "price-low": "Price Low",
-  "price-high": "Price High",
-  "best-seller": "Best Seller",
-  "highest-stock": "Highest Stock",
-};
-
 function readShopSearchParams() {
   const searchParams = new URLSearchParams(window.location.search);
 
   return {
-    category: searchParams.get("category") || "all",
-    sortBy: searchParams.get("sort") || "newest",
-    stockFilter: searchParams.get("stock") || "all",
-    sizeFilter: searchParams.get("size") || "all",
-    colorFilter: searchParams.get("color") || "all",
     page: Math.max(1, Number.parseInt(searchParams.get("page") || "1", 10) || 1),
   };
 }
 
 export default function Products() {
   const initialState = readShopSearchParams();
-  const { theme } = useThemeStore();
-  const isDark = theme === "dark";
-
-  const [category, setCategory] = useState<string>(initialState.category);
-  const [sortBy, setSortBy] = useState(initialState.sortBy);
-  const [stockFilter, setStockFilter] = useState(initialState.stockFilter);
-  const [sizeFilter, setSizeFilter] = useState(initialState.sizeFilter);
-  const [colorFilter, setColorFilter] = useState(initialState.colorFilter);
-  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [page, setPage] = useState(initialState.page);
   const [selectedCardColors, setSelectedCardColors] = useState<Record<string, string>>({});
   const [hoveredCardColors, setHoveredCardColors] = useState<Record<string, string | null>>({});
-  const hasInitializedFilters = useRef(false);
   const previewTemplateId = useMemo(() => {
     if (typeof window === "undefined") return null;
     const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
     return rawValue && /^\d+$/.test(rawValue) ? rawValue : null;
   }, []);
-  const { user, isAuthenticated } = useCurrentUser({ enabled: previewTemplateId === null });
+
   const { data: pageConfig } = useQuery({
     queryKey: ["page-config", previewTemplateId],
     queryFn: () => fetchPageConfig(previewTemplateId),
@@ -160,470 +125,63 @@ export default function Products() {
     refetchOnMount: previewTemplateId !== null ? "always" : false,
     refetchOnWindowFocus: previewTemplateId !== null,
   });
+
   const isStuffyClone = pageConfig?.template?.slug === "stuffyclone";
-  const pageSize = isStuffyClone ? 16 : 10;
-  const storefrontSelectTheme = useMemo(
-    () => ({
-      backgroundColor: isDark ? "#161b22" : "#ffffff",
-      color: isDark ? "#e6edf3" : "#111111",
-      colorScheme: isDark ? ("dark" as const) : ("light" as const),
-    }),
-    [isDark],
-  );
-
-  const shopPath = useMemo(() => {
-    const params = new URLSearchParams();
-
-    if (category !== "all") params.set("category", category);
-    if (sortBy !== "newest") params.set("sort", sortBy);
-    if (stockFilter !== "all") params.set("stock", stockFilter);
-    if (sizeFilter !== "all") params.set("size", sizeFilter);
-    if (colorFilter !== "all") params.set("color", colorFilter);
-    if (page > 1) params.set("page", String(page));
-
-    const query = params.toString();
-    return `/products${query ? `?${query}` : ""}`;
-  }, [category, colorFilter, page, sizeFilter, sortBy, stockFilter]);
-
-  useEffect(() => {
-    if (!isSortMenuOpen) return;
-
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    const previousBodyOverscroll = document.body.style.overscrollBehaviorY;
-    const previousHtmlOverscroll = document.documentElement.style.overscrollBehaviorY;
-
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-    document.body.style.overscrollBehaviorY = "none";
-    document.documentElement.style.overscrollBehaviorY = "none";
-
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
-      document.body.style.overscrollBehaviorY = previousBodyOverscroll;
-      document.documentElement.style.overscrollBehaviorY = previousHtmlOverscroll;
-    };
-  }, [isSortMenuOpen]);
+  const pageSize = isStuffyClone ? 16 : 12;
+  const shopPath = page > 1 ? `/products?page=${page}` : "/products";
 
   useEffect(() => {
     window.history.replaceState(window.history.state, "", shopPath);
   }, [shopPath]);
 
-  useEffect(() => {
-    if (!hasInitializedFilters.current) {
-      hasInitializedFilters.current = true;
-      return;
-    }
-    setPage(1);
-  }, [category, sortBy, stockFilter, sizeFilter, colorFilter]);
-
-  const { data: categories = [] } = useQuery({
-    queryKey: ["categories"],
-    queryFn: fetchCategories,
-  });
-
-  const filters = useMemo(
-    () => ({
-      category: category === "all" ? undefined : category,
-      page,
-      limit: pageSize,
-    }),
-    [category, page, pageSize],
-  );
-
-  const {
-    data: productsData,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery<{ products: ProductApi[]; total: number }>({
-    queryKey: ["products", filters],
-    queryFn: () => fetchProducts(filters),
+  const { data: productsData, isLoading, isError, refetch } = useQuery<{ products: ProductApi[]; total: number }>({
+    queryKey: ["products", { page, limit: pageSize }],
+    queryFn: () => fetchProducts({ page, limit: pageSize }),
     staleTime: 1000 * 60 * 5,
   });
 
   const products = productsData?.products ?? [];
   const totalProducts = productsData?.total ?? 0;
-
-  const filteredProducts = useMemo(() => {
-    if (!products) return [];
-    const filteredByCategory =
-      category === "all" ? [...products] : products.filter((p) => (p.category ?? "") === category);
-
-    const filtered = filteredByCategory.filter((product) => {
-      if (stockFilter === "in-stock" && Number(product.stock) <= 0) return false;
-      if (stockFilter === "out-of-stock" && Number(product.stock) > 0) return false;
-      if (stockFilter === "on-sale" && !(product.saleActive && Number(product.salePercentage) > 0)) return false;
-
-      if (sizeFilter !== "all") {
-        const sizeOptions = parseJsonArray(product.sizeOptions);
-        const variantSizes = (product.variants ?? []).map((variant) => variant.size).filter(Boolean);
-        const sizeSet = new Set([...sizeOptions, ...variantSizes]);
-        if (!sizeSet.has(sizeFilter)) return false;
-      }
-
-      if (colorFilter !== "all") {
-        const colorOptions = parseJsonArray(product.colorOptions);
-        const variantColors = (product.variants ?? [])
-          .map((variant) => variant.color ?? "")
-          .filter((color) => Boolean(color));
-        const colorSet = new Set([...colorOptions, ...variantColors]);
-        if (!colorSet.has(colorFilter)) return false;
-      }
-
-      return true;
-    });
-
-    switch (sortBy) {
-      case "price-low":
-        filtered.sort((a, b) => Number(a.price) - Number(b.price));
-        break;
-      case "price-high":
-        filtered.sort((a, b) => Number(b.price) - Number(a.price));
-        break;
-      case "best-seller":
-        filtered.sort((a, b) => Number(b.ranking ?? 0) - Number(a.ranking ?? 0));
-        break;
-      case "highest-stock":
-        filtered.sort((a, b) => Number(b.stock) - Number(a.stock));
-        break;
-      case "newest":
-      default:
-        filtered.sort((a, b) => Number(b.id) - Number(a.id));
-        break;
-    }
-
-    return filtered;
-  }, [
-    products,
-    category,
-    sortBy,
-    stockFilter,
-    sizeFilter,
-    colorFilter,
-  ]);
-
-  const availableSizes = useMemo(() => {
-    if (!products) return [];
-    const sizeSet = new Set<string>();
-    products.forEach((product) => {
-      parseJsonArray(product.sizeOptions).forEach((size) => sizeSet.add(size));
-      (product.variants ?? []).forEach((variant) => {
-        if (variant.size?.trim()) sizeSet.add(variant.size.trim());
-      });
-    });
-    return Array.from(sizeSet);
-  }, [products]);
-
-  const availableColors = useMemo(() => {
-    if (!products) return [];
-    const colorSet = new Set<string>();
-    products.forEach((product) => {
-      parseJsonArray(product.colorOptions).forEach((color) => colorSet.add(color));
-      (product.variants ?? []).forEach((variant) => {
-        const color = variant.color?.trim();
-        if (color) colorSet.add(color);
-      });
-    });
-    return Array.from(colorSet);
-  }, [products]);
-
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (sortBy !== "newest") count += 1;
-    if (stockFilter !== "all") count += 1;
-    if (sizeFilter !== "all") count += 1;
-    if (colorFilter !== "all") count += 1;
-    return count;
-  }, [sortBy, stockFilter, sizeFilter, colorFilter]);
-
-  const MAX_INLINE_CATEGORIES = 6;
-  const inlineCategories = categories.slice(0, MAX_INLINE_CATEGORIES);
-  const overflowCategories = categories.slice(MAX_INLINE_CATEGORIES);
-  const isOverflowSelected = overflowCategories.some((cat) => cat.slug === category);
+  const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
 
   return (
-    <div className={`min-h-screen w-full pb-16 ${isStuffyClone ? "px-0 pt-24" : "pl-3 pr-1 sm:pl-4 sm:pr-2 lg:px-6 xl:px-7 2xl:px-8 pt-4 sm:pt-6"} ${isStuffyClone ? "bg-white text-neutral-950 dark:bg-[#0d1117] dark:text-[#e6edf3] sm:pt-28" : ""}`}>
+    <div className="min-h-screen w-full bg-white pb-16 pt-20 text-neutral-950 sm:pt-24">
       <StorefrontSeo
-        title={
-          category !== "all"
-            ? `${category.charAt(0).toUpperCase() + category.slice(1)} | Shop Rare Atelier`
-            : "Shop Rare Atelier | Premium Streetwear Collection"
-        }
-        description={
-          category !== "all"
-            ? `Browse ${category} pieces from Rare Atelier. Discover premium silhouettes, refined details, and limited streetwear drops.`
-            : "Browse the Rare Atelier shop for premium streetwear, new arrivals, curated categories, and elevated everyday essentials."
-        }
+        title="Shop Rare Atelier | Premium Streetwear Collection"
+        description="Browse the Rare Atelier shop for premium streetwear, new arrivals, curated categories, and elevated everyday essentials."
         canonicalPath={shopPath}
         structuredData={{
           "@context": "https://schema.org",
           "@type": "CollectionPage",
-          name: category !== "all" ? `${category} collection` : "Rare Atelier shop",
-          url:
-            typeof window !== "undefined"
-              ? `${window.location.origin}${shopPath}`
-              : shopPath,
-          numberOfItems: filteredProducts.length,
+          name: "Rare Atelier shop",
+          url: typeof window !== "undefined" ? `${window.location.origin}${shopPath}` : shopPath,
+          numberOfItems: products.length,
         }}
       />
 
-      <div className={`w-full ${isStuffyClone ? "bg-white px-3 pr-1 sm:px-4 sm:pr-2 lg:px-6 xl:px-7 2xl:px-8 dark:bg-[#0d1117]" : ""}`}>
-        {!isStuffyClone ? (
-          <>
-            <div className="mb-6">
-              <StorefrontBreadcrumbs
-                items={[
-                  { label: "Home", href: "/" },
-                  { label: "Shop" },
-                ]}
-              />
-            </div>
-
-            <div className="mb-8 border-b border-border/70 pb-5 text-center">
-              <h1 className="text-3xl font-black uppercase tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-4xl">
-                All Products
-              </h1>
-              <p
-                style={{ fontFamily: "Roboto, sans-serif" }}
-                className="mt-2 text-[10px] font-bold uppercase tracking-widest text-neutral-500 dark:text-neutral-300"
-              >
-                Showing {filteredProducts.length} results
-              </p>
-            </div>
-          </>
-        ) : null}
-
-        <div className="min-h-[400px] text-neutral-900 dark:text-neutral-100">
-          <div className="mb-10 space-y-5">
-            <div className="flex flex-col gap-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center">
-              <div className="w-full overflow-x-auto scrollbar-hide md:col-start-2 md:w-auto md:max-w-full md:justify-self-center">
-                <div className="flex w-max min-w-full items-center gap-4 md:min-w-0 md:flex-wrap md:justify-center md:gap-5">
-                  <button
-                    onClick={() => setCategory("all")}
-                    style={{ fontFamily: "Roboto, sans-serif" }}
-                    className={`shrink-0 border-b-2 px-1 py-1 text-sm font-medium uppercase tracking-[0.16em] transition-colors md:text-base ${
-                      category === "all"
-                        ? "border-current text-neutral-900 dark:text-neutral-100"
-                        : "border-transparent text-neutral-800/85 dark:text-neutral-300/85 hover:text-neutral-900 dark:hover:bg-black/40 dark:hover:text-white"
-                    }`}
-                  >
-                    All
-                  </button>
-                  {inlineCategories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => setCategory(cat.slug)}
-                      style={{ fontFamily: "Roboto, sans-serif" }}
-                      className={`shrink-0 border-b-2 px-1 py-1 text-sm font-medium uppercase tracking-[0.16em] transition-colors md:text-base ${
-                        category === cat.slug
-                          ? "border-current text-neutral-900 dark:text-neutral-100"
-                          : "border-transparent text-neutral-800/85 dark:text-neutral-300/85 hover:text-neutral-900 dark:hover:bg-black/40 dark:hover:text-white"
-                      }`}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
-                  {overflowCategories.length > 0 && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          style={{ fontFamily: "Roboto, sans-serif" }}
-                          className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full border px-3 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-sm transition-colors ${
-                            isOverflowSelected
-                              ? "border-transparent bg-neutral-950 text-white hover:bg-neutral-800 dark:bg-[#1f6feb] dark:text-white dark:hover:bg-[#388bfd]"
-                              : "border-transparent bg-white text-neutral-950 hover:bg-neutral-100 dark:bg-[#161b22] dark:text-[#e6edf3] dark:hover:bg-[#1f242d]"
-                          }`}
-                        >
-                          <span>More</span>
-                          <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white/90 px-1.5 text-[9px] font-black tracking-normal text-black dark:bg-neutral-950 dark:text-white">
-                            {overflowCategories.length}
-                          </span>
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="min-w-[12rem] rounded-xl border border-black/10 bg-white/95 p-2 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-sm dark:border-white/12 dark:bg-[#161b22]/95 dark:shadow-[0_10px_28px_rgba(0,0,0,0.35)]">
-                        <DropdownMenuLabel className="px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-700 dark:text-neutral-200">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Sparkles className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-200" />
-                            More Categories
-                          </span>
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuRadioGroup
-                          value={category}
-                          onValueChange={(value) => setCategory(value)}
-                        >
-                          {overflowCategories.map((cat) => (
-                            <DropdownMenuRadioItem key={cat.id} value={cat.slug}>
-                              {cat.name}
-                            </DropdownMenuRadioItem>
-                          ))}
-                        </DropdownMenuRadioGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-start whitespace-nowrap md:col-start-3 md:justify-self-end">
-                <DropdownMenu open={isSortMenuOpen} onOpenChange={setIsSortMenuOpen}>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      style={{ fontFamily: "Roboto, sans-serif" }}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-transparent bg-white px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 dark:bg-[#161b22] dark:text-[#e6edf3] dark:hover:bg-[#1f242d]"
-                    >
-                      <ArrowDownWideNarrow className="h-3.5 w-3.5" />
-                      <span>{SORT_LABELS[sortBy] ? `Sort: ${SORT_LABELS[sortBy]}` : "Sort By"}</span>
-                      {activeFilterCount > 0 ? (
-                        <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-neutral-100 px-1.5 text-[9px] font-black tracking-normal text-neutral-900 dark:bg-neutral-800 dark:text-white">
-                          {activeFilterCount}
-                        </span>
-                      ) : null}
-                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isSortMenuOpen ? "rotate-180" : ""}`} />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[18rem] rounded-xl border border-neutral-200 bg-white/95 p-3 shadow-[0_12px_32px_rgba(15,23,42,0.1)] backdrop-blur-sm dark:border-white/12 dark:bg-[#161b22]/95 dark:shadow-[0_12px_32px_rgba(0,0,0,0.3)]">
-                    <DropdownMenuLabel className="px-0 text-[10px] font-bold uppercase tracking-[0.22em] text-neutral-700 dark:text-neutral-200">
-                      <span className="inline-flex items-center gap-1.5">
-                        <Sparkles className="h-3.5 w-3.5 text-cyan-500" />
-                        Sort & Filter
-                      </span>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-
-                    <div className="space-y-2">
-                      <label className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300">
-                        <span className="inline-flex items-center gap-1.5">
-                          <ArrowDownWideNarrow className="h-3.5 w-3.5 text-blue-500" />
-                          Sort By
-                        </span>
-                      </label>
-                      <select
-                        style={{ fontFamily: "Roboto, sans-serif", ...storefrontSelectTheme }}
-                        className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                        aria-label="Sort products"
-                      >
-                        <option style={storefrontSelectTheme} value="newest">Newest</option>
-                        <option style={storefrontSelectTheme} value="price-low">Price Low</option>
-                        <option style={storefrontSelectTheme} value="price-high">Price High</option>
-                        <option style={storefrontSelectTheme} value="best-seller">Best Seller</option>
-                        <option style={storefrontSelectTheme} value="highest-stock">Highest Stock</option>
-                      </select>
-                    </div>
-
-                    <div className="mt-3 space-y-2">
-                      <label className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300">
-                        <span className="inline-flex items-center gap-1.5">
-                          <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
-                          Stock
-                        </span>
-                      </label>
-                      <select
-                        style={{ fontFamily: "Roboto, sans-serif", ...storefrontSelectTheme }}
-                        className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
-                        value={stockFilter}
-                        onChange={(e) => setStockFilter(e.target.value)}
-                        aria-label="Filter products by stock or sale"
-                      >
-                        <option style={storefrontSelectTheme} value="all">All</option>
-                        <option style={storefrontSelectTheme} value="on-sale">On Sale</option>
-                        <option style={storefrontSelectTheme} value="in-stock">In Stock</option>
-                        <option style={storefrontSelectTheme} value="out-of-stock">Out of Stock</option>
-                      </select>
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <div className="space-y-2">
-                        <label className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Ruler className="h-3.5 w-3.5 text-indigo-500" />
-                            Size
-                          </span>
-                        </label>
-                        <select
-                          style={{ fontFamily: "Roboto, sans-serif", ...storefrontSelectTheme }}
-                          className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
-                          value={sizeFilter}
-                          onChange={(e) => setSizeFilter(e.target.value)}
-                          aria-label="Filter products by size"
-                        >
-                          <option style={storefrontSelectTheme} value="all">All</option>
-                          {availableSizes.map((size) => (
-                            <option key={size} style={storefrontSelectTheme} value={size}>
-                              {size}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Palette className="h-3.5 w-3.5 text-fuchsia-500" />
-                            Color
-                          </span>
-                        </label>
-                        <select
-                          style={{ fontFamily: "Roboto, sans-serif", ...storefrontSelectTheme }}
-                          className="h-9 w-full rounded border border-black/[0.1] bg-transparent px-2 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-950 focus:ring-1 focus:ring-black dark:border-white/[0.24] dark:text-white dark:focus:ring-white"
-                          value={colorFilter}
-                          onChange={(e) => setColorFilter(e.target.value)}
-                          aria-label="Filter products by color"
-                        >
-                          <option style={storefrontSelectTheme} value="all">All</option>
-                          {availableColors.map((color) => (
-                            <option key={color} style={storefrontSelectTheme} value={color}>
-                              {color}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="mt-3 h-8 w-full rounded border border-black/20 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-800 transition-colors hover:bg-neutral-100 dark:border-white/18 dark:text-[#e6edf3] dark:hover:bg-[#1f242d]"
-                      onClick={() => {
-                        setSortBy("newest");
-                        setStockFilter("all");
-                        setSizeFilter("all");
-                        setColorFilter("all");
-                      }}
-                    >
-                      Reset Filters
-                    </button>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-          </div>
-
+      <div className="w-full bg-white px-3 pr-1 sm:px-4 sm:pr-2 lg:px-6 xl:px-7 2xl:px-8">
+        <div className="min-h-[400px] text-neutral-900">
           {isLoading ? (
-            <div className="flex items-center justify-center min-h-[400px] w-full col-span-full">
+            <div className="flex min-h-[400px] w-full items-center justify-center col-span-full">
               <BrandedLoader />
             </div>
           ) : isError ? (
-            <div className="py-20 text-center space-y-4">
-              <p className="uppercase text-[10px] tracking-widest font-bold text-neutral-500 dark:text-neutral-300">
+            <div className="space-y-4 py-20 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
                 Failed to load products. Try again.
               </p>
               <button
                 onClick={() => refetch()}
-                className="text-[10px] uppercase tracking-widest border border-neutral-600 dark:border-neutral-300 px-4 py-2 rounded-lg hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors"
+                className="rounded-lg border border-neutral-600 px-4 py-2 text-[10px] uppercase tracking-widest transition-colors hover:bg-neutral-100"
               >
                 Retry
               </button>
             </div>
           ) : (
             <div>
-              {filteredProducts.length > 0 ? (
-                <div className={`grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 lg:gap-4 ${isStuffyClone ? "xl:grid-cols-4" : "md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-5"}`}>
-                  {filteredProducts.map((product) => {
+              {products.length > 0 ? (
+                <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-8 lg:grid-cols-4 lg:gap-x-5 lg:gap-y-10 xl:grid-cols-4">
+                  {products.map((product, index) => {
                     const hoverImage = getHoverImage(product);
                     const mainImage = product.imageUrl ?? hoverImage ?? "";
                     const colorOptions = parseJsonArray(product.colorOptions);
@@ -634,132 +192,165 @@ export default function Products() {
                       }
                       return acc;
                     }, {});
-                    const defaultColor = colorOptions[0] ?? null;
-                    const activeColor =
-                      hoveredCardColors[product.id] ?? selectedCardColors[product.id] ?? defaultColor ?? "";
-                    const activeColorImages =
-                      activeColor ? normalizedColorMap[normalizeColorLabel(activeColor)] ?? [] : [];
+                    const activeColor = hoveredCardColors[product.id] ?? selectedCardColors[product.id] ?? "";
+                    const activeColorImages = activeColor ? normalizedColorMap[normalizeColorLabel(activeColor)] ?? [] : [];
                     const primaryImage = activeColorImages[0] ?? mainImage;
                     const secondaryImage = activeColorImages[1] ?? hoverImage ?? primaryImage;
+                    const activeColorLabel = activeColor ? parseColorOption(activeColor).label : null;
+                    const hasSaleBadge = Boolean(product.saleActive && Number(product.salePercentage) > 0);
+                    const showNewInBadge = index < 5;
+                    const saleBadgeTopClass = showNewInBadge ? "top-11" : "top-3";
+                    const stockBadgeTopClass = showNewInBadge
+                      ? hasSaleBadge
+                        ? "top-[4.55rem]"
+                        : "top-11"
+                      : hasSaleBadge
+                        ? "top-12"
+                        : "top-3";
+                    const displayPrice =
+                      hasSaleBadge
+                        ? formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))
+                        : formatPrice(product.price);
+
                     return (
-                        <Link
-                          key={product.id}
-                          href={`/product/${product.id}?from=${encodeURIComponent(shopPath)}`}
-                          className="group block"
-                        >
+                      <Link
+                        key={product.id}
+                        href={`/product/${product.id}?from=${encodeURIComponent(shopPath)}`}
+                        className="group block"
+                      >
                         <div className="mb-2">
-                          <div className={`relative overflow-hidden rounded-md border ${isStuffyClone ? "aspect-[5/6] border-neutral-200 bg-zinc-50 dark:border-white/10 dark:bg-[#161b22]" : "aspect-[3/5] border-white/80 bg-zinc-50 dark:border-white/20 dark:bg-zinc-900/70"}`}>
-                          <button
-                            type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                window.open(`/product/${product.id}?from=${encodeURIComponent(shopPath)}`, "_blank");
-                              }}
-                            className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                            aria-label="Open product in new tab"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </button>
-                          {product.saleActive && Number(product.salePercentage) > 0 && (
-                            <div className="absolute top-3 left-3 z-10 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-sm shadow-xl animate-pulse">
-                              {product.salePercentage}% OFF
-                            </div>
-                          )}
-                          {product.stock === 0 && (
-                            <div
-                              className={`absolute ${product.saleActive ? "top-12" : "top-3"} left-3 z-10 bg-black/80 dark:bg-[#21262d] text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded`}
-                            >
-                              Out of Stock
-                            </div>
-                          )}
-                          <img
-                            src={primaryImage}
-                            alt={product.name}
-                            className={`absolute inset-0 h-full w-full object-cover ${
-                              isStuffyClone
-                                ? "translate-x-0 transition-transform duration-500 ease-out group-hover:-translate-x-full motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-100 motion-reduce:group-hover:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-200"
-                                : "opacity-100 transition-opacity duration-300 group-hover:opacity-0"
-                            }`}
-                          />
-                          <img
-                            src={secondaryImage}
-                            alt={product.name}
-                            className={`absolute inset-0 h-full w-full object-cover ${
-                              isStuffyClone
-                                ? "translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-0 motion-reduce:group-hover:opacity-100 motion-reduce:transition-opacity motion-reduce:duration-200"
-                                : "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                            }`}
-                          />
+                          <div className={`relative overflow-hidden rounded-none border ${isStuffyClone ? "aspect-[5/6] border-neutral-100 bg-white" : "aspect-[3/5] border-neutral-100 bg-white"}`}>
+                            {showNewInBadge ? (
+                              <div className="absolute left-3 top-3 z-10 text-[10px] font-semibold uppercase tracking-[0.24em] text-neutral-950">
+                                NEW IN
+                              </div>
+                            ) : null}
+                            {hasSaleBadge ? (
+                              <div className={`absolute left-3 z-10 rounded-sm bg-red-600 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-white shadow-xl ${saleBadgeTopClass}`}>
+                                {product.salePercentage}% OFF
+                              </div>
+                            ) : null}
+                            {Number(product.stock) === 0 ? (
+                              <div className={`absolute left-3 z-10 rounded bg-black px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white ${stockBadgeTopClass}`}>
+                                Out of Stock
+                              </div>
+                            ) : null}
+                            <img
+                              src={primaryImage}
+                              alt={product.name}
+                              loading="lazy"
+                              className={`absolute inset-0 h-full w-full object-cover ${
+                                isStuffyClone
+                                  ? "translate-x-0 transition-transform duration-500 ease-out group-hover:-translate-x-full motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-100 motion-reduce:group-hover:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-200"
+                                  : "opacity-100 transition-opacity duration-300 group-hover:opacity-0"
+                              }`}
+                            />
+                            <img
+                              src={secondaryImage}
+                              alt={product.name}
+                              loading="lazy"
+                              className={`absolute inset-0 h-full w-full object-cover ${
+                                isStuffyClone
+                                  ? "translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-0 motion-reduce:group-hover:opacity-100 motion-reduce:transition-opacity motion-reduce:duration-200"
+                                  : "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                              }`}
+                            />
                           </div>
                         </div>
-                        <div className={`space-y-1 ${isStuffyClone ? "text-neutral-950 dark:text-[#e6edf3]" : ""}`}>
-                          <h3
-                            className="mb-1 truncate text-[rgb(17,17,17)] dark:text-[#f0f6fc]"
-                            style={{
-                              fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
-                              fontWeight: 700,
-                              fontSize: "18px",
-                              lineHeight: "27px",
-                            }}
-                          >
-                            {product.name}
-                          </h3>
-                          <div className="flex items-center gap-2">
-                            <p
-                              className={`text-sm font-bold uppercase tracking-wider ${
-                                product.saleActive
-                                  ? "text-red-700 dark:text-red-400"
-                                  : "text-neutral-700 dark:text-[#c9d1d9]"
-                              }`}
+
+                        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 text-neutral-950">
+                          <div className="min-w-0 space-y-1">
+                            <h3
+                              className="truncate text-[rgb(17,17,17)]"
+                              style={{
+                                fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
+                                fontWeight: 700,
+                                fontSize: "18px",
+                                lineHeight: "27px",
+                              }}
                             >
-                              {product.saleActive && Number(product.salePercentage) > 0
-                                ? formatPrice(
-                                    Number(product.price) *
-                                      (1 - Number(product.salePercentage) / 100),
-                                  )
-                                : formatPrice(product.price)}
-                            </p>
-                            {product.saleActive && Number(product.salePercentage) > 0 && (
-                              <p className="text-[10px] text-neutral-500 dark:text-neutral-300 line-through opacity-70">
-                                {formatPrice(product.price)}
+                              {product.name}
+                            </h3>
+                            <div className="flex items-center gap-2">
+                              <p
+                                className={`text-sm font-bold uppercase tracking-wider ${
+                                  hasSaleBadge ? "text-red-700" : "text-neutral-700"
+                                }`}
+                              >
+                                {displayPrice}
                               </p>
-                            )}
+                              {hasSaleBadge ? (
+                                <p className="text-[10px] text-neutral-500 line-through opacity-70">
+                                  {formatPrice(product.price)}
+                                </p>
+                              ) : null}
+                            </div>
                           </div>
-                          {isStuffyClone && colorOptions.length > 0 ? (
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {colorOptions.map((color) => {
-                                const parsed = parseColorOption(color);
-                                const isActive = normalizeColorLabel(activeColor) === normalizeColorLabel(color);
-                                return (
-                                  <button
-                                    key={`${product.id}-${color}`}
-                                    type="button"
-                                    className={`h-4 w-4 rounded-sm border transition ${isActive ? "border-neutral-900 dark:border-[#f0f6fc]" : "border-neutral-300/80 dark:border-white/30"}`}
-                                    style={{
-                                      background:
-                                        parsed.swatch ??
-                                        "linear-gradient(135deg, rgba(120,120,120,0.15), rgba(120,120,120,0.35))",
-                                    }}
-                                    onMouseEnter={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      setHoveredCardColors((prev) => ({ ...prev, [product.id]: color }));
-                                    }}
-                                    onMouseLeave={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      setHoveredCardColors((prev) => ({ ...prev, [product.id]: null }));
-                                    }}
-                                    onClick={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      setSelectedCardColors((prev) => ({ ...prev, [product.id]: color }));
-                                    }}
-                                    aria-label={`Select ${parsed.label} color`}
-                                  />
-                                );
-                              })}
+
+                          {colorOptions.length > 0 ? (
+                            <div className="flex max-w-[6rem] shrink-0 flex-col items-end text-right">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                {colorOptions.map((color) => {
+                                  const parsed = parseColorOption(color);
+                                  const normalizedColor = normalizeColorLabel(color);
+                                  const isActive = normalizeColorLabel(activeColor) === normalizedColor;
+                                  const colorImages = normalizedColorMap[normalizedColor] ?? [];
+                                  const selectorImage = colorImages[0] ?? mainImage;
+
+                                  return (
+                                    <button
+                                      key={`${product.id}-${color}`}
+                                      type="button"
+                                      className="group/color flex w-[42px] flex-col items-center gap-1 text-center"
+                                      onMouseEnter={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setHoveredCardColors((prev) => ({ ...prev, [product.id]: color }));
+                                      }}
+                                      onMouseLeave={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setHoveredCardColors((prev) => ({ ...prev, [product.id]: null }));
+                                      }}
+                                      onClick={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setSelectedCardColors((prev) => ({ ...prev, [product.id]: color }));
+                                      }}
+                                      onFocus={() => {
+                                        setHoveredCardColors((prev) => ({ ...prev, [product.id]: color }));
+                                      }}
+                                      onBlur={() => {
+                                        setHoveredCardColors((prev) => ({ ...prev, [product.id]: null }));
+                                      }}
+                                      aria-label={`Select ${parsed.label} color`}
+                                      aria-pressed={isActive}
+                                    >
+                                      <span
+                                        className={`overflow-hidden rounded-md border transition ${
+                                          isActive
+                                            ? "border-neutral-900 shadow-[0_0_0_1px_rgba(17,17,17,0.08)]"
+                                            : "border-neutral-200"
+                                        }`}
+                                      >
+                                        <img
+                                          src={selectorImage}
+                                          alt={`${product.name} in ${parsed.label}`}
+                                          loading="lazy"
+                                          className="h-11 w-[42px] object-cover transition-transform duration-300 group-hover/color:scale-[1.03]"
+                                        />
+                                      </span>
+                                      <span
+                                        className={`w-full truncate text-[8px] font-semibold uppercase tracking-[0.14em] transition-colors ${
+                                          isActive ? "text-neutral-950" : "text-neutral-500"
+                                        }`}
+                                      >
+                                        {parsed.label}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
                           ) : null}
                         </div>
@@ -768,65 +359,66 @@ export default function Products() {
                   })}
                 </div>
               ) : (
-                <div className="py-20 text-center uppercase text-[10px] tracking-widest font-bold text-neutral-500 dark:text-neutral-300">
+                <div className="py-20 text-center text-[10px] font-bold uppercase tracking-widest text-neutral-500">
                   No products found.
                 </div>
               )}
 
-              {totalProducts > pageSize && (
+              {totalProducts > pageSize ? (
                 <div className="mt-12 flex items-center justify-center gap-2">
                   <button
                     type="button"
                     aria-label="Previous page"
                     onClick={() => {
-                      setPage((p) => Math.max(1, p - 1));
+                      setPage((currentPage) => Math.max(1, currentPage - 1));
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                     disabled={page === 1}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30 dark:border-white/12 dark:hover:bg-[#1f242d]"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-neutral-300 text-neutral-950 transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
-                  {Array.from({ length: Math.min(5, Math.ceil(totalProducts / pageSize)) }, (_, i) => {
-                    const totalPages = Math.ceil(totalProducts / pageSize);
-                    let pageNum: number;
-                    if (totalPages <= 5) pageNum = i + 1;
-                    else if (page <= 3) pageNum = i + 1;
-                    else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
-                    else pageNum = page - 2 + i;
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, index) => {
+                    let pageNumber = index + 1;
+                    if (totalPages > 5) {
+                      if (page <= 3) pageNumber = index + 1;
+                      else if (page >= totalPages - 2) pageNumber = totalPages - 4 + index;
+                      else pageNumber = page - 2 + index;
+                    }
+
                     return (
                       <button
                         type="button"
-                        key={pageNum}
+                        key={pageNumber}
                         onClick={() => {
-                          setPage(pageNum);
+                          setPage(pageNumber);
                           window.scrollTo({ top: 0, behavior: "smooth" });
                         }}
                         className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-colors ${
-                          pageNum === page
-                            ? "bg-[#2C3E2D] text-white dark:bg-[#1f6feb] dark:text-white"
-                            : "border border-border/60 text-foreground hover:bg-muted dark:border-white/12 dark:hover:bg-[#1f242d]"
+                          pageNumber === page
+                            ? "bg-[#111111] text-white"
+                            : "border border-neutral-300 text-neutral-950 hover:bg-neutral-100"
                         }`}
                       >
-                        {pageNum}
+                        {pageNumber}
                       </button>
                     );
                   })}
+
                   <button
                     type="button"
                     aria-label="Next page"
                     onClick={() => {
-                      setPage((p) => Math.min(Math.ceil(totalProducts / pageSize), p + 1));
+                      setPage((currentPage) => Math.min(totalPages, currentPage + 1));
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
-                    disabled={page >= Math.ceil(totalProducts / pageSize)}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30 dark:border-white/12 dark:hover:bg-[#1f242d]"
+                    disabled={page >= totalPages}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-neutral-300 text-neutral-950 transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
-              )}
-
+              ) : null}
             </div>
           )}
         </div>

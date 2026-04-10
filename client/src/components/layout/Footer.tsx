@@ -103,7 +103,7 @@ export default function Footer() {
             </h4>
             <ul className="space-y-3 text-sm" style={{ fontFamily: "var(--font-body)", color: "var(--fg-dim)" }}>
               <li><Link href="/atelier" className="hover:text-[var(--fg)]">About</Link></li>
-              <li><Link href="/new-collection" className="hover:text-[var(--fg)]">Lookbook</Link></li>
+              <li><Link href="/gallery" className="hover:text-[var(--fg)]">Gallery</Link></li>
               <li><Link href="/shipping" className="hover:text-[var(--fg)]">Stockists</Link></li>
               <li><Link href="/refund" className="hover:text-[var(--fg)]">Care Guide</Link></li>
               <li><Link href="/atelier" className="hover:text-[var(--fg)]">Contact</Link></li>

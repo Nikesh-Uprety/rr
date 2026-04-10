@@ -433,7 +433,7 @@ export default function Navbar() {
                   }}
                 >
                   <div
-                    className="grid grid-cols-[40px_1fr_40px] items-center border-b px-4 py-4 sm:px-5"
+                    className="grid grid-cols-[36px_1fr_36px] items-center border-b px-4 py-3.5 sm:px-5"
                     style={{ borderColor: mobileMenuSurface.mutedBorder }}
                   >
                     <div />
@@ -445,7 +445,7 @@ export default function Navbar() {
                       <img
                         src={STOREFRONT_HEADER_LOGO}
                         alt="Rare Atelier"
-                        className="h-auto w-[5.7rem] object-contain sm:w-[6rem]"
+                        className="h-auto w-[4.8rem] object-contain sm:w-[5.1rem]"
                         style={{
                           filter: getStorefrontLogoFilter({
                             branding: null,
@@ -458,7 +458,7 @@ export default function Navbar() {
                     <button
                       type="button"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="flex h-10 w-10 items-center justify-center rounded-full border"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border"
                       style={{
                         borderColor: mobileMenuSurface.mutedBorder,
                         background: mobileMenuSurface.iconBg,
@@ -466,11 +466,11 @@ export default function Navbar() {
                       }}
                       aria-label="Close menu"
                     >
-                      <X className="h-4.5 w-4.5" />
+                      <X className="h-4 w-4" />
                     </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto px-8 py-6 sm:px-9">
+                  <div className="flex-1 overflow-y-auto px-7 py-5 sm:px-8">
                     <nav className="flex flex-col">
               {sidebarNavLinks.map((item, index) => {
                 const isActive = location === item.href;
@@ -478,7 +478,7 @@ export default function Navbar() {
                           <Link
                             key={item.href}
                             href={item.href}
-                            className="border-b py-5 text-[16px] font-bold uppercase tracking-[0.22em] transition-opacity duration-200"
+                            className="border-b py-4 text-[14px] font-semibold uppercase tracking-[0.18em] transition-opacity duration-200"
                             style={{
                               fontFamily: "\"Archivo Narrow\", system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
                               borderColor: mobileMenuSurface.mutedBorder,

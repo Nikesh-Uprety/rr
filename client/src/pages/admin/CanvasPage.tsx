@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { PageListSidebar } from "@/components/canvas/PageListSidebar";
-import { PageEditor } from "@/components/canvas/PageEditor";
 import { CreatePageDialog } from "@/components/canvas/CreatePageDialog";
+import { PageMetadataForm } from "@/components/canvas/PageMetadataForm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,7 @@ import type { CanvasPage, SiteBranding, ColorPreset, CanvasTemplate } from "@/li
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getCanvasPages, updateCanvasPage, reorderCanvasPages, getBranding, updateBranding, getColorPresets, createColorPreset, updateColorPreset, activateColorPreset, deleteColorPreset, uploadProductImageFile, getCanvasTemplates } from "@/lib/adminApi";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   DndContext,
   closestCenter,
@@ -107,6 +108,8 @@ const CUSTOMIZATION_TABS: Array<{
 
 export default function CanvasPage() {
   const [location] = useLocation();
+  const { user } = useCurrentUser();
+  const isSuperAdmin = user?.role?.toLowerCase() === "superadmin";
   const readTabFromUrl = (): ActiveTab => {
     if (typeof window === "undefined") return "pages";
     const params = new URLSearchParams(window.location.search);
@@ -121,11 +124,38 @@ export default function CanvasPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedCreateTemplate, setSelectedCreateTemplate] = useState<CanvasTemplate | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showMetadataForm, setShowMetadataForm] = useState(false);
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ["/api/admin/canvas/templates"],
     queryFn: getCanvasTemplates,
   });
+
+  const { data: pages = [], isLoading: pagesLoading } = useQuery({
+    queryKey: ["/api/admin/canvas/pages"],
+    queryFn: getCanvasPages,
+  });
+
+  const selectedPage = useMemo(
+    () => pages.find((page) => page.id === selectedPageId) ?? null,
+    [pages, selectedPageId],
+  );
+
+  const canvasTabs = useMemo(
+    () =>
+      CUSTOMIZATION_TABS.filter((tab) => {
+        if (tab.id === "branding" || tab.id === "theme") return false;
+        if (!isSuperAdmin && (tab.id === "pages" || tab.id === "templates" || tab.id === "navigation")) return false;
+        return true;
+      }),
+    [isSuperAdmin],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isSuperAdmin) return;
+    window.history.replaceState({}, "", "/admin/canvas/branding");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }, [isSuperAdmin]);
 
   useEffect(() => {
     const syncFromUrl = () => {
@@ -169,13 +199,35 @@ export default function CanvasPage() {
     window.dispatchEvent(new Event("canvas-customization-nav"));
   }, [activeTab]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (activeTab === "branding") {
+      window.history.replaceState({}, "", "/admin/canvas/branding");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      return;
+    }
+    if (activeTab === "theme") {
+      window.history.replaceState({}, "", "/admin/canvas/theme");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      return;
+    }
+    if (!isSuperAdmin && (activeTab === "pages" || activeTab === "templates" || activeTab === "navigation")) {
+      window.history.replaceState({}, "", "/admin/canvas/branding");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  }, [activeTab, isSuperAdmin]);
+
+  if (!isSuperAdmin) {
+    return null;
+  }
+
   function handlePageSelect(id: number) {
     setSelectedPageId(id);
     setActiveTab("pages");
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       params.set("tab", "pages");
-      params.set("panel", "editor");
+      params.set("panel", "details");
       params.set("pageId", String(id));
       const nextUrl = `${window.location.pathname}?${params.toString()}`;
       window.history.replaceState({}, "", nextUrl);
@@ -184,13 +236,19 @@ export default function CanvasPage() {
     }
   }
 
+  function handleOpenBuilder(id: number) {
+    if (typeof window === "undefined") return;
+    window.history.pushState({}, "", `/admin/canvas/builder?pageId=${id}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }
+
   function handlePageCreated(id: number) {
     setSelectedPageId(id);
     setSelectedCreateTemplate(null);
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       params.set("tab", "pages");
-      params.set("panel", "editor");
+      params.set("panel", "details");
       params.set("pageId", String(id));
       const nextUrl = `${window.location.pathname}?${params.toString()}`;
       window.history.replaceState({}, "", nextUrl);
@@ -211,19 +269,17 @@ export default function CanvasPage() {
   }
 
   const sidebarWidth = sidebarCollapsed ? "w-12" : "w-64";
-  const activeTabMeta = CUSTOMIZATION_TABS.find((tab) => tab.id === activeTab);
-  const isEditingPage = activeTab === "pages" && Boolean(selectedPageId);
+  const activeTabMeta = canvasTabs.find((tab) => tab.id === activeTab);
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Sidebar */}
-      {!isEditingPage ? (
-        <div
-          className={cn(
-            "border-r bg-card/50 flex flex-col transition-all duration-300 shrink-0",
-            sidebarWidth
-          )}
-        >
+      <div
+        className={cn(
+          "border-r bg-card/50 flex flex-col transition-all duration-300 shrink-0",
+          sidebarWidth
+        )}
+      >
         {/* Collapse toggle */}
         <div className="flex items-center justify-between p-3 border-b">
           {!sidebarCollapsed && (
@@ -254,7 +310,7 @@ export default function CanvasPage() {
           <div className="flex-1 overflow-y-auto">
             <div className="p-3">
               <div className="space-y-1.5">
-                {CUSTOMIZATION_TABS.map((tab) => {
+                {canvasTabs.map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
                   return (
@@ -288,7 +344,7 @@ export default function CanvasPage() {
         {/* Collapsed icon nav */}
         {sidebarCollapsed && (
           <div className="flex-1 flex flex-col items-center gap-4 py-4">
-            {CUSTOMIZATION_TABS.map((tab) => {
+            {canvasTabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
@@ -308,15 +364,14 @@ export default function CanvasPage() {
           </div>
         )}
         </div>
-      ) : null}
 
-      {/* Page List (when Pages tab active and no page selected) */}
-      {activeTab === "pages" && !selectedPageId && (
-        <div className="w-72 border-r bg-card/30 flex flex-col">
+      {activeTab === "pages" && (
+        <>
+          <div className="w-72 border-r bg-card/30 flex flex-col">
           <div className="p-4 border-b">
             <h2 className="text-sm font-bold">Pages</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Select a page to edit or create a new one.
+              Select a page to manage or create a new one.
             </p>
           </div>
           <div className="flex-1 overflow-hidden">
@@ -328,29 +383,172 @@ export default function CanvasPage() {
               onPreview={handlePreview}
             />
           </div>
-        </div>
-      )}
+          </div>
 
-      {/* Page Editor (when a page is selected) */}
-      {activeTab === "pages" && selectedPageId && (
-        <div className="flex-1 overflow-hidden">
-          <PageEditor
-            pageId={selectedPageId}
-            onBack={() => {
-              setSelectedPageId(null);
-              if (typeof window !== "undefined") {
-                const params = new URLSearchParams(window.location.search);
-                params.set("tab", "pages");
-                params.set("panel", "list");
-                params.delete("pageId");
-                const nextUrl = `${window.location.pathname}?${params.toString()}`;
-                window.history.replaceState({}, "", nextUrl);
-                window.dispatchEvent(new PopStateEvent("popstate"));
-                window.dispatchEvent(new Event("canvas-customization-nav"));
-              }
-            }}
-          />
-        </div>
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,#f7f8fc_0%,#eef3ff_100%)]">
+            <div className="border-b border-black/10 bg-white/85 px-6 py-5 backdrop-blur-sm">
+              <p className="text-[11px] font-black uppercase tracking-[0.26em] text-[#4565d0]">
+                Page Studio
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-950">
+                Build pages from a focused canvas, not an inline preview.
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm text-slate-600">
+                Select a page, review its metadata here, then open the dedicated builder to add sections,
+                preview changes, and shape the storefront live.
+              </p>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              {pagesLoading ? (
+                <div className="grid gap-4 lg:grid-cols-[1.6fr,1fr]">
+                  <Skeleton className="h-[320px] w-full rounded-[32px]" />
+                  <Skeleton className="h-[320px] w-full rounded-[32px]" />
+                </div>
+              ) : selectedPage ? (
+                <div className="grid gap-6 lg:grid-cols-[1.65fr,1fr]">
+                  <div className="rounded-[32px] border border-[#bfd1ff] bg-white p-8 shadow-[0_24px_60px_rgba(69,101,208,0.10)]">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="border-[#bfd1ff] bg-[#eef3ff] text-[#3654b1]">
+                            {selectedPage.isHomepage ? "Homepage" : "Storefront Page"}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "border-transparent",
+                              selectedPage.status === "published"
+                                ? "bg-emerald-500/10 text-emerald-700"
+                                : "bg-slate-900/5 text-slate-600",
+                            )}
+                          >
+                            {selectedPage.status === "published" ? "Published" : "Draft"}
+                          </Badge>
+                        </div>
+                        <div>
+                          <h3 className="text-3xl font-semibold tracking-tight text-slate-950">
+                            {selectedPage.title}
+                          </h3>
+                          <p className="mt-2 font-mono text-sm text-slate-500">{selectedPage.slug}</p>
+                        </div>
+                        <p className="max-w-2xl text-sm leading-7 text-slate-600">
+                          {selectedPage.description ||
+                            "Open this page in the builder to add sections, refine composition, and preview the storefront layout without reloading the page."}
+                        </p>
+                      </div>
+
+                      <div className="rounded-3xl border border-[#d6e0ff] bg-[#f8fbff] px-5 py-4 text-right">
+                        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
+                          Navigation
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-slate-950">
+                          {selectedPage.showInNav ? "Shown in storefront nav" : "Hidden from nav"}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">Sort order {selectedPage.sortOrder}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-8 grid gap-4 md:grid-cols-3">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenBuilder(selectedPage.id)}
+                        className="rounded-[24px] border border-[#8fa8ff] bg-[#4565d0] px-5 py-5 text-left text-white shadow-[0_16px_36px_rgba(69,101,208,0.26)] transition-transform hover:-translate-y-0.5"
+                      >
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-white/70">Builder</p>
+                        <p className="mt-3 text-xl font-semibold">Open visual builder</p>
+                        <p className="mt-2 text-sm text-white/80">
+                          Edit on a blank live canvas with section controls and instant rendering.
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePreview(selectedPage)}
+                        className="rounded-[24px] border border-slate-200 bg-white px-5 py-5 text-left transition-colors hover:border-[#bfd1ff] hover:bg-[#f8fbff]"
+                      >
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Preview</p>
+                        <p className="mt-3 text-xl font-semibold text-slate-950">Open storefront page</p>
+                        <p className="mt-2 text-sm text-slate-600">
+                          Check the public page in a separate tab without exposing the builder UI.
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowMetadataForm(true)}
+                        className="rounded-[24px] border border-slate-200 bg-white px-5 py-5 text-left transition-colors hover:border-[#bfd1ff] hover:bg-[#f8fbff]"
+                      >
+                        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-500">Settings</p>
+                        <p className="mt-3 text-xl font-semibold text-slate-950">Edit page metadata</p>
+                        <p className="mt-2 text-sm text-slate-600">
+                          Update title, slug, SEO details, and navigation visibility from one clean sheet.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-[28px] border border-[#d6e0ff] bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.06)]">
+                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[#4565d0]">
+                        Builder Flow
+                      </p>
+                      <div className="mt-4 space-y-4 text-sm text-slate-600">
+                        <div>
+                          <p className="font-semibold text-slate-950">1. Open Builder</p>
+                          <p className="mt-1">Jump into the dedicated page canvas instead of editing inside the list view.</p>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-950">2. Add Sections</p>
+                          <p className="mt-1">Start from a blank white page and drop in hero, product, quote, services, and utility sections.</p>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-950">3. Refine Live</p>
+                          <p className="mt-1">Click a section, adjust content, swap imagery, and watch the canvas update without a page reload.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[28px] border border-dashed border-[#bfd1ff] bg-[#f8fbff] p-6">
+                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">
+                        Current Selection
+                      </p>
+                      <p className="mt-3 text-lg font-semibold text-slate-950">{selectedPage.title}</p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {selectedPage.seoTitle || "No custom SEO title set yet."}
+                      </p>
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        <Badge variant="outline" className="border-[#bfd1ff] bg-white text-[#3654b1]">
+                          {selectedPage.isHomepage ? "Pinned Home" : "Secondary Page"}
+                        </Badge>
+                        <Badge variant="outline" className="border-slate-200 bg-white text-slate-600">
+                          {selectedPage.showInNav ? "Navigation On" : "Navigation Off"}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <div className="max-w-xl rounded-[32px] border border-dashed border-[#bfd1ff] bg-white px-10 py-14 text-center shadow-[0_24px_60px_rgba(69,101,208,0.08)]">
+                    <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[#4565d0]">
+                      Page Studio
+                    </p>
+                    <h3 className="mt-4 text-3xl font-semibold text-slate-950">
+                      Pick a page to manage, then open the dedicated builder.
+                    </h3>
+                    <p className="mt-4 text-sm leading-7 text-slate-600">
+                      The live preview no longer takes over this screen. Use this area for page selection and
+                      settings, then step into the builder only when you want to design the canvas.
+                    </p>
+                    <Button className="mt-8" onClick={() => setShowCreateDialog(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Blank Page
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {activeTab !== "pages" ? (
@@ -371,8 +569,6 @@ export default function CanvasPage() {
             />
           ) : null}
 
-          {activeTab === "theme" ? <TypographyManager /> : null}
-          {activeTab === "branding" ? <BrandingManager /> : null}
           {activeTab === "navigation" ? <NavigationManager /> : null}
         </div>
       ) : null}
@@ -388,6 +584,14 @@ export default function CanvasPage() {
         templateId={selectedCreateTemplate?.id ?? null}
         templateName={selectedCreateTemplate?.name ?? null}
       />
+
+      {selectedPage ? (
+        <PageMetadataForm
+          page={selectedPage}
+          open={showMetadataForm}
+          onOpenChange={setShowMetadataForm}
+        />
+      ) : null}
     </div>
   );
 }
@@ -512,7 +716,7 @@ function TemplatesPanel({
   );
 }
 
-function TypographyManager() {
+export function TypographyManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -617,7 +821,7 @@ function TypographyManager() {
   );
 }
 
-function BrandingManager() {
+export function BrandingManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -1143,7 +1347,7 @@ function ImageUploadDialog({ open, onOpenChange, title, maxSizeMB, accept, onSuc
   );
 }
 
-function ColorPresetDialog({ open, onOpenChange, preset, onSave }: {
+export function ColorPresetDialog({ open, onOpenChange, preset, onSave }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   preset: ColorPreset | null;
@@ -1260,7 +1464,7 @@ function ColorPresetDialog({ open, onOpenChange, preset, onSave }: {
   );
 }
 
-function ColorPresetItem({ preset, isActive, onActivate, onEdit, onDelete }: { preset: ColorPreset; isActive: boolean; onActivate: () => void; onEdit: () => void; onDelete: () => void }) {
+export function ColorPresetItem({ preset, isActive, onActivate, onEdit, onDelete }: { preset: ColorPreset; isActive: boolean; onActivate: () => void; onEdit: () => void; onDelete: () => void }) {
   const swatchBg = preset.accentColor || "#3b82f6";
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border border-muted/50 hover:border-muted/100 transition-colors">

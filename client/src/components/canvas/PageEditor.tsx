@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Copy,
   Eye,
+  ImageIcon,
   Loader2,
   Monitor,
   Plus,
@@ -26,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { SortableSectionList } from "./SortableSectionList";
 import { SectionPicker } from "./SectionPicker";
 import { PageMetadataForm } from "./PageMetadataForm";
+import { MediaLibrary } from "@/components/admin/MediaLibrary";
 import type { CanvasPage, CanvasSection } from "@/lib/adminApi";
 import {
   addPageSection,
@@ -60,6 +64,29 @@ type SectionEditorDraft = {
   configText: string;
 };
 
+type SectionImageTarget =
+  | {
+      id: string;
+      label: string;
+      url: string | null;
+      kind: "field";
+      field: string;
+    }
+  | {
+      id: string;
+      label: string;
+      url: string | null;
+      kind: "slide";
+      index: number;
+    }
+  | {
+      id: string;
+      label: string;
+      url: string | null;
+      kind: "images";
+      index: number;
+    };
+
 const HERO_IMAGES_FALLBACK = [
   "/images/landingpage3.webp",
   "/images/landingpage4.webp",
@@ -84,6 +111,127 @@ function buildSectionDraft(section: CanvasSection | null): SectionEditorDraft {
   };
 }
 
+function parseSectionConfigText(configText: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(configText || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return {};
+  } catch {
+    return null;
+  }
+}
+
+function getSectionImageTargets(
+  section: CanvasSection | null,
+  config: Record<string, unknown> | null,
+): SectionImageTarget[] {
+  if (!section || !config) return [];
+
+  const targets: SectionImageTarget[] = [];
+  const imageFields = [
+    "image",
+    "imageUrl",
+    "backgroundImage",
+    "desktopImage",
+    "mobileImage",
+    "posterImage",
+    "fallbackImage",
+  ];
+
+  for (const field of imageFields) {
+    const value = config[field];
+    if (typeof value === "string" || value == null) {
+      targets.push({
+        id: `field:${field}`,
+        label: field.replace(/([A-Z])/g, " $1").replace(/^./, (match) => match.toUpperCase()),
+        url: typeof value === "string" ? value : null,
+        kind: "field",
+        field,
+      });
+    }
+  }
+
+  const slides = Array.isArray(config.slides) ? config.slides : [];
+  if (slides.length > 0) {
+    slides.forEach((slide, index) => {
+      const image =
+        slide && typeof slide === "object" && typeof (slide as { image?: unknown }).image === "string"
+          ? ((slide as { image: string }).image ?? null)
+          : null;
+      targets.push({
+        id: `slide:${index}`,
+        label: `Hero slide ${index + 1}`,
+        url: image,
+        kind: "slide",
+        index,
+      });
+    });
+  } else if (section.sectionType === "hero") {
+    targets.push({
+      id: "slide:0",
+      label: "Hero slide 1",
+      url: null,
+      kind: "slide",
+      index: 0,
+    });
+  }
+
+  const images = Array.isArray(config.images) ? config.images : [];
+  images.forEach((item, index) => {
+    const image =
+      typeof item === "string"
+        ? item
+        : item && typeof item === "object"
+          ? typeof (item as { image?: unknown }).image === "string"
+            ? ((item as { image: string }).image ?? null)
+            : typeof (item as { src?: unknown }).src === "string"
+              ? ((item as { src: string }).src ?? null)
+              : null
+          : null;
+
+    targets.push({
+      id: `images:${index}`,
+      label: `Gallery image ${index + 1}`,
+      url: image,
+      kind: "images",
+      index,
+    });
+  });
+
+  return targets;
+}
+
+function applySectionImageTarget(
+  config: Record<string, unknown>,
+  target: SectionImageTarget,
+  url: string,
+): Record<string, unknown> {
+  if (target.kind === "field") {
+    return { ...config, [target.field]: url };
+  }
+
+  if (target.kind === "slide") {
+    const slides = Array.isArray(config.slides) ? [...config.slides] : [];
+    const currentSlide =
+      slides[target.index] && typeof slides[target.index] === "object"
+        ? { ...(slides[target.index] as Record<string, unknown>) }
+        : {};
+    slides[target.index] = { ...currentSlide, image: url };
+    return { ...config, slides };
+  }
+
+  const images = Array.isArray(config.images) ? [...config.images] : [];
+  const currentImage = images[target.index];
+  if (currentImage && typeof currentImage === "object" && !Array.isArray(currentImage)) {
+    images[target.index] = { ...(currentImage as Record<string, unknown>), image: url };
+  } else {
+    images[target.index] = url;
+  }
+  return { ...config, images };
+}
+
 function getPreviewWidth(viewport: PreviewViewport) {
   if (viewport === "tablet") return "max-w-[768px]";
   if (viewport === "mobile") return "max-w-[390px]";
@@ -96,12 +244,16 @@ function PagePreview({
   selectedSectionId,
   onSelectSection,
   viewport,
+  onAddSection,
+  onMoveSection,
 }: {
   page: CanvasPage;
   sections: CanvasSection[];
   selectedSectionId: number | null;
   onSelectSection: (id: number) => void;
   viewport: PreviewViewport;
+  onAddSection: () => void;
+  onMoveSection: (id: number, direction: "up" | "down") => void;
 }) {
   const [heroIndex, setHeroIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -127,6 +279,7 @@ function PagePreview({
   const heroSections = visibleSections.filter((section) => section.sectionType === "hero");
   const faqSections = visibleSections.filter((section) => section.sectionType === "faq");
   const nonFaqSections = visibleSections.filter((section) => section.sectionType !== "faq");
+  const orderedVisibleIds = visibleSections.map((section) => section.id);
   const hasContact = visibleSections.some((section) => section.sectionType === "contact");
   const hasBackToTop = visibleSections.some((section) => section.sectionType === "back-to-top");
   const hasFaq = visibleSections.length > 0 && faqSections.length > 0;
@@ -183,8 +336,31 @@ function PagePreview({
     [featuredProductsList, heroImages, heroIndex, isTransitioning, newArrivalsList, videoFailed, viewport],
   );
 
+  if (visibleSections.length === 0) {
+    return (
+      <div className="flex min-h-[720px] items-center justify-center bg-white px-10 py-16 text-neutral-900">
+        <button
+          type="button"
+          onClick={onAddSection}
+          className="flex max-w-md flex-col items-center justify-center rounded-[32px] border-2 border-dashed border-[#6c8cff] bg-[#f8fbff] px-12 py-16 text-center transition-colors hover:bg-[#eef3ff]"
+        >
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#4565d0] text-white">
+            <Plus className="h-6 w-6" />
+          </span>
+          <p className="mt-6 text-[11px] font-black uppercase tracking-[0.24em] text-[#4565d0]">
+            Start building
+          </p>
+          <h3 className="mt-3 text-2xl font-semibold text-slate-950">Add the first section to this blank page</h3>
+          <p className="mt-3 text-sm leading-7 text-slate-600">
+            Choose a hero, product grid, quote, services, or utility section and it will render here live.
+          </p>
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-full bg-[linear-gradient(180deg,#ffffff_0%,#fbfaf7_42%,#f4efe6_100%)] text-neutral-900">
+    <div className="min-h-full bg-white text-neutral-900">
       <main>
         {nonFaqSections.map((section) => (
           <div
@@ -194,7 +370,7 @@ function PagePreview({
             className={cn(
               "group relative block w-full cursor-pointer text-left transition-all",
               selectedSectionId === section.id &&
-                "ring-2 ring-inset ring-[#c9a84c] shadow-[0_0_0_1px_rgba(201,168,76,0.35)]",
+                "ring-2 ring-inset ring-[#4565d0] shadow-[0_0_0_1px_rgba(69,101,208,0.32)]",
             )}
             onClick={() => onSelectSection(section.id)}
             onKeyDown={(event) => {
@@ -204,9 +380,37 @@ function PagePreview({
               }
             }}
           >
-            <div className="pointer-events-none absolute left-4 top-4 z-20 rounded-full border border-[#c9a84c]/35 bg-[#100f0d]/85 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d7b66a] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+            <div className="pointer-events-none absolute left-4 top-4 z-20 rounded-full border border-[#4565d0]/25 bg-[#132450]/88 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#dbe5ff] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               {getSectionLabel(section)}
             </div>
+            {selectedSectionId === section.id ? (
+              <div className="absolute right-4 top-4 z-20 flex items-center gap-2 rounded-full border border-[#bfd1ff] bg-white/92 px-2 py-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onMoveSection(section.id, "up");
+                  }}
+                  disabled={orderedVisibleIds[0] === section.id}
+                  className="rounded-full p-1 text-[#3654b1] transition-colors hover:bg-[#eef3ff] disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Move section up"
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onMoveSection(section.id, "down");
+                  }}
+                  disabled={orderedVisibleIds[orderedVisibleIds.length - 1] === section.id}
+                  className="rounded-full p-1 text-[#3654b1] transition-colors hover:bg-[#eef3ff] disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Move section down"
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : null}
             {renderSection(section, previewCtx, `page-preview-${page.id}`)}
           </div>
         ))}
@@ -231,7 +435,7 @@ function PagePreview({
             className={cn(
               "group relative block w-full cursor-pointer text-left transition-all",
               selectedSectionId === section.id &&
-                "ring-2 ring-inset ring-[#c9a84c] shadow-[0_0_0_1px_rgba(201,168,76,0.35)]",
+                "ring-2 ring-inset ring-[#4565d0] shadow-[0_0_0_1px_rgba(69,101,208,0.32)]",
             )}
             onClick={() => onSelectSection(section.id)}
             onKeyDown={(event) => {
@@ -241,9 +445,37 @@ function PagePreview({
               }
             }}
           >
-            <div className="pointer-events-none absolute left-4 top-4 z-20 rounded-full border border-[#c9a84c]/35 bg-[#100f0d]/85 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d7b66a] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+            <div className="pointer-events-none absolute left-4 top-4 z-20 rounded-full border border-[#4565d0]/25 bg-[#132450]/88 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#dbe5ff] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               {getSectionLabel(section)}
             </div>
+            {selectedSectionId === section.id ? (
+              <div className="absolute right-4 top-4 z-20 flex items-center gap-2 rounded-full border border-[#bfd1ff] bg-white/92 px-2 py-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onMoveSection(section.id, "up");
+                  }}
+                  disabled={orderedVisibleIds[0] === section.id}
+                  className="rounded-full p-1 text-[#3654b1] transition-colors hover:bg-[#eef3ff] disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Move section up"
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onMoveSection(section.id, "down");
+                  }}
+                  disabled={orderedVisibleIds[orderedVisibleIds.length - 1] === section.id}
+                  className="rounded-full p-1 text-[#3654b1] transition-colors hover:bg-[#eef3ff] disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Move section down"
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : null}
             {renderSection(section, previewCtx, `page-preview-faq-${page.id}`)}
           </div>
         ))}
@@ -266,6 +498,8 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
   const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
   const [showSectionPicker, setShowSectionPicker] = useState(false);
   const [showMetadataForm, setShowMetadataForm] = useState(false);
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [activeImageTargetId, setActiveImageTargetId] = useState<string | null>(null);
   const [previewViewport, setPreviewViewport] = useState<PreviewViewport>("desktop");
   const [sectionItems, setSectionItems] = useState<CanvasSection[]>([]);
   const [sectionDraft, setSectionDraft] = useState<SectionEditorDraft>(buildSectionDraft(null));
@@ -326,8 +560,41 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
     [sectionItems, selectedSectionId],
   );
 
+  const parsedDraftConfig = useMemo(
+    () => parseSectionConfigText(sectionDraft.configText),
+    [sectionDraft.configText],
+  );
+
+  const imageTargets = useMemo(
+    () => getSectionImageTargets(selectedSection, parsedDraftConfig),
+    [parsedDraftConfig, selectedSection],
+  );
+
+  const activeImageTarget = useMemo(
+    () => imageTargets.find((target) => target.id === activeImageTargetId) ?? null,
+    [activeImageTargetId, imageTargets],
+  );
+
+  const previewSections = useMemo(() => {
+    if (!selectedSection || !parsedDraftConfig) {
+      return sectionItems;
+    }
+
+    return sectionItems.map((section) =>
+      section.id === selectedSection.id
+        ? {
+            ...section,
+            label: sectionDraft.label.trim() || getSectionLabel(section),
+            isVisible: sectionDraft.isVisible,
+            config: parsedDraftConfig,
+          }
+        : section,
+    );
+  }, [parsedDraftConfig, sectionDraft.isVisible, sectionDraft.label, sectionItems, selectedSection]);
+
   useEffect(() => {
     setSectionDraft(buildSectionDraft(selectedSection));
+    setActiveImageTargetId(null);
   }, [selectedSection]);
 
   const pageUpdateMutation = useMutation({
@@ -513,11 +780,62 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
     [deleteSectionMutation],
   );
 
+  const moveSelectedSection = useCallback(
+    (sectionId: number, direction: "up" | "down") => {
+      if (!sectionId) return;
+
+      const orderedIds = sectionItems
+        .slice()
+        .sort((a, b) => a.orderIndex - b.orderIndex)
+        .map((section) => section.id);
+      const currentIndex = orderedIds.indexOf(sectionId);
+      if (currentIndex === -1) return;
+
+      const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (nextIndex < 0 || nextIndex >= orderedIds.length) return;
+
+      const nextIds = [...orderedIds];
+      const [moved] = nextIds.splice(currentIndex, 1);
+      nextIds.splice(nextIndex, 0, moved);
+      handleReorder(nextIds);
+    },
+    [handleReorder, sectionItems],
+  );
+
   const handleRename = useCallback(
     (id: number, label: string) => {
       patchSectionMutation.mutate({ id, data: { label } });
     },
     [patchSectionMutation],
+  );
+
+  const applyImageSelection = useCallback(
+    (url: string) => {
+      if (!selectedSection || !activeImageTarget) return;
+
+      const currentConfig = parseSectionConfigText(sectionDraft.configText) ?? {};
+      const nextConfig = applySectionImageTarget(currentConfig, activeImageTarget, url);
+      const nextText = JSON.stringify(nextConfig, null, 2);
+
+      setSectionDraft((current) => ({ ...current, configText: nextText }));
+      patchSectionMutation.mutate(
+        {
+          id: selectedSection.id,
+          data: {
+            label: sectionDraft.label.trim() || getSectionLabel(selectedSection),
+            isVisible: sectionDraft.isVisible,
+            config: nextConfig,
+          },
+        },
+        {
+          onSuccess: () => {
+            toast({ title: "Image updated", description: "Section media changed on the builder canvas." });
+          },
+        },
+      );
+      setShowMediaLibrary(false);
+    },
+    [activeImageTarget, patchSectionMutation, sectionDraft.configText, sectionDraft.isVisible, sectionDraft.label, selectedSection, toast],
   );
 
   const handleSaveSection = useCallback(() => {
@@ -584,7 +902,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-[linear-gradient(180deg,#faf8f4_0%,#f3eee5_100%)] text-neutral-900">
+    <div className="flex h-full overflow-hidden bg-[linear-gradient(180deg,#f7f8fc_0%,#eef3ff_100%)] text-neutral-900">
       <div className="flex w-80 shrink-0 flex-col border-r border-black/10 bg-white/90 backdrop-blur-sm">
         <div className="space-y-4 border-b border-black/10 p-4">
           <div className="flex items-center gap-2">
@@ -651,7 +969,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
           <button
             type="button"
             onClick={() => setShowSectionPicker(true)}
-            className="flex w-full items-center justify-center rounded-2xl border border-dashed border-[#c9a84c]/40 bg-[#fffaf0] px-4 py-4 text-sm font-semibold text-[#8f6a15] transition-colors hover:border-[#c9a84c]/70 hover:bg-[#fff4db]"
+            className="flex w-full items-center justify-center rounded-2xl border border-dashed border-[#6c8cff] bg-[#f8fbff] px-4 py-4 text-sm font-semibold text-[#3654b1] transition-colors hover:border-[#4565d0] hover:bg-[#eef3ff]"
           >
             <Plus className="mr-2 h-4 w-4" />
             Add a Section
@@ -660,7 +978,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex items-center gap-3 border-b border-black/10 bg-white/80 px-5 py-4 backdrop-blur-sm">
+        <div className="flex items-center gap-3 border-b border-black/10 bg-white/85 px-5 py-4 backdrop-blur-sm">
           <div className="min-w-0 flex-1">
             <Input
               value={titleDraft}
@@ -673,7 +991,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
               className="h-10 border-black/10 bg-white text-base font-semibold text-neutral-900"
             />
             <p className="mt-1 text-xs text-neutral-500">
-              Live page preview with section selection and device resizing.
+              Dedicated builder canvas with live section rendering and blue selection outlines.
             </p>
           </div>
 
@@ -689,7 +1007,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                   className={cn(
                     "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
                     active
-                      ? "bg-[#c9a84c] text-black"
+                      ? "bg-[#4565d0] text-white"
                       : "text-neutral-600 hover:bg-black/5 hover:text-neutral-900",
                   )}
                 >
@@ -707,7 +1025,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
             onClick={() => window.open(page.slug, "_blank", "noopener,noreferrer")}
           >
             <Eye className="h-4 w-4" />
-            Open Page
+            Preview Storefront
           </Button>
 
           <Button
@@ -721,21 +1039,23 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
         </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(circle_at_top,rgba(201,168,76,0.14),transparent_28%),linear-gradient(180deg,#faf7f0_0%,#f3ede1_100%)]">
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,#f7f8fc_0%,#eef3ff_100%)]">
             <div className="border-b border-black/10 px-5 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
-                Full Page Live Preview
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#4565d0]">
+                Builder Canvas
               </p>
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-6">
               <div className={cn("mx-auto transition-all duration-300", getPreviewWidth(previewViewport))}>
-                <div className="overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.12)]">
+                <div className="overflow-hidden rounded-[30px] border-2 border-[#bfd1ff] bg-white shadow-[0_26px_80px_rgba(69,101,208,0.16)]">
                   <PagePreview
                     page={page}
-                    sections={sectionItems}
+                    sections={previewSections}
                     selectedSectionId={selectedSectionId}
                     onSelectSection={setSelectedSectionId}
                     viewport={previewViewport}
+                    onAddSection={() => setShowSectionPicker(true)}
+                    onMoveSection={moveSelectedSection}
                   />
                 </div>
               </div>
@@ -787,8 +1107,74 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                       {resolveSectionTypeDefinition(selectedSection)?.label ?? selectedSection.sectionType}
                     </p>
                     <p className="mt-1 text-xs text-neutral-500">
-                      Click the live preview to swap between page sections while keeping this panel open.
+                      Click the canvas to swap between sections while keeping this panel open.
                     </p>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="justify-start"
+                      onClick={() => moveSelectedSection(selectedSection.id, "up")}
+                      disabled={sectionItems[0]?.id === selectedSection.id}
+                    >
+                      <ArrowUp className="mr-2 h-4 w-4" />
+                      Move up
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="justify-start"
+                      onClick={() => moveSelectedSection(selectedSection.id, "down")}
+                      disabled={sectionItems[sectionItems.length - 1]?.id === selectedSection.id}
+                    >
+                      <ArrowDown className="mr-2 h-4 w-4" />
+                      Move down
+                    </Button>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#dbe5ff] bg-[#f8fbff] p-4">
+                    <div className="flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4 text-[#4565d0]" />
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#4565d0]">
+                        Section imagery
+                      </p>
+                    </div>
+                    {imageTargets.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {imageTargets.map((target) => (
+                          <button
+                            key={target.id}
+                            type="button"
+                            className={cn(
+                              "flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left transition-colors",
+                              activeImageTargetId === target.id
+                                ? "border-[#8fa8ff] bg-white"
+                                : "border-transparent bg-white/60 hover:border-[#bfd1ff]",
+                            )}
+                            onClick={() => {
+                              setActiveImageTargetId(target.id);
+                              setShowMediaLibrary(true);
+                            }}
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-slate-950">{target.label}</p>
+                              <p className="mt-1 line-clamp-1 text-xs text-slate-500">
+                                {target.url || "No image selected yet"}
+                              </p>
+                            </div>
+                            <span className="text-xs font-semibold text-[#3654b1]">
+                              {target.url ? "Change" : "Add"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs leading-6 text-slate-500">
+                        This section does not expose a direct image field yet, so use the config JSON below for advanced media changes.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -801,8 +1187,13 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                       className="min-h-[320px] border-black/10 bg-[#fffdf9] font-mono text-xs text-neutral-900"
                     />
                     <p className="text-xs text-neutral-500">
-                      Update copy, images, links, and layout data directly. The preview refreshes after save.
+                      Update copy, images, links, and layout data directly. The builder canvas updates live while you type.
                     </p>
+                    {parsedDraftConfig === null ? (
+                      <p className="text-xs text-red-500">
+                        Fix the JSON syntax to restore the live section preview.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -852,6 +1243,12 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
         page={page}
         open={showMetadataForm}
         onOpenChange={setShowMetadataForm}
+      />
+      <MediaLibrary
+        open={showMediaLibrary}
+        onOpenChange={setShowMediaLibrary}
+        onSelect={applyImageSelection}
+        category="all"
       />
     </div>
   );

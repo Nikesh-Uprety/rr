@@ -60,6 +60,9 @@ const loadAdminLandingPageManagerPage = () => import("@/pages/admin/LandingPageM
 const loadAdminImagesPage = () => import("@/pages/admin/Images");
 const loadAdminBucketsPage = () => import("@/pages/admin/Buckets");
 const loadAdminStorefrontImagesPage = () => import("@/pages/admin/StorefrontImagePicker");
+const loadAdminCanvasBuilderPage = () => import("@/pages/admin/CanvasBuilder");
+const loadAdminBrandingStudioPage = () => import("@/pages/admin/BrandingStudio");
+const loadAdminThemeStudioPage = () => import("@/pages/admin/ThemeStudio");
 const loadLoginPage = () => import("@/pages/auth/Login");
 const loadNotFoundPage = () => import("@/pages/not-found");
 const loadLegalPlaceholderPage = () => import("@/pages/storefront/LegalPlaceholder");
@@ -98,6 +101,9 @@ const AdminLandingPageManager = lazy(loadAdminLandingPageManagerPage);
 const AdminImages = lazy(loadAdminImagesPage);
 const AdminBuckets = lazy(loadAdminBucketsPage);
 const AdminStorefrontImages = lazy(loadAdminStorefrontImagesPage);
+const AdminCanvasBuilder = lazy(loadAdminCanvasBuilderPage);
+const AdminBrandingStudio = lazy(loadAdminBrandingStudioPage);
+const AdminThemeStudio = lazy(loadAdminThemeStudioPage);
 const Canvas = lazy(() => import("@/pages/admin/Canvas"));
 const CanvasPage = lazy(() => import("@/pages/admin/CanvasPage"));
 const DynamicPage = lazy(() => import("@/pages/storefront/DynamicPage"));
@@ -415,10 +421,24 @@ function AppRoutes() {
           </AdminLayout>
         </ProtectedRoute>
       </Route>
-      <Route path="/admin/canvas">
+      <Route path="/admin/canvas/builder">
         <ProtectedRoute requiredAdminPage="landing-page">
           <AdminLayout>
-            <CanvasPage />
+            <AdminCanvasBuilder />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/canvas/branding">
+        <ProtectedRoute requiredAdminPage="landing-page">
+          <AdminLayout>
+            <AdminBrandingStudio />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/canvas/theme">
+        <ProtectedRoute requiredAdminPage="landing-page">
+          <AdminLayout>
+            <AdminThemeStudio />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
@@ -426,6 +446,13 @@ function AppRoutes() {
         <ProtectedRoute requiredAdminPage="landing-page">
           <AdminLayout>
             <Canvas />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/canvas">
+        <ProtectedRoute requiredAdminPage="landing-page">
+          <AdminLayout>
+            <CanvasPage />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

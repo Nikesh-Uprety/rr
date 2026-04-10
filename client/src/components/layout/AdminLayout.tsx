@@ -279,6 +279,7 @@ export default function AdminLayout({
       .toUpperCase() || (user?.email?.[0] || "U").toUpperCase();
 
   const displayName = user?.name || user?.email || "User";
+  const isSuperAdmin = user?.role?.toLowerCase() === "superadmin";
   const isVisuallyExpanded =
     !sidebarCollapsed || collapsedSidebarWidth >= ADMIN_SIDEBAR_VISUAL_EXPAND_THRESHOLD;
   const collapsedThemeSidebarClass = !isVisuallyExpanded
@@ -301,41 +302,59 @@ export default function AdminLayout({
       badge: "BETA" as const,
     },
     {
-      href: "/admin/canvas?tab=pages&panel=list",
-      label: "Pages",
-      description: "Pages, add section, redesign",
-      icon: FileText,
-      badge: "BETA" as const,
-    },
-    {
-      href: "/admin/canvas?tab=templates",
-      label: "Templates",
-      description: "Rare Atelier default templates",
-      icon: Layers3,
-    },
-    {
-      href: "/admin/canvas?tab=theme",
+      href: "/admin/canvas/theme",
       label: "Theme",
-      description: "Typography and storefront styling",
+      description: "Fonts and storefront color system",
       icon: Type,
     },
     {
-      href: "/admin/canvas?tab=branding",
+      href: "/admin/canvas/branding",
       label: "Branding",
-      description: "Logos, colors, and brand assets",
+      description: "Logo, favicon, and active template branding",
       icon: Paintbrush2,
     },
-    {
-      href: "/admin/canvas?tab=navigation",
-      label: "Navigation",
-      description: "Header links and page order",
-      icon: Link2,
-    },
+    ...(isSuperAdmin
+      ? [
+          {
+            href: "/admin/canvas?tab=pages&panel=list",
+            label: "Pages",
+            description: "Create and manage storefront pages",
+            icon: FileText,
+            badge: "BETA" as const,
+          },
+          {
+            href: "/admin/canvas?tab=templates",
+            label: "Templates",
+            description: "Rare Atelier default templates",
+            icon: Layers3,
+          },
+          {
+            href: "/admin/canvas?tab=navigation",
+            label: "Navigation",
+            description: "Header links and page order",
+            icon: Link2,
+          },
+        ]
+      : []),
   ];
   const currentCanvasLocation =
     typeof window !== "undefined"
       ? `${window.location.pathname}${window.location.search}`
       : location;
+  const currentCanvasPath =
+    typeof window !== "undefined"
+      ? window.location.pathname
+      : pathname;
+  const isCustomizationItemActive = (href: string) => {
+    if (href.startsWith("/admin/canvas?tab=pages")) {
+      return (
+        currentCanvasPath === "/admin/canvas" ||
+        currentCanvasPath === "/admin/canvas/builder"
+      );
+    }
+
+    return currentCanvasLocation === href || currentCanvasPath === href;
+  };
   const navigateToCustomization = (href: string) => {
     if (typeof window === "undefined") return;
     window.history.pushState({}, "", href);
@@ -452,7 +471,7 @@ export default function AdminLayout({
               </p>
               <div className="space-y-1">
                 {websiteNavItems.map((item) => {
-                  const isActive = currentCanvasLocation === item.href;
+                  const isActive = isCustomizationItemActive(item.href);
                   if (!item.href.startsWith("/admin/canvas")) {
                     return null;
                   }
@@ -606,7 +625,7 @@ export default function AdminLayout({
               ) : null}
               <SidebarMenu>
                 {websiteNavItems.map((item) => {
-                  const isActive = currentCanvasLocation === item.href;
+                  const isActive = isCustomizationItemActive(item.href);
                   return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton

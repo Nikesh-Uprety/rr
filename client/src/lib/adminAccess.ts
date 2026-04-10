@@ -9,7 +9,6 @@ import {
   Package,
   Folder,
   Receipt,
-  Settings,
   Shirt,
   ShoppingBag,
   Sparkles,
@@ -51,13 +50,6 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { page: "marketing", href: "/admin/marketing", icon: Megaphone, label: "Marketing", type: "marketing" },
   { page: "buckets", href: "/admin/buckets", icon: Folder, label: "Buckets", type: "media", badge: "BETA" },
   { page: "images", href: "/admin/images", icon: Images, label: "Images", type: "media", badge: "BETA" },
-  {
-    page: "storefront-images",
-    href: "/admin/storefront-images",
-    icon: Settings,
-    label: "Storefront Images",
-    type: "system",
-  },
 ];
 
 const ADMIN_ROUTE_BY_PAGE: Record<AdminPageKey, string> = {
@@ -95,7 +87,6 @@ const ADMIN_DEFAULT_PAGE_ORDER: AdminPageKey[] = [
   "messages",
   "buckets",
   "images",
-  "storefront-images",
   "landing-page",
   "notifications",
   "profile",

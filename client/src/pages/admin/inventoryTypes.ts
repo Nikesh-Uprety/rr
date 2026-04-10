@@ -23,7 +23,9 @@ export interface InventoryListItem {
   channel: string;
   status: InventoryStatus;
   units: number;
-  avgCost: number;
+  costPrice: number;
+  sellingPrice: number;
+  totalCost: number;
   totalValue: number;
   variant: string;
   sku: string;

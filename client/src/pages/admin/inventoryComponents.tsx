@@ -85,15 +85,30 @@ export function InventoryCard({
           </p>
         </div>
         <div className="rounded-xl bg-muted/50 px-3 py-2 text-center">
-          <p className="text-sm font-semibold text-foreground">{formatNpr(item.avgCost)}</p>
+          <p className="text-sm font-semibold text-foreground">{formatNpr(item.costPrice)}</p>
           <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-            Avg Cost
+            Cost Price
           </p>
         </div>
         <div className="rounded-xl bg-muted/50 px-3 py-2 text-center">
+          <p className="text-sm font-semibold text-foreground">{formatNpr(item.sellingPrice)}</p>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            Selling Price
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-muted/40 px-3 py-2 text-center">
+          <p className="text-sm font-semibold text-foreground">{formatNpr(item.totalCost)}</p>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            Stock Cost
+          </p>
+        </div>
+        <div className="rounded-xl bg-muted/40 px-3 py-2 text-center">
           <p className="text-sm font-semibold text-foreground">{formatNpr(item.totalValue)}</p>
           <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-            Total Value
+            Stock Value
           </p>
         </div>
       </div>
@@ -237,7 +252,7 @@ export function StockInSheet({
   const totalQty = selections.reduce((sum, selection) => sum + selection.qty, 0);
   const estimatedValue = selections.reduce((sum, selection) => {
     const match = products.find((product) => product.id === selection.id);
-    return sum + (match ? match.avgCost * selection.qty : 0);
+    return sum + (match ? match.costPrice * selection.qty : 0);
   }, 0);
 
   const setQuantity = (product: InventoryListItem, nextQty: number) => {
@@ -361,7 +376,8 @@ export function StockInSheet({
                       {product.variant}
                     </span>
                     <span>SKU: {product.sku}</span>
-                    <span>{formatNpr(product.avgCost)}</span>
+                    <span>Cost: {formatNpr(product.costPrice)}</span>
+                    <span>Sell: {formatNpr(product.sellingPrice)}</span>
                     <span>Stock: {product.currentQty}</span>
                   </div>
                 </div>
@@ -403,7 +419,7 @@ export function StockInSheet({
             </p>
             {!isMobile ? (
               <p className="mt-1 text-xs text-muted-foreground">
-                Est. value: {formatNpr(estimatedValue)}
+                Est. cost: {formatNpr(estimatedValue)}
               </p>
             ) : null}
           </div>

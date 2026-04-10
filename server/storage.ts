@@ -43,10 +43,12 @@ import {
 } from "@shared/schema";
 import { and, or, asc, desc, eq, gt, gte, ilike, inArray, isNull, isNotNull, ne, sql } from "drizzle-orm";
 import { meiliClient, PRODUCT_INDEX } from "./lib/meilisearch";
+import { tryNormalizeStoredObjectUrl } from "./s3-upload";
 import { broadcastNotification } from "./websocket";
 
 const ARCHIVED_PRODUCT_CATEGORY = "__archived__";
 const ARCHIVED_PRODUCT_CATEGORY_PREFIX = `${ARCHIVED_PRODUCT_CATEGORY}::`;
+const DELETED_HISTORY_PRODUCT_CATEGORY = "__deleted_history__";
 
 const isArchivedCategoryValue = (category: string | null | undefined): boolean =>
   category === ARCHIVED_PRODUCT_CATEGORY ||
@@ -80,6 +82,11 @@ const notArchivedCategoryCondition = sql<boolean>`
   )
 `;
 
+const notDeletedHistoryCategoryCondition = sql<boolean>`
+  ${products.category} IS NULL
+  OR ${products.category} <> ${DELETED_HISTORY_PRODUCT_CATEGORY}
+`;
+
 type ProductFilterInput = {
   category?: string;
   search?: string;
@@ -89,8 +96,58 @@ type ProductFilterInput = {
   status?: "active" | "draft" | "archived";
 };
 
+export type DeleteProductResult = {
+  action: "deleted" | "archived" | "retained_history";
+};
+
+function normalizeSerializedUrlArray(value: string | null | undefined): string | null | undefined {
+  if (!value) return value;
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return value;
+    return JSON.stringify(
+      parsed.map((entry) =>
+        typeof entry === "string" ? (tryNormalizeStoredObjectUrl(entry) ?? entry) : entry,
+      ),
+    );
+  } catch {
+    return value;
+  }
+}
+
+function normalizeColorImageMap(
+  value: Product["colorImageMap"] | null | undefined,
+): Product["colorImageMap"] | null | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, urls]) => [
+      key,
+      Array.isArray(urls)
+        ? urls.map((entry) =>
+            typeof entry === "string" ? (tryNormalizeStoredObjectUrl(entry) ?? entry) : entry,
+          )
+        : urls,
+    ]),
+  );
+}
+
+function normalizeProductMedia<T extends {
+  imageUrl?: string | null;
+  galleryUrls?: string | null;
+  colorImageMap?: Product["colorImageMap"] | null;
+}>(product: T): T {
+  return {
+    ...product,
+    imageUrl: (tryNormalizeStoredObjectUrl(product.imageUrl) ?? product.imageUrl) as T["imageUrl"],
+    galleryUrls: normalizeSerializedUrlArray(product.galleryUrls) as T["galleryUrls"],
+    colorImageMap: normalizeColorImageMap(product.colorImageMap) as T["colorImageMap"],
+  };
+}
+
 const buildProductConditions = (filters?: ProductFilterInput) => {
-  const conditions = [];
+  const conditions: any[] = [notDeletedHistoryCategoryCondition];
 
   if (filters?.category) {
     conditions.push(eq(products.category, filters.category));
@@ -308,7 +365,7 @@ export interface IStorage {
     id: string,
     data: Partial<Omit<Product, "id">>,
   ): Promise<Product>;
-  deleteProduct(id: string, options?: { permanent?: boolean }): Promise<void>;
+  deleteProduct(id: string, options?: { permanent?: boolean }): Promise<DeleteProductResult>;
 
   // Orders
   getOrders(filters?: {
@@ -574,6 +631,7 @@ export class PgStorage implements IStorage {
       .where(
         and(
           sql`${bills.status} != 'void'`,
+          isNull(bills.orderId),
           or(...billMatchClauses),
         ),
       );
@@ -640,7 +698,7 @@ export class PgStorage implements IStorage {
       .limit(limit)
       .offset(offset);
 
-    return rows;
+    return rows.map((row) => normalizeProductMedia(row));
   }
 
   async getProductsCount(filters?: {
@@ -694,7 +752,8 @@ export class PgStorage implements IStorage {
         draft: sql<number>`count(*) FILTER (WHERE ${products.isActive} = false AND (${notArchivedCategoryCondition}))`,
         archived: sql<number>`count(*) FILTER (WHERE (${archivedCategoryCondition}))`,
       })
-      .from(products);
+      .from(products)
+      .where(notDeletedHistoryCategoryCondition);
 
     const categoryRows = await db
       .select({
@@ -702,6 +761,7 @@ export class PgStorage implements IStorage {
         count: sql<number>`count(*)`,
       })
       .from(products)
+      .where(notDeletedHistoryCategoryCondition)
       .groupBy(products.category);
 
     const categoryCounts: Record<string, number> = {};
@@ -753,13 +813,16 @@ export class PgStorage implements IStorage {
       .where(eq(products.id, id))
       .limit(1);
 
-    return row ?? null;
+    return row ? normalizeProductMedia(row) : null;
   }
 
   async createProduct(
     data: Omit<Product, "id" | "createdAt" | "updatedAt">,
   ): Promise<Product> {
     const nextIsActive = (data.isActive ?? true) && Number(data.stock ?? 0) > 0;
+    const normalizedImageUrl = tryNormalizeStoredObjectUrl(data.imageUrl) ?? null;
+    const normalizedGalleryUrls = normalizeSerializedUrlArray(data.galleryUrls) ?? null;
+    const normalizedColorImageMap = normalizeColorImageMap(data.colorImageMap) ?? undefined;
     const [row] = await db
       .insert(products)
       .values({
@@ -769,9 +832,9 @@ export class PgStorage implements IStorage {
         price: data.price,
         costPrice: data.costPrice ?? 0,
         sku: data.sku ?? "",
-        imageUrl: data.imageUrl ?? null,
-        galleryUrls: data.galleryUrls ?? null,
-        colorImageMap: data.colorImageMap ?? null,
+        imageUrl: normalizedImageUrl,
+        galleryUrls: normalizedGalleryUrls,
+        colorImageMap: normalizedColorImageMap,
         category: data.category ?? null,
         stock: data.stock,
         colorOptions: data.colorOptions ?? null,
@@ -839,7 +902,7 @@ export class PgStorage implements IStorage {
       link: "/admin/products",
     });
 
-    return row;
+    return normalizeProductMedia(row);
   }
 
   async updateProduct(
@@ -852,6 +915,18 @@ export class PgStorage implements IStorage {
           ? data.isActive
           : false
         : data.isActive;
+    const normalizedImageUrl =
+      data.imageUrl === undefined
+        ? undefined
+        : (tryNormalizeStoredObjectUrl(data.imageUrl) ?? null);
+    const normalizedGalleryUrls =
+      data.galleryUrls === undefined
+        ? undefined
+        : (normalizeSerializedUrlArray(data.galleryUrls) ?? null);
+    const normalizedColorImageMap =
+      data.colorImageMap === undefined
+        ? undefined
+        : (normalizeColorImageMap(data.colorImageMap) ?? undefined);
 
     const [row] = await db
       .update(products)
@@ -862,9 +937,9 @@ export class PgStorage implements IStorage {
         price: data.price,
         costPrice: data.costPrice,
         sku: data.sku,
-        imageUrl: data.imageUrl,
-        galleryUrls: data.galleryUrls,
-        colorImageMap: data.colorImageMap,
+        imageUrl: normalizedImageUrl,
+        galleryUrls: normalizedGalleryUrls,
+        colorImageMap: normalizedColorImageMap,
         category: data.category,
         stock: data.stock,
         colorOptions: data.colorOptions,
@@ -914,10 +989,10 @@ export class PgStorage implements IStorage {
       });
     }
 
-    return row;
+    return normalizeProductMedia(row);
   }
 
-  async deleteProduct(id: string, options?: { permanent?: boolean }): Promise<void> {
+  async deleteProduct(id: string, options?: { permanent?: boolean }): Promise<DeleteProductResult> {
     const permanent = options?.permanent === true;
 
     const [existing] = await db
@@ -930,10 +1005,14 @@ export class PgStorage implements IStorage {
       .where(eq(products.id, id))
       .limit(1);
 
-    if (!existing) return;
+    if (!existing) {
+      return { action: permanent ? "deleted" : "archived" };
+    }
 
     if (!permanent) {
-      if (isArchivedCategoryValue(existing.category)) return;
+      if (isArchivedCategoryValue(existing.category)) {
+        return { action: "archived" };
+      }
 
       await db
         .update(products)
@@ -951,12 +1030,18 @@ export class PgStorage implements IStorage {
           console.warn("[MeiliSearch] Delete failed for archived product:", err)
         );
       }
-      return;
+      return { action: "archived" };
     }
 
     try {
       await db.delete(products).where(eq(products.id, id));
-      return;
+
+      if (meiliClient) {
+        meiliClient.index(PRODUCT_INDEX).deleteDocument(id).catch(err =>
+          console.warn("[MeiliSearch] Delete failed for deleted product:", err)
+        );
+      }
+      return { action: "deleted" };
     } catch (err: any) {
       const referencedByOrderItems =
         err?.code === "23503" &&
@@ -966,20 +1051,18 @@ export class PgStorage implements IStorage {
         throw err;
       }
 
-      if (permanent) {
-        throw err;
-      }
-
       const suffix = `${id.slice(0, 8)}-${Date.now().toString(36)}`;
 
       await db
         .update(products)
         .set({
-          name: `${existing.name} [archived-${suffix}]`,
-          category: archiveCategoryValue(existing.category),
+          name: `${existing.name} [history-${suffix}]`,
+          category: DELETED_HISTORY_PRODUCT_CATEGORY,
           stock: 0,
           saleActive: false,
           homeFeatured: false,
+          isNewArrival: false,
+          isNewCollection: false,
           isActive: false,
           updatedAt: new Date(),
         })
@@ -991,6 +1074,8 @@ export class PgStorage implements IStorage {
           console.warn("[MeiliSearch] Delete failed for archived product:", err)
         );
       }
+
+      return { action: "retained_history" };
     }
   }
 
@@ -1746,22 +1831,10 @@ export class PgStorage implements IStorage {
     const includeZeroOrders = filters?.includeZeroOrders ?? true;
     const timeRange = filters?.timeRange;
 
-    if (!includeZeroOrders && !timeRange) {
-      conditions.push(gt(customers.orderCount, 0));
-    }
-
     const whereClause =
       conditions.length > 0 ? and(...conditions) : undefined;
 
-    const page = filters?.page && filters.page > 0 ? filters.page : 1;
-    const limit = typeof filters?.limit === "number"
-      ? Math.max(1, filters.limit)
-      : filters?.page
-        ? 25
-        : undefined;
-    const offset = limit ? (page - 1) * limit : 0;
-
-    const baseQuery = db
+    const rows = await db
       .select({
         id: customers.id,
         firstName: customers.firstName,
@@ -1778,8 +1851,6 @@ export class PgStorage implements IStorage {
       .leftJoin(users, eq(sql`lower(${customers.email})`, sql`lower(${users.username})`))
       .where(whereClause)
       .orderBy(desc(customers.createdAt));
-
-    const rows = await (limit ? baseQuery.limit(limit).offset(offset) : baseQuery);
 
     const since = timeRange === "1w"
       ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
@@ -1806,11 +1877,23 @@ export class PgStorage implements IStorage {
       }),
     );
 
-    if (includeZeroOrders) {
-      return rowsWithLiveStats;
+    const filteredRows = includeZeroOrders
+      ? rowsWithLiveStats
+      : rowsWithLiveStats.filter((row) => row.orderCount > 0);
+
+    const page = filters?.page && filters.page > 0 ? filters.page : 1;
+    const limit = typeof filters?.limit === "number"
+      ? Math.max(1, filters.limit)
+      : filters?.page
+        ? 25
+        : undefined;
+
+    if (!limit) {
+      return filteredRows;
     }
 
-    return rowsWithLiveStats.filter((row) => row.orderCount > 0);
+    const offset = (page - 1) * limit;
+    return filteredRows.slice(offset, offset + limit);
   }
 
   async getCustomersCount(filters?: {
@@ -1831,20 +1914,41 @@ export class PgStorage implements IStorage {
       );
     }
 
-    const includeZeroOrders = filters?.includeZeroOrders ?? true;
-    if (!includeZeroOrders) {
-      conditions.push(gt(customers.orderCount, 0));
-    }
-
     const whereClause =
       conditions.length > 0 ? and(...conditions) : undefined;
 
-    const [row] = await db
-      .select({ count: sql<number>`count(*)` })
+    const rows = await db
+      .select({
+        id: customers.id,
+        firstName: customers.firstName,
+        lastName: customers.lastName,
+        email: customers.email,
+        phoneNumber: customers.phoneNumber,
+      })
       .from(customers)
-      .where(whereClause);
+      .where(whereClause)
+      .orderBy(desc(customers.createdAt));
 
-    return Number(row?.count ?? 0);
+    const includeZeroOrders = filters?.includeZeroOrders ?? true;
+    if (includeZeroOrders) {
+      return rows.length;
+    }
+
+    const rowsWithLiveStats = await Promise.all(
+      rows.map(async (row) => {
+        const stats = await this.getCustomerFinancialStats({
+          id: row.id,
+          email: row.email,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          phoneNumber: row.phoneNumber ?? null,
+        });
+
+        return stats.orderCount;
+      }),
+    );
+
+    return rowsWithLiveStats.filter((orderCount) => orderCount > 0).length;
   }
 
   async getCustomerById(
@@ -3305,13 +3409,18 @@ export class PgStorage implements IStorage {
     const limit = params.limit || 50;
     const offset = params.offset || 0;
 
-    return db
+    const rows = await db
       .select()
       .from(mediaAssets)
       .where(whereClause)
       .orderBy(desc(mediaAssets.createdAt))
       .limit(limit)
       .offset(offset);
+
+    return rows.map((row) => ({
+      ...row,
+      url: tryNormalizeStoredObjectUrl(row.url) ?? row.url,
+    }));
   }
 
   async createMediaAsset(data: NewMediaAsset): Promise<MediaAsset> {
@@ -3511,22 +3620,27 @@ export class MemStorage implements IStorage {
     return product;
   }
 
-  async deleteProduct(id: string, options?: { permanent?: boolean }): Promise<void> {
+  async deleteProduct(id: string, options?: { permanent?: boolean }): Promise<DeleteProductResult> {
     const product = await this.getProductById(id);
-    if (!product) return;
+    if (!product) {
+      return { action: options?.permanent ? "deleted" : "archived" };
+    }
 
     if (options?.permanent) {
       this._products = this._products.filter((p) => p.id !== id);
-      return;
+      return { action: "deleted" };
     }
 
-    if (isArchivedCategoryValue(product.category)) return;
+    if (isArchivedCategoryValue(product.category)) {
+      return { action: "archived" };
+    }
 
     product.category = archiveCategoryValue(product.category);
     product.isActive = false;
     product.saleActive = false;
     product.homeFeatured = false;
     product.updatedAt = new Date();
+    return { action: "archived" };
   }
 
   async getCategories(): Promise<Category[]> {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, Mail, Phone, MapPin, ShoppingBag, Calendar, User as UserIcon, MoreVertical, ExternalLink, Download, Loader2, ChevronRight } from "lucide-react";
@@ -142,6 +142,15 @@ export default function AdminCustomers() {
   const listCustomers = customerPageData?.data ?? [];
   const totalCustomers = customerPageData?.total ?? 0;
   const chartCustomers = chartCustomersData?.data ?? [];
+  const selectedCustomerRevenue = useMemo(
+    () =>
+      orders.reduce((sum, order) => sum + Number(order.total ?? 0), 0),
+    [orders],
+  );
+  const selectedCustomerOnlineOrders = useMemo(
+    () => orders.filter((order) => order.source === "online").length,
+    [orders],
+  );
 
   const customerTotalPages = Math.max(1, Math.ceil(totalCustomers / customerPageSize));
   const paginatedCustomers = listCustomers;
@@ -326,35 +335,42 @@ export default function AdminCustomers() {
             transition={{ duration: 0.2 }}
             className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm"
           >
-            <Table className="min-w-[980px] table-fixed">
+            <div className="overflow-x-auto">
+            <Table className="w-full min-w-[980px] table-fixed">
               <colgroup>
-                <col style={{ width: "11%" }} />
-                <col style={{ width: "41%" }} />
-                <col style={{ width: "16%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "14%" }} />
+                <col className="w-[46%]" />
+                <col className="w-[14%]" />
+                <col className="w-[16%]" />
+                <col className="w-[14%]" />
+                <col className="w-[10%]" />
               </colgroup>
               <TableHeader className="bg-transparent">
                 <TableRow className="border-b border-[#E5E5E0] dark:border-border hover:bg-transparent">
-                  <TableHead className="w-[80px] py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customer</TableHead>
-                  <TableHead className="py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact Info</TableHead>
-                  <TableHead className="py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Orders</TableHead>
-                  <TableHead className="py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Spent</TableHead>
-                  <TableHead className="text-right py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</TableHead>
+                  <TableHead className="py-4 pr-6 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customer Info</TableHead>
+                  <TableHead className="py-4 pr-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Joined</TableHead>
+                  <TableHead className="py-4 pr-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Orders</TableHead>
+                  <TableHead className="py-4 pr-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Spent</TableHead>
+                  <TableHead className="py-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-[#E5E5E0] dark:divide-border">
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell><div className="w-10 h-10 rounded-full bg-muted animate-pulse" /></TableCell>
-                      <TableCell>
-                        <div className="h-4 w-32 bg-muted animate-pulse mb-2" />
-                        <div className="h-3 w-48 bg-muted animate-pulse" />
+                      <TableCell className="align-top">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-full bg-muted animate-pulse" />
+                          <div>
+                            <div className="h-4 w-32 bg-muted animate-pulse mb-2" />
+                            <div className="h-3 w-24 bg-muted animate-pulse" />
+                            <div className="mt-2 h-3 w-40 bg-muted animate-pulse" />
+                          </div>
+                        </div>
                       </TableCell>
-                      <TableCell><div className="h-4 w-12 bg-muted animate-pulse" /></TableCell>
-                      <TableCell><div className="h-4 w-20 bg-muted animate-pulse" /></TableCell>
-                      <TableCell className="text-right"><div className="h-8 w-8 bg-muted animate-pulse float-right rounded" /></TableCell>
+                      <TableCell className="align-top"><div className="h-4 w-20 bg-muted animate-pulse" /></TableCell>
+                      <TableCell className="align-top"><div className="h-4 w-12 bg-muted animate-pulse" /></TableCell>
+                      <TableCell className="align-top text-right"><div className="ml-auto h-4 w-20 bg-muted animate-pulse" /></TableCell>
+                      <TableCell className="align-top text-right"><div className="h-8 w-8 bg-muted animate-pulse float-right rounded" /></TableCell>
                     </TableRow>
                   ))
                 ) : paginatedCustomers.length === 0 ? (
@@ -376,46 +392,64 @@ export default function AdminCustomers() {
                         )}
                         onClick={() => handleToggleExpand(customer.id)}
                       >
-                        <TableCell className="py-4">
-                          <Avatar className={cn("w-12 h-12 shadow-sm border border-black/5 dark:border-white/5", !customer.profileImageUrl && bgGradients[i % bgGradients.length])}>
-                            {customer.profileImageUrl ? (
-                              <img src={customer.profileImageUrl} alt={`${customer.firstName} ${customer.lastName}`} className="object-cover" />
-                            ) : (
-                              <AvatarFallback className="text-white text-sm font-bold bg-transparent">
-                                {getInitials(customer.firstName, customer.lastName)}
-                              </AvatarFallback>
-                            )}
-                          </Avatar>
-                        </TableCell>
-                        <TableCell className="py-4">
-                          <div className="font-semibold text-base text-[#2C3E2D] dark:text-foreground">
-                            {customer.firstName} {customer.lastName}
-                          </div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
-                            <Mail className="w-3.5 h-3.5" /> {customer.email}
-                          </div>
-                          {customer.phoneNumber && (
-                            <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                              <Phone className="w-3 h-3" /> {customer.phoneNumber}
+                        <TableCell className="py-4 pr-6 align-top">
+                          <div className="flex w-full min-w-0 items-start gap-3">
+                            <Avatar className={cn("w-12 h-12 shadow-sm border border-black/5 dark:border-white/5", !customer.profileImageUrl && bgGradients[i % bgGradients.length])}>
+                              {customer.profileImageUrl ? (
+                                <img src={customer.profileImageUrl} alt={`${customer.firstName} ${customer.lastName}`} className="object-cover" />
+                              ) : (
+                                <AvatarFallback className="text-white text-sm font-bold bg-transparent">
+                                  {getInitials(customer.firstName, customer.lastName)}
+                                </AvatarFallback>
+                              )}
+                            </Avatar>
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <div className="truncate font-semibold leading-tight text-base text-[#2C3E2D] dark:text-foreground">
+                                {customer.firstName} {customer.lastName}
+                              </div>
+                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <UserIcon className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">
+                                  {customer.orderCount > 0 ? "Active customer" : "No completed orders yet"}
+                                </span>
+                              </div>
+                              <div className="space-y-1.5">
+                                <div className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
+                                  <Mail className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="break-words leading-relaxed">{customer.email}</span>
+                                </div>
+                                <div className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
+                                  <Phone className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="break-words leading-relaxed">{customer.phoneNumber || "No phone number"}</span>
+                                </div>
+                              </div>
                             </div>
-                          )}
+                          </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="font-medium bg-muted/50">
-                            {customer.orderCount} orders
-                          </Badge>
-                          {customer.orderCount > 0 ? (
-                            <Badge className="ml-2 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0">Active</Badge>
-                          ) : (
-                            <Badge variant="secondary" className="ml-2 bg-muted text-muted-foreground border-0">Inactive</Badge>
-                          )}
+                        <TableCell className="py-4 pr-4 align-top">
+                          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5 shrink-0" />
+                            <span>{new Date(customer.createdAt).toLocaleDateString()}</span>
+                          </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-4 pr-4 align-top">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="font-medium bg-muted/50">
+                              {customer.orderCount} orders
+                            </Badge>
+                            {customer.orderCount > 0 ? (
+                              <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0">Active</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="bg-muted text-muted-foreground border-0">Inactive</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-4 pr-4 align-top text-right">
                           <div className="font-bold text-[#2C3E2D] dark:text-foreground">
                             {formatPrice(customer.totalSpent)}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="align-top text-right" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted rounded-full">
@@ -467,9 +501,7 @@ export default function AdminCustomers() {
                                             <div className="p-3 rounded-lg bg-muted/20 border border-border/50">
                                               <div className="text-xs text-muted-foreground mb-1 uppercase tracking-tighter">Website Orders</div>
                                               <div className="text-xl font-bold">
-                                                {ordersLoading
-                                                  ? detail.orderCount
-                                                  : orders.filter((order) => order.source === "online").length}
+                                                {ordersLoading ? "..." : selectedCustomerOnlineOrders}
                                               </div>
                                             </div>
                                             <div className="p-3 rounded-lg bg-muted/20 border border-border/50">
@@ -480,50 +512,63 @@ export default function AdminCustomers() {
                                             </div>
                                             <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
                                               <div className="text-xs text-primary/70 mb-1 uppercase tracking-tighter">Total Revenue</div>
-                                              <div className="text-xl font-bold text-primary">{formatPrice(detail.totalSpent)}</div>
+                                              <div className="text-xl font-bold text-primary">
+                                                {formatPrice(
+                                                  ordersLoading
+                                                    ? detail.totalSpent
+                                                    : selectedCustomerRevenue,
+                                                )}
+                                              </div>
                                             </div>
                                           </div>
                                         </div>
                                         <div>
                                           <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Personal Details</h4>
-                                          <div className="space-y-2">
-                                            <div className="flex items-center gap-2 text-sm">
-                                              <UserIcon className="w-3.5 h-3.5 text-muted-foreground" />
-                                              <span>
-                                                {detail.firstName} {detail.lastName}
-                                              </span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-sm">
-                                              <Mail className="w-3.5 h-3.5 text-muted-foreground" />
-                                              <span>{detail.email}</span>
-                                            </div>
-                                            {detail.phoneNumber && (
-                                              <div className="flex items-center gap-2 text-sm">
-                                                <Phone className="w-3.5 h-3.5 text-muted-foreground" />
-                                                <span>{detail.phoneNumber}</span>
+                                          <div className="overflow-hidden rounded-lg border border-border/60">
+                                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0 text-sm">
+                                              <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-3 py-2 font-medium text-muted-foreground">
+                                                <UserIcon className="w-3.5 h-3.5" />
+                                                Name
                                               </div>
-                                            )}
-                                            <div className="flex items-start gap-2 text-sm">
-                                              <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
-                                              <span>
-                                                {detail.deliveryAddress ? (
-                                                  [
-                                                    detail.deliveryAddress.street,
-                                                    detail.deliveryAddress.city,
-                                                    detail.deliveryAddress.region,
-                                                  ]
-                                                    .filter(Boolean)
-                                                    .join(", ") || "No address on file"
-                                                ) : (
-                                                  <span className="text-muted-foreground">
-                                                    No address on file
-                                                  </span>
-                                                )}
-                                              </span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-sm">
-                                              <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                                              <span>Account created {new Date(detail.createdAt).toLocaleDateString()}</span>
+                                              <div className="border-b border-border/60 px-3 py-2">
+                                                {detail.firstName} {detail.lastName}
+                                              </div>
+                                              <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-3 py-2 font-medium text-muted-foreground">
+                                                <Mail className="w-3.5 h-3.5" />
+                                                Email
+                                              </div>
+                                              <div className="border-b border-border/60 px-3 py-2 break-all">
+                                                {detail.email}
+                                              </div>
+                                              <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-3 py-2 font-medium text-muted-foreground">
+                                                <Phone className="w-3.5 h-3.5" />
+                                                Phone
+                                              </div>
+                                              <div className="border-b border-border/60 px-3 py-2">
+                                                {detail.phoneNumber || "No phone number"}
+                                              </div>
+                                              <div className="flex items-start gap-2 border-b border-border/60 bg-muted/20 px-3 py-2 font-medium text-muted-foreground">
+                                                <MapPin className="mt-0.5 w-3.5 h-3.5" />
+                                                Address
+                                              </div>
+                                              <div className="border-b border-border/60 px-3 py-2">
+                                                {detail.deliveryAddress
+                                                  ? [
+                                                      detail.deliveryAddress.street,
+                                                      detail.deliveryAddress.city,
+                                                      detail.deliveryAddress.region,
+                                                    ]
+                                                      .filter(Boolean)
+                                                      .join(", ") || "No address on file"
+                                                  : "No address on file"}
+                                              </div>
+                                              <div className="flex items-center gap-2 bg-muted/20 px-3 py-2 font-medium text-muted-foreground">
+                                                <Calendar className="w-3.5 h-3.5" />
+                                                Joined
+                                              </div>
+                                              <div className="px-3 py-2">
+                                                {new Date(detail.createdAt).toLocaleDateString()}
+                                              </div>
                                             </div>
                                           </div>
                                         </div>
@@ -532,7 +577,7 @@ export default function AdminCustomers() {
                                         <div className="flex items-center justify-between mb-3">
                                           <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Order History</h4>
                                           <Badge variant="secondary" className="text-[10px] px-1.5 h-5">
-                                            {ordersLoading ? "Loading..." : `${orders.length} items`}
+                                            {ordersLoading ? "Loading..." : `${orders.length} orders`}
                                           </Badge>
                                         </div>
                                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
@@ -687,6 +732,7 @@ export default function AdminCustomers() {
                 )}
               </TableBody>
             </Table>
+            </div>
           </motion.div>
         ) : (
           <motion.div

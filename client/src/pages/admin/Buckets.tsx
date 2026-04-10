@@ -20,6 +20,7 @@ import {
   fetchAdminFolders,
   fetchAdminImages,
   fetchAdminImagesPage,
+  importAdminDriveFolder,
   updateAdminImageMeta,
   uploadAdminImage,
   type AdminImageAsset,
@@ -34,6 +35,7 @@ import {
   Eye,
   Folder,
   FolderPlus,
+  FolderInput,
   Grid2X2,
   List,
   MoveRight,
@@ -123,6 +125,8 @@ export default function AdminBucketsPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [isBulkUploading, setIsBulkUploading] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [driveImportOpen, setDriveImportOpen] = useState(false);
+  const [driveFolderUrl, setDriveFolderUrl] = useState("");
   const [folderName, setFolderName] = useState("");
   const [folderParentMode, setFolderParentMode] = useState<"current" | "root">("current");
   const [expiryMode, setExpiryMode] = useState<ExpiryMode>("none");
@@ -431,6 +435,55 @@ export default function AdminBucketsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "buckets"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "folders"] });
+    },
+  });
+
+  const importDriveMutation = useMutation({
+    mutationFn: async () =>
+      importAdminDriveFolder({
+        folderUrl: driveFolderUrl.trim(),
+        category,
+        destinationFolderPath: currentFolder ?? null,
+      }),
+    onSuccess: (result) => {
+      setProvider("tigris");
+      setDriveImportOpen(false);
+      setDriveFolderUrl("");
+      setCurrentFolder(result.rootFolderPath);
+      setExpandedFolders((prev) => {
+        const next = new Set(prev);
+        const parts = result.rootFolderPath.split("/");
+        let current = "";
+        for (const part of parts.slice(0, -1)) {
+          current = current ? `${current}/${part}` : part;
+          next.add(current);
+        }
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin", "buckets"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "folders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "folder-markers"] });
+      toast({
+        title: "Drive folder imported",
+        description:
+          result.failedCount > 0
+            ? `${result.importedCount} imported, ${result.skippedCount} skipped, ${result.failedCount} failed.`
+            : `${result.importedCount} imported across ${result.folderCount} folders.`,
+      });
+      if (result.errors.length > 0) {
+        toast({
+          title: "Some files were skipped",
+          description: result.errors.slice(0, 2).join(" "),
+          variant: "warning",
+        });
+      }
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Drive import failed",
+        description: err?.message || "Unable to import this Google Drive folder.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -946,6 +999,16 @@ export default function AdminBucketsPage() {
               >
                 <Upload className="mr-2 h-4 w-4" />
                 Select files
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 px-4"
+                onClick={() => setDriveImportOpen(true)}
+                disabled={provider !== "tigris"}
+              >
+                <FolderInput className="mr-2 h-4 w-4" />
+                Drive import
               </Button>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Calendar className="h-4 w-4" />
@@ -1470,6 +1533,64 @@ export default function AdminBucketsPage() {
               loadingText="Creating..."
             >
               Create folder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={driveImportOpen}
+        onOpenChange={(open) => {
+          setDriveImportOpen(open);
+          if (!open && !importDriveMutation.isPending) {
+            setDriveFolderUrl("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Import Google Drive Folder</DialogTitle>
+            <DialogDescription>
+              Paste a public Google Drive folder URL to import its folder tree and image files into Tigris.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Drive folder URL</p>
+              <Input
+                value={driveFolderUrl}
+                onChange={(e) => setDriveFolderUrl(e.target.value)}
+                placeholder="https://drive.google.com/drive/folders/..."
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-[#DCE8DB] bg-[#F6FAF5] px-3 py-2 text-sm">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Category</p>
+                <p className="font-semibold text-[#203123]">{CATEGORY_LABELS[category]}</p>
+              </div>
+              <div className="rounded-xl border border-[#DCE8DB] bg-[#F6FAF5] px-3 py-2 text-sm">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Destination</p>
+                <p className="font-semibold text-[#203123] break-words">{currentFolder ?? "Root"}</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-dashed border-[#DCE8DB] bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
+              The import keeps the Google Drive folder structure and writes the files into your Tigris bucket so they appear in Buckets and the media library.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDriveImportOpen(false)}
+              disabled={importDriveMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => importDriveMutation.mutate()}
+              loading={importDriveMutation.isPending}
+              loadingText="Importing..."
+              disabled={!driveFolderUrl.trim()}
+            >
+              Import to Tigris
             </Button>
           </DialogFooter>
         </DialogContent>

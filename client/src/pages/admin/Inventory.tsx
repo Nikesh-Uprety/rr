@@ -476,12 +476,12 @@ export default function Inventory() {
         : "Inventory items";
   const pageSubtitle =
     activeDesktopTab === "overview"
-      ? `Real-time metrics for ${selectedOutlet === "all" ? "All Warehouses" : selectedOutlet}`
+      ? `Real-time metrics for active inventory in ${selectedOutlet === "all" ? "all outlets" : selectedOutlet}`
       : activeDesktopTab === "movements"
-        ? "Unified log of stock updates, outgoing orders, and manual adjustments."
+        ? "Active-product stock updates, outgoing orders, and manual adjustments."
         : activeDesktopTab === "settings"
           ? "Tune how the inventory workspace behaves for your team."
-        : "Manage stock levels, variants, and replenishment across the admin inventory.";
+        : "Manage active stock levels, variant pricing, and replenishment across the admin inventory.";
 
   const overviewSummaryCards = [
     {
@@ -925,22 +925,24 @@ export default function Inventory() {
                 <div className="overflow-x-auto">
                   <table className="min-w-full table-fixed text-sm">
                     <colgroup>
-                      <col style={{ width: "30%" }} />
-                      <col style={{ width: "14%" }} />
-                      <col style={{ width: "10%" }} />
-                      <col style={{ width: "14%" }} />
+                      <col style={{ width: "26%" }} />
+                      <col style={{ width: "18%" }} />
                       <col style={{ width: "12%" }} />
                       <col style={{ width: "10%" }} />
                       <col style={{ width: "10%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "10%" }} />
+                      <col style={{ width: "16%" }} />
                     </colgroup>
                     <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.16em] text-muted-foreground">
                       <tr>
                         <th className="px-4 py-3">Product</th>
                         <th className="px-4 py-3">Variant</th>
-                        <th className="px-4 py-3">Batch</th>
                         <th className="px-4 py-3">Outlet</th>
-                        <th className="px-4 py-3">Avg cost</th>
+                        <th className="px-4 py-3">Cost</th>
+                        <th className="px-4 py-3">Selling</th>
                         <th className="px-4 py-3">Stock</th>
+                        <th className="px-4 py-3">Value</th>
                         <th className="px-4 py-3">Status</th>
                       </tr>
                     </thead>
@@ -957,11 +959,12 @@ export default function Inventory() {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-4"><Skeleton className="h-4 w-20" /></td>
-                              <td className="px-4 py-4"><Skeleton className="h-4 w-16" /></td>
                               <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
                               <td className="px-4 py-4"><Skeleton className="h-4 w-20" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-20" /></td>
                               <td className="px-4 py-4"><Skeleton className="h-4 w-12" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-20" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-20" /></td>
                               <td className="px-4 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
                             </tr>
                           ))
@@ -984,17 +987,25 @@ export default function Inventory() {
                                   </div>
                                   <div className="min-w-0">
                                     <p className="truncate font-medium text-foreground">{item.name}</p>
-                                    <p className="truncate text-xs text-muted-foreground">{item.channel}</p>
+                                    <p className="truncate text-xs text-muted-foreground">
+                                      {item.channel} · {item.category}
+                                    </p>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-4 text-muted-foreground">{item.variant}</td>
-                              <td className="px-4 py-4 text-muted-foreground">{item.batch}</td>
+                              <td className="px-4 py-4 text-muted-foreground">
+                                <div className="space-y-1">
+                                  <p>{item.variant}</p>
+                                  <p className="text-xs">SKU: {item.sku}</p>
+                                </div>
+                              </td>
                               <td className="px-4 py-4 text-muted-foreground">{item.outlet}</td>
-                              <td className="px-4 py-4">{formatNpr(item.avgCost)}</td>
+                              <td className="px-4 py-4">{formatNpr(item.costPrice)}</td>
+                              <td className="px-4 py-4">{formatNpr(item.sellingPrice)}</td>
                               <td className={cn("px-4 py-4 font-medium", item.status !== "in_stock" && "text-rose-700")}>
                                 {item.units} units
                               </td>
+                              <td className="px-4 py-4 font-medium">{formatNpr(item.totalValue)}</td>
                               <td className="px-4 py-4">
                                 <div className="flex items-center gap-2">
                                   <StatusBadge status={item.status} />

@@ -4855,7 +4855,20 @@ ${Array.from(uniqueEntries.entries())
   };
 
   const INVENTORY_DEFAULT_OUTLET = "Main Outlet";
-  const ACTIVE_INVENTORY_PRODUCT_CONDITION = eq(products.isActive, true);
+  const INVENTORY_ARCHIVED_CATEGORY = "__archived__";
+  const INVENTORY_ARCHIVED_CATEGORY_PREFIX = `${INVENTORY_ARCHIVED_CATEGORY}::%`;
+  const ACTIVE_INVENTORY_PRODUCT_CONDITION = and(
+    eq(products.isActive, true),
+    sql<boolean>`
+      (
+        ${products.category} is null
+        or (
+          ${products.category} <> ${INVENTORY_ARCHIVED_CATEGORY}
+          and ${products.category} not like ${INVENTORY_ARCHIVED_CATEGORY_PREFIX}
+        )
+      )
+    `,
+  );
 
   const resolveInventoryStatus = (units: number): InventoryStatus => {
     if (units <= 0) return "out_of_stock";
@@ -5139,21 +5152,30 @@ ${Array.from(uniqueEntries.entries())
           0,
         );
 
-        const productTotals = productRows.map((product) => ({
-          productId: product.id,
-          totalStock: (itemsByProduct.get(product.id) ?? []).reduce(
-            (sum, item) => sum + item.units,
-            0,
-          ),
-        }));
+        const productHealth = productRows.map((product) => {
+          const productItems = itemsByProduct.get(product.id) ?? [];
+          const totalStock = productItems.reduce((sum, item) => sum + item.units, 0);
+          const hasVariantIssue = productItems.some((item) => item.status !== "in_stock");
 
-        const lowStockCount = productTotals.filter(
-          (product) => product.totalStock > 0 && product.totalStock <= 10,
-        ).length;
-        const criticalStockCount = productTotals.filter(
+          return {
+            productId: product.id,
+            totalStock,
+            hasVariantIssue,
+          };
+        });
+
+        const criticalStockCount = productHealth.filter(
           (product) => product.totalStock <= 0,
         ).length;
-        const inStockCount = productTotals.filter((product) => product.totalStock > 10).length;
+        const lowStockCount = productHealth.filter(
+          (product) =>
+            product.totalStock > 0 &&
+            (product.totalStock <= 10 || product.hasVariantIssue),
+        ).length;
+        const inStockCount = productHealth.filter(
+          (product) =>
+            product.totalStock > 10 && !product.hasVariantIssue,
+        ).length;
 
         const result: InventorySummaryResponse = {
           totalProducts: productRows.length,

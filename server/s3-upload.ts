@@ -66,13 +66,80 @@ export class S3Uploader {
   }
 
   getPublicUrl(fileName: string): string {
-    const base = (this.config.publicBaseUrl || this.config.endpoint).replace(/\/+$/, "");
-    return `${base}/${this.config.bucket}/${fileName}`;
+    return buildPublicObjectUrl(this.config, fileName);
   }
 }
 
 function readFirst(...values: Array<string | undefined>): string | undefined {
   return values.find((value) => typeof value === "string" && value.trim().length > 0)?.trim();
+}
+
+function trimTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function trimLeadingSlashes(value: string): string {
+  return value.replace(/^\/+/, "");
+}
+
+function isTigrisEndpoint(endpoint: string): boolean {
+  return /(?:^https?:\/\/)?(?:[^/]+\.)?(?:t3\.storageapi\.dev|fly\.storage\.tigris\.dev)/i.test(endpoint);
+}
+
+function normalizeObjectKey(fileName: string): string {
+  return trimLeadingSlashes(fileName).replace(/\/{2,}/g, "/");
+}
+
+export function resolvePublicObjectBaseUrl(config: S3Config): string {
+  if (config.publicBaseUrl && config.publicBaseUrl.trim()) {
+    return trimTrailingSlashes(config.publicBaseUrl.trim());
+  }
+
+  if (isTigrisEndpoint(config.endpoint)) {
+    return `https://${config.bucket}.t3.tigrisfiles.io`;
+  }
+
+  return `${trimTrailingSlashes(config.endpoint)}/${trimLeadingSlashes(config.bucket)}`;
+}
+
+export function buildPublicObjectUrl(config: S3Config, fileName: string): string {
+  const base = resolvePublicObjectBaseUrl(config);
+  const key = normalizeObjectKey(fileName);
+  return `${base}/${key}`;
+}
+
+export function normalizeStoredObjectUrl(url: string, config: S3Config): string {
+  const rawUrl = url.trim();
+  if (!rawUrl) return url;
+
+  const normalizedBucket = trimLeadingSlashes(config.bucket);
+  const publicBase = resolvePublicObjectBaseUrl(config);
+  const endpointBase = trimTrailingSlashes(config.endpoint);
+
+  const prefixes = [
+    `${publicBase}/${normalizedBucket}/`,
+    `${publicBase}/`,
+    `${endpointBase}/${normalizedBucket}/`,
+  ];
+
+  for (const prefix of prefixes) {
+    if (rawUrl.startsWith(prefix)) {
+      const key = rawUrl.slice(prefix.length);
+      return buildPublicObjectUrl(config, key);
+    }
+  }
+
+  return url;
+}
+
+export function tryNormalizeStoredObjectUrl(url: string | null | undefined): string | null | undefined {
+  if (!url) return url;
+
+  try {
+    return normalizeStoredObjectUrl(url, resolveS3ConfigFromEnv());
+  } catch {
+    return url;
+  }
 }
 
 export function resolveS3ConfigFromEnv(): S3Config {

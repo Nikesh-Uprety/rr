@@ -14,6 +14,7 @@ import {
   Smartphone,
   Tablet,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 
@@ -45,6 +46,7 @@ import {
   updatePageSection,
   reorderPageSections,
   generatePreviewToken,
+  uploadProductImageFile,
 } from "@/lib/adminApi";
 import {
   getSectionLabel,
@@ -144,6 +146,7 @@ function getSectionImageTargets(
   ];
 
   for (const field of imageFields) {
+    if (!Object.prototype.hasOwnProperty.call(config, field)) continue;
     const value = config[field];
     if (typeof value === "string" || value == null) {
       targets.push({
@@ -359,9 +362,16 @@ function PagePreview({
   const orderedVisibleIds = visibleSections.map((section) => section.id);
 
   const heroImages = heroSections.length > 0
-    ? ((heroSections[0].config?.slides as Array<{ image?: string }> | undefined)
-        ?.map((slide) => slide.image)
-        .filter((image): image is string => Boolean(image)) ?? HERO_IMAGES_FALLBACK)
+    ? (() => {
+        const heroSection = heroSections[0];
+        const slideImages =
+          ((heroSection.config?.slides as Array<{ image?: string }> | undefined)
+            ?.map((slide) => slide.image)
+            .filter((image): image is string => Boolean(image)) ?? []);
+        if (slideImages.length > 0) return slideImages;
+        if (heroSection.config?.variant === "stuffyclone") return ["/images/stussy.webp"];
+        return HERO_IMAGES_FALLBACK;
+      })()
     : HERO_IMAGES_FALLBACK;
 
   const featuredProductsList = featuredProducts?.products ?? [];
@@ -508,12 +518,15 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const sectionListRef = useRef<HTMLDivElement | null>(null);
+  const imageUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
   const [showSectionPicker, setShowSectionPicker] = useState(false);
   const [showMetadataForm, setShowMetadataForm] = useState(false);
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [activeImageTargetId, setActiveImageTargetId] = useState<string | null>(null);
+  const [queuedImageUploadTargetId, setQueuedImageUploadTargetId] = useState<string | null>(null);
+  const [uploadingImageTargetId, setUploadingImageTargetId] = useState<string | null>(null);
   const [previewViewport, setPreviewViewport] = useState<PreviewViewport>("desktop");
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [sectionItems, setSectionItems] = useState<CanvasSection[]>([]);
@@ -596,6 +609,17 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
     () => imageTargets.find((target) => target.id === activeImageTargetId) ?? null,
     [activeImageTargetId, imageTargets],
   );
+  const isStuffyLandingHero =
+    selectedSection?.sectionType === "hero" &&
+    parsedDraftConfig?.variant === "stuffyclone";
+  const stuffyHeroImageTarget = useMemo(
+    () =>
+      imageTargets.find((target) => target.id === "slide:0") ??
+      imageTargets.find((target) => target.kind === "slide") ??
+      null,
+    [imageTargets],
+  );
+  const stuffyHeroImageUrl = stuffyHeroImageTarget?.url ?? heroSlides[0]?.image ?? "";
 
 
   const replaceDraftConfig = useCallback((nextConfig: Record<string, unknown>) => {
@@ -850,12 +874,19 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
     [patchSectionMutation],
   );
 
-  const applyImageSelection = useCallback(
-    (url: string) => {
-      if (!selectedSection || !activeImageTarget) return;
-
+  const applyImageToTarget = useCallback(
+    (
+      target: SectionImageTarget,
+      url: string,
+      options?: {
+        closeLibrary?: boolean;
+        successTitle?: string;
+        successDescription?: string;
+      },
+    ) => {
+      if (!selectedSection) return;
       const currentConfig = parseSectionConfigText(sectionDraft.configText) ?? {};
-      const nextConfig = applySectionImageTarget(currentConfig, activeImageTarget, url);
+      const nextConfig = applySectionImageTarget(currentConfig, target, url);
       const nextText = JSON.stringify(nextConfig, null, 2);
 
       setSectionDraft((current) => ({ ...current, configText: nextText }));
@@ -870,13 +901,103 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
         },
         {
           onSuccess: () => {
-            toast({ title: "Image updated", description: "Section media changed on the builder canvas." });
+            toast({
+              title: options?.successTitle ?? "Image updated",
+              description:
+                options?.successDescription ?? "Section media changed on the builder canvas.",
+            });
           },
         },
       );
-      setShowMediaLibrary(false);
+      if (options?.closeLibrary ?? true) {
+        setShowMediaLibrary(false);
+      }
     },
-    [activeImageTarget, patchSectionMutation, sectionDraft.configText, sectionDraft.isVisible, sectionDraft.label, selectedSection, toast],
+    [
+      patchSectionMutation,
+      sectionDraft.configText,
+      sectionDraft.isVisible,
+      sectionDraft.label,
+      selectedSection,
+      toast,
+    ],
+  );
+
+  const applyImageSelection = useCallback(
+    (url: string) => {
+      if (!activeImageTarget) return;
+      applyImageToTarget(activeImageTarget, url);
+    },
+    [activeImageTarget, applyImageToTarget],
+  );
+
+  const uploadTargetImageMutation = useMutation({
+    mutationFn: async ({
+      file,
+      target,
+    }: {
+      file: File;
+      target: SectionImageTarget;
+    }) => {
+      const url = await uploadProductImageFile(file);
+      return { url, target };
+    },
+    onMutate: ({ target }) => {
+      setUploadingImageTargetId(target.id);
+    },
+    onSuccess: ({ url, target }) => {
+      applyImageToTarget(target, url, {
+        closeLibrary: false,
+        successTitle: "Image uploaded",
+        successDescription: "Uploaded to Tigris and applied to this section.",
+      });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Upload failed",
+        description: err.message || "Failed to upload image to Tigris.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setUploadingImageTargetId(null);
+      setQueuedImageUploadTargetId(null);
+      if (imageUploadInputRef.current) {
+        imageUploadInputRef.current.value = "";
+      }
+    },
+  });
+
+  const triggerDirectImageUpload = useCallback((targetId: string) => {
+    setQueuedImageUploadTargetId(targetId);
+    if (imageUploadInputRef.current) {
+      imageUploadInputRef.current.value = "";
+      imageUploadInputRef.current.click();
+    }
+  }, []);
+
+  const handleDirectImageUploadChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file || !queuedImageUploadTargetId) {
+        setQueuedImageUploadTargetId(null);
+        return;
+      }
+
+      const target = imageTargets.find((item) => item.id === queuedImageUploadTargetId);
+      if (!target) {
+        setQueuedImageUploadTargetId(null);
+        toast({
+          title: "Upload failed",
+          description: "The selected image slot is no longer available.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      uploadTargetImageMutation.mutate({ file, target });
+    },
+    [imageTargets, queuedImageUploadTargetId, toast, uploadTargetImageMutation],
   );
 
   const openStorefrontPreview = useCallback(async () => {
@@ -1190,104 +1311,200 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
 
                   {selectedSection.sectionType === "hero" ? (
                     <div className="rounded-2xl border border-[#dbe5ff] bg-[#f8fbff] p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#4565d0]">Hero slides</p>
-                          <p className="mt-1 text-xs text-slate-600">Edit hero headlines, CTA text, and slide images without touching JSON.</p>
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full"
-                          onClick={() => updateHeroSlidesDraft([
-                            ...heroSlides,
-                            {
-                              tag: "Campaign",
-                              headline: "New slide headline",
-                              eyebrow: "Story layer",
-                              body: "Add a short sentence that explains what this slide is doing.",
-                              ctaLabel: "Shop now",
-                              ctaHref: "/products",
-                              image: "",
-                            },
-                          ])}
-                        >
-                          <Plus className="mr-2 h-3.5 w-3.5" />
-                          Add slide
-                        </Button>
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        {heroSlides.map((slide, index) => (
-                          <div key={`hero-slide-${index}`} className="rounded-2xl border border-[#d7e4ff] bg-white p-3 shadow-sm">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-950">Slide {index + 1}</p>
-                                <p className="text-xs text-slate-500">This content updates the live builder canvas instantly.</p>
+                      {isStuffyLandingHero ? (
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#4565d0]">
+                              Stuffy landing background
+                            </p>
+                            <p className="mt-1 text-xs text-slate-600">
+                              This template uses one full-screen background image. Change that image here.
+                            </p>
+                          </div>
+                          <div className="overflow-hidden rounded-[24px] border border-[#d7e4ff] bg-white shadow-sm">
+                            <div className="relative aspect-[4/5] bg-black">
+                              {stuffyHeroImageUrl ? (
+                                <img
+                                  src={stuffyHeroImageUrl}
+                                  alt="Stuffy landing background preview"
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-500">
+                                  No landing background image selected yet.
+                                </div>
+                              )}
+                              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-5">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/70">
+                                  Live background
+                                </p>
+                                <p className="mt-2 text-lg font-semibold text-white">
+                                  Stuffy landing hero
+                                </p>
                               </div>
-                              {heroSlides.length > 1 ? (
+                            </div>
+                            <div className="space-y-3 border-t border-[#d7e4ff] bg-white p-4">
+                              <p className="line-clamp-1 text-xs text-slate-500">
+                                {stuffyHeroImageUrl || "No image URL yet"}
+                              </p>
+                              <div className="grid gap-2 sm:grid-cols-2">
                                 <Button
                                   type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-red-500 hover:bg-red-50 hover:text-red-600"
-                                  onClick={() => updateHeroSlidesDraft(heroSlides.filter((_, slideIndex) => slideIndex !== index))}
+                                  variant="outline"
+                                  className="justify-start rounded-2xl"
+                                  onClick={() => {
+                                    if (!stuffyHeroImageTarget) return;
+                                    setActiveImageTargetId(stuffyHeroImageTarget.id);
+                                    setShowMediaLibrary(true);
+                                  }}
+                                  disabled={!stuffyHeroImageTarget}
                                 >
-                                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                                  Remove
+                                  <ImageIcon className="mr-2 h-4 w-4" />
+                                  Choose from media library
                                 </Button>
-                              ) : null}
-                            </div>
-                            <div className="mt-3 grid gap-3">
-                              <Input
-                                value={slide.tag}
-                                onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, tag: event.target.value } : item))}
-                                placeholder="Tag"
-                              />
-                              <Input
-                                value={slide.headline}
-                                onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, headline: event.target.value } : item))}
-                                placeholder="Headline"
-                              />
-                              <Input
-                                value={slide.eyebrow}
-                                onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, eyebrow: event.target.value } : item))}
-                                placeholder="Eyebrow"
-                              />
-                              <Textarea
-                                value={slide.body}
-                                onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, body: event.target.value } : item))}
-                                className="min-h-[100px]"
-                                placeholder="Short supporting copy"
-                              />
-                              <div className="grid gap-3 sm:grid-cols-2">
-                                <Input
-                                  value={slide.ctaLabel}
-                                  onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, ctaLabel: event.target.value } : item))}
-                                  placeholder="CTA label"
-                                />
-                                <Input
-                                  value={slide.ctaHref}
-                                  onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, ctaHref: event.target.value } : item))}
-                                  placeholder="CTA link"
-                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="justify-start rounded-2xl"
+                                  disabled={!stuffyHeroImageTarget || uploadTargetImageMutation.isPending}
+                                  onClick={() => {
+                                    if (!stuffyHeroImageTarget) return;
+                                    triggerDirectImageUpload(stuffyHeroImageTarget.id);
+                                  }}
+                                >
+                                  {uploadingImageTargetId === stuffyHeroImageTarget?.id ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Upload className="mr-2 h-4 w-4" />
+                                  )}
+                                  {uploadingImageTargetId === stuffyHeroImageTarget?.id
+                                    ? "Uploading..."
+                                    : "Upload to Tigris"}
+                                </Button>
                               </div>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="justify-start rounded-2xl"
-                                onClick={() => {
-                                  setActiveImageTargetId(`slide:${index}`);
-                                  setShowMediaLibrary(true);
-                                }}
-                              >
-                                <ImageIcon className="mr-2 h-4 w-4" />
-                                {slide.image ? "Change slide image" : "Add slide image"}
-                              </Button>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#4565d0]">Hero slides</p>
+                              <p className="mt-1 text-xs text-slate-600">Edit hero headlines, CTA text, and slide images without touching JSON.</p>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="rounded-full"
+                              onClick={() => updateHeroSlidesDraft([
+                                ...heroSlides,
+                                {
+                                  tag: "Campaign",
+                                  headline: "New slide headline",
+                                  eyebrow: "Story layer",
+                                  body: "Add a short sentence that explains what this slide is doing.",
+                                  ctaLabel: "Shop now",
+                                  ctaHref: "/products",
+                                  image: "",
+                                },
+                              ])}
+                            >
+                              <Plus className="mr-2 h-3.5 w-3.5" />
+                              Add slide
+                            </Button>
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            {heroSlides.map((slide, index) => (
+                              <div key={`hero-slide-${index}`} className="rounded-2xl border border-[#d7e4ff] bg-white p-3 shadow-sm">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-950">Slide {index + 1}</p>
+                                    <p className="text-xs text-slate-500">This content updates the live builder canvas instantly.</p>
+                                  </div>
+                                  {heroSlides.length > 1 ? (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                                      onClick={() => updateHeroSlidesDraft(heroSlides.filter((_, slideIndex) => slideIndex !== index))}
+                                    >
+                                      <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                      Remove
+                                    </Button>
+                                  ) : null}
+                                </div>
+                                <div className="mt-3 grid gap-3">
+                                  <Input
+                                    value={slide.tag}
+                                    onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, tag: event.target.value } : item))}
+                                    placeholder="Tag"
+                                  />
+                                  <Input
+                                    value={slide.headline}
+                                    onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, headline: event.target.value } : item))}
+                                    placeholder="Headline"
+                                  />
+                                  <Input
+                                    value={slide.eyebrow}
+                                    onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, eyebrow: event.target.value } : item))}
+                                    placeholder="Eyebrow"
+                                  />
+                                  <Textarea
+                                    value={slide.body}
+                                    onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, body: event.target.value } : item))}
+                                    className="min-h-[100px]"
+                                    placeholder="Short supporting copy"
+                                  />
+                                  <div className="grid gap-3 sm:grid-cols-2">
+                                    <Input
+                                      value={slide.ctaLabel}
+                                      onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, ctaLabel: event.target.value } : item))}
+                                      placeholder="CTA label"
+                                    />
+                                    <Input
+                                      value={slide.ctaHref}
+                                      onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, ctaHref: event.target.value } : item))}
+                                      placeholder="CTA link"
+                                    />
+                                  </div>
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="justify-start rounded-2xl"
+                                      onClick={() => {
+                                        setActiveImageTargetId(`slide:${index}`);
+                                        setShowMediaLibrary(true);
+                                      }}
+                                    >
+                                      <ImageIcon className="mr-2 h-4 w-4" />
+                                      {slide.image ? "Change slide image" : "Add slide image"}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="justify-start rounded-2xl"
+                                      disabled={uploadTargetImageMutation.isPending}
+                                      onClick={() => triggerDirectImageUpload(`slide:${index}`)}
+                                    >
+                                      {uploadingImageTargetId === `slide:${index}` ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Upload className="mr-2 h-4 w-4" />
+                                      )}
+                                      {uploadingImageTargetId === `slide:${index}`
+                                        ? "Uploading..."
+                                        : "Upload to Tigris"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   ) : null}
 
@@ -1314,6 +1531,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                     </Button>
                   </div>
 
+                  {isStuffyLandingHero ? null : (
                   <div className="rounded-2xl border border-[#dbe5ff] bg-[#f8fbff] p-4">
                     <div className="flex items-center gap-2">
                       <ImageIcon className="h-4 w-4 text-[#4565d0]" />
@@ -1324,30 +1542,45 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                     {imageTargets.length > 0 ? (
                       <div className="mt-3 space-y-2">
                         {imageTargets.map((target) => (
-                          <button
-                            key={target.id}
-                            type="button"
-                            className={cn(
-                              "flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left transition-colors",
-                              activeImageTargetId === target.id
-                                ? "border-[#8fa8ff] bg-white"
-                                : "border-transparent bg-white/60 hover:border-[#bfd1ff]",
-                            )}
-                            onClick={() => {
-                              setActiveImageTargetId(target.id);
-                              setShowMediaLibrary(true);
-                            }}
-                          >
-                            <div>
-                              <p className="text-sm font-medium text-slate-950">{target.label}</p>
-                              <p className="mt-1 line-clamp-1 text-xs text-slate-500">
-                                {target.url || "No image selected yet"}
-                              </p>
-                            </div>
-                            <span className="text-xs font-semibold text-[#3654b1]">
-                              {target.url ? "Change" : "Add"}
-                            </span>
-                          </button>
+                          <div key={target.id} className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className={cn(
+                                "flex min-w-0 flex-1 items-center justify-between rounded-2xl border px-3 py-3 text-left transition-colors",
+                                activeImageTargetId === target.id
+                                  ? "border-[#8fa8ff] bg-white"
+                                  : "border-transparent bg-white/60 hover:border-[#bfd1ff]",
+                              )}
+                              onClick={() => {
+                                setActiveImageTargetId(target.id);
+                                setShowMediaLibrary(true);
+                              }}
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-slate-950">{target.label}</p>
+                                <p className="mt-1 line-clamp-1 text-xs text-slate-500">
+                                  {target.url || "No image selected yet"}
+                                </p>
+                              </div>
+                              <span className="ml-3 shrink-0 text-xs font-semibold text-[#3654b1]">
+                                {target.url ? "Change" : "Add"}
+                              </span>
+                            </button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-11 shrink-0 rounded-2xl px-3"
+                              disabled={uploadTargetImageMutation.isPending}
+                              onClick={() => triggerDirectImageUpload(target.id)}
+                            >
+                              {uploadingImageTargetId === target.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
                         ))}
                       </div>
                     ) : (
@@ -1356,24 +1589,50 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                       </p>
                     )}
                   </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-[0.18em] text-neutral-500">Config JSON</Label>
-                    <Textarea
-                      value={sectionDraft.configText}
-                      onChange={(event) =>
-                        setSectionDraft((current) => ({ ...current, configText: event.target.value }))
-                      }
-                      className="min-h-[320px] border-black/10 bg-[#fffdf9] font-mono text-xs text-neutral-900"
-                    />
-                    <p className="text-xs text-neutral-500">
-                      Update copy, images, links, and layout data directly. The builder canvas updates live while you type.
-                    </p>
-                    {parsedDraftConfig === null ? (
-                      <p className="text-xs text-red-500">
-                        Fix the JSON syntax to restore the live section preview.
-                      </p>
-                    ) : null}
+                    {isStuffyLandingHero ? (
+                      <details className="rounded-2xl border border-black/10 bg-[#fffdf9] p-4">
+                        <summary className="cursor-pointer text-sm font-medium text-neutral-900">
+                          Advanced JSON
+                        </summary>
+                        <p className="mt-2 text-xs text-neutral-500">
+                          Only open this if you want to edit the raw hero config directly.
+                        </p>
+                        <Textarea
+                          value={sectionDraft.configText}
+                          onChange={(event) =>
+                            setSectionDraft((current) => ({ ...current, configText: event.target.value }))
+                          }
+                          className="mt-3 min-h-[220px] border-black/10 bg-white font-mono text-xs text-neutral-900"
+                        />
+                        {parsedDraftConfig === null ? (
+                          <p className="mt-2 text-xs text-red-500">
+                            Fix the JSON syntax to restore the live section preview.
+                          </p>
+                        ) : null}
+                      </details>
+                    ) : (
+                      <>
+                        <Textarea
+                          value={sectionDraft.configText}
+                          onChange={(event) =>
+                            setSectionDraft((current) => ({ ...current, configText: event.target.value }))
+                          }
+                          className="min-h-[320px] border-black/10 bg-[#fffdf9] font-mono text-xs text-neutral-900"
+                        />
+                        <p className="text-xs text-neutral-500">
+                          Update copy, images, links, and layout data directly. The builder canvas updates live while you type.
+                        </p>
+                        {parsedDraftConfig === null ? (
+                          <p className="text-xs text-red-500">
+                            Fix the JSON syntax to restore the live section preview.
+                          </p>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1425,6 +1684,13 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
         page={page}
         open={showMetadataForm}
         onOpenChange={setShowMetadataForm}
+      />
+      <input
+        ref={imageUploadInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/avif"
+        className="hidden"
+        onChange={handleDirectImageUploadChange}
       />
       <MediaLibrary
         open={showMediaLibrary}

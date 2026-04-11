@@ -728,7 +728,7 @@ export default function Products() {
           ) : paginatedProducts.length > 0 ? (
             <div>
               <div
-                className={`grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-8 ${desktopGridClassName} lg:gap-x-5 lg:gap-y-10`}
+                className={`grid grid-cols-2 gap-x-2 gap-y-4 sm:grid-cols-2 sm:gap-x-3 sm:gap-y-5 ${desktopGridClassName} lg:gap-x-3 lg:gap-y-6`}
               >
                 {paginatedProducts.map((product, index) => {
                   const hoverImage = getHoverImage(product);
@@ -776,7 +776,7 @@ export default function Products() {
                       href={`/product/${product.id}?from=${encodeURIComponent(shopPath)}`}
                       className="group block"
                     >
-                      <div className="mb-2">
+                      <div className="mb-1.5">
                         <div
                           className={`shop-card-frame relative overflow-hidden rounded-none border ${
                             isStuffyClone
@@ -826,7 +826,7 @@ export default function Products() {
                         </div>
                       </div>
 
-                      <div className="shop-card-meta mt-3 space-y-2 text-neutral-950">
+                      <div className="shop-card-meta mt-2 space-y-1.5 text-neutral-950">
                         <div className="min-w-0 space-y-1">
                           <h3
                             className="shop-card-title truncate text-[rgb(17,17,17)]"

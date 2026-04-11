@@ -388,7 +388,7 @@ export default function AdminProfilePage() {
       });
       const res = await apiRequest("POST", "/api/admin/profile/upload-avatar", {
         imageBase64: base64,
-        provider: "local",
+        provider: "tigris",
       });
       return (await res.json()) as { success: boolean; url?: string };
     },
@@ -435,7 +435,7 @@ export default function AdminProfilePage() {
         title: "Avatar deleted",
         description: result.removedCurrentImage
           ? "Current profile image was removed."
-          : "Uploaded avatar removed from library.",
+          : "Uploaded avatar removed from storage.",
       });
     },
     onError: (error: Error) => {
@@ -1044,7 +1044,7 @@ export default function AdminProfilePage() {
               <DialogHeader>
                 <DialogTitle>Profile Image</DialogTitle>
                 <DialogDescription>
-                  Upload new, preview full-size, and choose from your recent uploads.
+                  Upload new, preview full-size, and manage your current Tigris-hosted profile image.
                 </DialogDescription>
               </DialogHeader>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -1075,7 +1075,7 @@ export default function AdminProfilePage() {
                   size="sm"
                   variant="outline"
                   className="text-red-600 hover:text-red-700"
-                  disabled={!selectedAvatarUrl || !selectedAvatarUrl.startsWith("/uploads/avatars/")}
+                  disabled={!selectedAvatarUrl || !avatarHistory.some((item) => item.url === selectedAvatarUrl)}
                   onClick={() => {
                     const match = avatarHistory.find((item) => item.url === selectedAvatarUrl);
                     if (match) setAvatarToDelete(match);
@@ -1088,16 +1088,16 @@ export default function AdminProfilePage() {
 
               <div className="mt-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                  Recent Uploads
+                  Current Upload
                 </p>
                 <div className="mt-2 grid max-h-[380px] gap-2 overflow-y-auto pr-1">
                   {avatarHistoryQuery.isLoading ? (
                     <div className="rounded-lg border p-3 text-xs text-muted-foreground">
-                      Loading uploads...
+                      Loading image...
                     </div>
                   ) : avatarHistory.length === 0 ? (
                     <div className="rounded-lg border p-3 text-xs text-muted-foreground">
-                      No uploaded images yet.
+                      No uploaded profile image yet.
                     </div>
                   ) : (
                     avatarHistory.map((item) => (
@@ -1213,7 +1213,7 @@ export default function AdminProfilePage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this uploaded image?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the image from your local avatar history.
+              This removes the current profile image from Tigris storage.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

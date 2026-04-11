@@ -7521,17 +7521,16 @@ ${Array.from(uniqueEntries.entries())
     async (req: Request, res: Response) => {
       try {
         const actor = req.user as Express.User | undefined;
-        if (!canManageStoreUsers(actor)) {
-          return res.status(403).json({ success: false, error: "Only superadmin/admin users can manage store users" });
+        if (!canViewStoreUsers(actor)) {
+          return res.status(403).json({ success: false, error: "Only superadmin, owner, or admin users can view store users" });
         }
         const isRootActor = actor?.role?.toLowerCase() === "superadmin";
         const users = await storage.getStoreUsers();
         const filtered = users
           .filter((userRow) => isRootActor || userRow.role.toLowerCase() !== "superadmin")
           .sort((a, b) => {
-            const aIsSuper = a.role.toLowerCase() === "superadmin";
-            const bIsSuper = b.role.toLowerCase() === "superadmin";
-            if (aIsSuper !== bIsSuper) return aIsSuper ? -1 : 1;
+            const priorityDiff = compareStoreUserPriority(a.role, b.role);
+            if (priorityDiff !== 0) return priorityDiff;
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           });
         return res.json({ success: true, data: filtered });
@@ -7553,11 +7552,30 @@ ${Array.from(uniqueEntries.entries())
   const updateStoreUserRoleEnum = z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff", "cook", "sales", "marketing"]);
   const privilegedAdminRoles = new Set(["superadmin", "owner", "admin"]);
   const storeUserManagementRoles = new Set(["superadmin", "admin"]);
+  const storeUserViewerRoles = new Set(["superadmin", "owner", "admin"]);
+  const storeUserRolePriority = new Map<string, number>([
+    ["superadmin", 0],
+    ["owner", 1],
+    ["admin", 2],
+    ["manager", 3],
+    ["csr", 4],
+    ["sales", 5],
+    ["marketing", 6],
+    ["staff", 7],
+    ["cook", 8],
+  ]);
   const isSuperAdmin = (role: string | null | undefined) => role?.toLowerCase() === "superadmin";
   const canManagePrivilegedAdminRoles = (actor: Express.User | undefined) =>
     isSuperAdmin(actor?.role);
   const canManageStoreUsers = (actor: Express.User | undefined) =>
     storeUserManagementRoles.has(actor?.role?.toLowerCase() ?? "");
+  const canViewStoreUsers = (actor: Express.User | undefined) =>
+    storeUserViewerRoles.has(actor?.role?.toLowerCase() ?? "");
+  const compareStoreUserPriority = (leftRole: string | null | undefined, rightRole: string | null | undefined) => {
+    const left = storeUserRolePriority.get(leftRole?.toLowerCase() ?? "") ?? 99;
+    const right = storeUserRolePriority.get(rightRole?.toLowerCase() ?? "") ?? 99;
+    return left - right;
+  };
 
   const updateStoreUserSchema = z
     .object({
@@ -7686,8 +7704,8 @@ ${Array.from(uniqueEntries.entries())
 
       try {
         const actor = req.user as Express.User | undefined;
-        if (!canManageStoreUsers(actor)) {
-          return res.status(403).json({ success: false, error: "Only superadmin/admin users can view store-user profiles" });
+        if (!canViewStoreUsers(actor)) {
+          return res.status(403).json({ success: false, error: "Only superadmin, owner, or admin users can view store-user profiles" });
         }
         const targetUser = await storage.getUserById(id);
 
@@ -7696,10 +7714,14 @@ ${Array.from(uniqueEntries.entries())
         }
 
         const targetRole = targetUser.role?.toLowerCase() ?? "";
-        if (!canManagePrivilegedAdminRoles(actor) && privilegedAdminRoles.has(targetRole)) {
+        const actorRole = actor?.role?.toLowerCase() ?? "";
+        const actorCanViewPrivilegedTarget =
+          canManagePrivilegedAdminRoles(actor) ||
+          (actorRole === "owner" && (targetRole === "owner" || targetRole === "admin"));
+        if (!actorCanViewPrivilegedTarget && privilegedAdminRoles.has(targetRole)) {
           return res.status(403).json({
             success: false,
-            error: "Only superadmin users can view owner/admin/superadmin users",
+            error: "You do not have access to view this user",
           });
         }
 
@@ -8343,7 +8365,7 @@ ${Array.from(uniqueEntries.entries())
   // Upload avatar image
   const uploadAvatarSchema = z.object({
     imageBase64: z.string().min(1),
-    provider: z.enum(["local", "cloudinary", "tigris"]).optional(),
+    provider: z.enum(["tigris"]).optional(),
   });
 
   app.post(
@@ -8352,7 +8374,7 @@ ${Array.from(uniqueEntries.entries())
     validateRequest(uploadAvatarSchema),
     async (req: Request, res: Response) => {
       try {
-        const { imageBase64, provider = "local" } = req.body;
+        const { imageBase64 } = req.body;
 
         const user = req.user as Express.User | undefined;
         if (!user) {
@@ -8375,28 +8397,10 @@ ${Array.from(uniqueEntries.entries())
           .webp({ quality: 96, effort: 6, smartSubsample: true })
           .toBuffer();
 
-        if (provider === "cloudinary") {
-          const uploaded = await uploadMediaToCloudinary(finalBuffer, "profile");
-          await storage.updateUserProfile(user.id, { profileImageUrl: uploaded.url });
-          return res.json({ success: true, url: uploaded.url, provider: "cloudinary" });
-        }
-
-        if (provider === "tigris") {
-          const fileName = `avatars/avatar-${user.id}-${Date.now()}.webp`;
-          const url = await storageService.uploadFile(finalBuffer, fileName, "image/webp");
-          await storage.updateUserProfile(user.id, { profileImageUrl: url });
-          return res.json({ success: true, url, provider: "tigris" });
-        }
-
-        const avatarDir = path.join(UPLOADS_DIR, "avatars");
-        fs.mkdirSync(avatarDir, { recursive: true });
-        const filename = `avatar-${user.id}-${Date.now()}.webp`;
-        const filepath = path.join(avatarDir, filename);
-        fs.writeFileSync(filepath, finalBuffer);
-        const url = `/uploads/avatars/${filename}`;
+        const fileName = `avatars/avatar-${user.id}-${Date.now()}.webp`;
+        const url = await storageService.uploadFile(finalBuffer, fileName, "image/webp");
         await storage.updateUserProfile(user.id, { profileImageUrl: url });
-
-        return res.json({ success: true, url, provider: "local" });
+        return res.json({ success: true, url, provider: "tigris" });
       } catch (err) {
         console.error("Error in POST /api/admin/profile/upload-avatar", err);
         return res.status(500).json({ success: false, error: "Failed to upload avatar" });
@@ -8414,29 +8418,21 @@ ${Array.from(uniqueEntries.entries())
           return res.status(401).json({ success: false, error: "Not authenticated" });
         }
 
-        const fs = await import("fs");
-        const path = await import("path");
-        const avatarDir = path.join(UPLOADS_DIR, "avatars");
-
-        if (!fs.existsSync(avatarDir)) {
-          return res.json({ success: true, data: [] });
-        }
-
-        const data = fs
-          .readdirSync(avatarDir)
-          .filter((file) => file.startsWith(`avatar-${user.id}-`))
-          .map((file) => {
-            const filepath = path.join(avatarDir, file);
-            const stats = fs.statSync(filepath);
-            return {
-              filename: file,
-              url: `/uploads/avatars/${file}`,
-              uploadedAt: stats.mtime.toISOString(),
-              size: stats.size,
-            };
-          })
-          .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
-          .slice(0, 12);
+        const currentAvatarUrl = typeof user.profileImageUrl === "string" ? user.profileImageUrl.trim() : "";
+        const matchesCurrentAvatar =
+          currentAvatarUrl.length > 0 &&
+          /\/avatars\/avatar-[^/]+-\d+\.webp(?:[?#].*)?$/i.test(currentAvatarUrl) &&
+          currentAvatarUrl.includes(`avatar-${user.id}-`);
+        const data = matchesCurrentAvatar
+          ? [
+              {
+                filename: currentAvatarUrl.split("/").pop()?.split("?")[0] ?? `avatar-${user.id}.webp`,
+                url: currentAvatarUrl,
+                uploadedAt: new Date().toISOString(),
+                size: 0,
+              },
+            ]
+          : [];
 
         return res.json({ success: true, data });
       } catch (err) {
@@ -8457,42 +8453,34 @@ ${Array.from(uniqueEntries.entries())
         }
 
         const avatarUrl = typeof req.body?.url === "string" ? req.body.url : "";
-        if (!avatarUrl.startsWith("/uploads/avatars/")) {
+        const currentProfileImageUrl = user.profileImageUrl || null;
+        const normalizedAvatarUrl = avatarUrl.trim();
+        if (!normalizedAvatarUrl || currentProfileImageUrl !== normalizedAvatarUrl) {
           return res.status(400).json({ success: false, error: "Invalid avatar path" });
         }
 
         const path = await import("path");
-        const fs = await import("fs");
-        const filename = path.basename(avatarUrl);
+        const parsedUrl = (() => {
+          try {
+            return new URL(normalizedAvatarUrl);
+          } catch {
+            return null;
+          }
+        })();
+        const avatarPathname = parsedUrl?.pathname ?? normalizedAvatarUrl;
+        const filename = path.basename(avatarPathname);
         const allowedPrefix = `avatar-${user.id}-`;
 
         if (!filename.startsWith(allowedPrefix)) {
           return res.status(403).json({ success: false, error: "You can only delete your own uploaded images" });
         }
 
-        const avatarDir = path.join(UPLOADS_DIR, "avatars");
-        const filepath = path.join(avatarDir, filename);
-        const normalizedDir = path.resolve(avatarDir);
-        const normalizedFile = path.resolve(filepath);
-
-        if (!normalizedFile.startsWith(normalizedDir)) {
-          return res.status(400).json({ success: false, error: "Invalid avatar path" });
-        }
-
-        if (!fs.existsSync(normalizedFile)) {
-          return res.status(404).json({ success: false, error: "Image not found" });
-        }
-
-        const currentProfileImageUrl = user.profileImageUrl || null;
-        fs.unlinkSync(normalizedFile);
-
-        if (currentProfileImageUrl === avatarUrl) {
-          await storage.updateUserProfile(user.id, { profileImageUrl: "" });
-        }
+        await storageService.deleteFile(`avatars/${filename}`);
+        await storage.updateUserProfile(user.id, { profileImageUrl: "" });
 
         return res.json({
           success: true,
-          removedCurrentImage: currentProfileImageUrl === avatarUrl,
+          removedCurrentImage: true,
         });
       } catch (err) {
         console.error("Error in DELETE /api/admin/profile/avatar", err);

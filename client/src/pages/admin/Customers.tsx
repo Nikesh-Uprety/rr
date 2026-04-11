@@ -336,13 +336,13 @@ export default function AdminCustomers() {
             className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm"
           >
             <div className="overflow-x-auto">
-            <Table className="w-full table-fixed">
+            <Table className="w-full min-w-[1040px] table-fixed">
               <colgroup>
-                <col className="w-[44%]" />
+                <col className="w-[46%]" />
+                <col className="w-[16%]" />
+                <col className="w-[16%]" />
                 <col className="w-[14%]" />
-                <col className="w-[16%]" />
-                <col className="w-[16%]" />
-                <col className="w-[10%]" />
+                <col className="w-[8%]" />
               </colgroup>
               <TableHeader className="bg-transparent">
                 <TableRow className="border-b border-[#E5E5E0] dark:border-border hover:bg-transparent">
@@ -392,7 +392,7 @@ export default function AdminCustomers() {
                         )}
                         onClick={() => handleToggleExpand(customer.id)}
                       >
-                        <TableCell className="px-4 py-4 align-top">
+                        <TableCell className="px-4 py-4 align-middle">
                           <div className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
                             <Avatar className={cn("w-12 h-12 shadow-sm border border-black/5 dark:border-white/5", !customer.profileImageUrl && bgGradients[i % bgGradients.length])}>
                               {customer.profileImageUrl ? (
@@ -426,14 +426,17 @@ export default function AdminCustomers() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="px-4 py-4 align-top">
-                          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5 shrink-0" />
-                            <span>{new Date(customer.createdAt).toLocaleDateString()}</span>
+                        <TableCell className="px-4 py-4 align-middle">
+                          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5 shrink-0" />
+                              <span>{new Date(customer.createdAt).toLocaleDateString()}</span>
+                            </span>
+                            <span className="pl-5">Customer since</span>
                           </div>
                         </TableCell>
-                        <TableCell className="px-4 py-4 align-top">
-                          <div className="flex flex-wrap items-center gap-2">
+                        <TableCell className="px-4 py-4 align-middle">
+                          <div className="flex min-h-[56px] flex-wrap items-center gap-2">
                             <Badge variant="outline" className="font-medium bg-muted/50">
                               {customer.orderCount} orders
                             </Badge>
@@ -444,12 +447,15 @@ export default function AdminCustomers() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="px-4 py-4 align-top text-right">
-                          <div className="font-bold text-[#2C3E2D] dark:text-foreground">
-                            {formatPrice(customer.totalSpent)}
+                        <TableCell className="px-4 py-4 align-middle text-right">
+                          <div className="flex min-h-[56px] flex-col items-end justify-center">
+                            <div className="font-bold text-[#2C3E2D] dark:text-foreground">
+                              {formatPrice(customer.totalSpent)}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">Lifetime spend</div>
                           </div>
                         </TableCell>
-                        <TableCell className="px-4 py-4 align-top text-right" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="px-4 py-4 align-middle text-right" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted rounded-full">
@@ -486,7 +492,7 @@ export default function AdminCustomers() {
                                 transition={{ duration: 0.2 }}
                                 className="overflow-hidden"
                               >
-                                <div className="p-6 border-x border-border mx-4 mb-4 bg-white dark:bg-card rounded-b-xl shadow-inner-sm">
+                                <div className="border-t border-border/60 bg-white px-6 py-5 dark:bg-card">
                                   {detailLoading ? (
                                     <div className="py-12 flex flex-col items-center justify-center gap-3">
                                       <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -524,34 +530,34 @@ export default function AdminCustomers() {
                                         </div>
                                         <div>
                                           <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Personal Details</h4>
-                                          <div className="overflow-hidden rounded-lg border border-border/60">
-                                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0 text-sm">
+                                            <div className="overflow-hidden rounded-lg border border-border/60">
+                                            <div className="grid grid-cols-[128px_minmax(0,1fr)] gap-x-0 gap-y-0 text-sm">
                                               <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-3 py-2 font-medium text-muted-foreground">
                                                 <UserIcon className="w-3.5 h-3.5" />
                                                 Name
                                               </div>
-                                              <div className="border-b border-border/60 px-3 py-2">
+                                              <div className="border-b border-border/60 px-4 py-2">
                                                 {detail.firstName} {detail.lastName}
                                               </div>
                                               <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-3 py-2 font-medium text-muted-foreground">
                                                 <Mail className="w-3.5 h-3.5" />
                                                 Email
                                               </div>
-                                              <div className="border-b border-border/60 px-3 py-2 break-all">
+                                              <div className="border-b border-border/60 px-4 py-2 break-all">
                                                 {detail.email}
                                               </div>
                                               <div className="flex items-center gap-2 border-b border-border/60 bg-muted/20 px-3 py-2 font-medium text-muted-foreground">
                                                 <Phone className="w-3.5 h-3.5" />
                                                 Phone
                                               </div>
-                                              <div className="border-b border-border/60 px-3 py-2">
+                                              <div className="border-b border-border/60 px-4 py-2">
                                                 {detail.phoneNumber || "No phone number"}
                                               </div>
                                               <div className="flex items-start gap-2 border-b border-border/60 bg-muted/20 px-3 py-2 font-medium text-muted-foreground">
                                                 <MapPin className="mt-0.5 w-3.5 h-3.5" />
                                                 Address
                                               </div>
-                                              <div className="border-b border-border/60 px-3 py-2">
+                                              <div className="border-b border-border/60 px-4 py-2">
                                                 {detail.deliveryAddress
                                                   ? [
                                                       detail.deliveryAddress.street,

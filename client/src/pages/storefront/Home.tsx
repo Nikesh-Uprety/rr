@@ -309,11 +309,38 @@ export default function Home() {
 
   // Hero images from CMS assets (fallback to placeholder)
   const heroImages = useMemo(() => {
-    const images = heroAssets
-      .filter(a => a.active && a.assetType === "image")
-      .map(a => a.imageUrl);
-    return images.length > 0 ? images : HERO_IMAGES_FALLBACK;
-  }, [heroAssets]);
+    const siteImages = heroAssets
+      .filter((asset) => asset.active && asset.assetType === "image")
+      .map((asset) => asset.imageUrl)
+      .filter(Boolean);
+
+    const templateSlug = pageConfig?.template?.slug;
+    if (templateSlug !== "stuffyclone") {
+      return siteImages.length > 0 ? siteImages : HERO_IMAGES_FALLBACK;
+    }
+
+    const heroSection = (pageConfig?.sections ?? [])
+      .filter((section: any) => section.isVisible)
+      .sort((left: any, right: any) => left.orderIndex - right.orderIndex)
+      .filter((section: any) => previewSectionId == null || Number(section.id) === previewSectionId)
+      .find((section: any) => section.sectionType === "hero");
+
+    const configuredSlides = Array.isArray(heroSection?.config?.slides)
+      ? heroSection.config.slides
+          .map((slide: any) => (typeof slide?.image === "string" ? slide.image.trim() : ""))
+          .filter(Boolean)
+      : [];
+
+    if (configuredSlides.length > 0) {
+      return configuredSlides;
+    }
+
+    if (siteImages.length > 0) {
+      return siteImages;
+    }
+
+    return ["/images/stussy.webp"];
+  }, [heroAssets, pageConfig?.sections, pageConfig?.template?.slug, previewSectionId]);
 
   const lifestyleImages =
     featureCollectionImages.length > 0 ? featureCollectionImages : LIFESTYLE_IMAGES_FALLBACK;
@@ -741,13 +768,22 @@ export default function Home() {
 
   if (isStuffyClone) {
     const isDarkTheme = theme === "dark";
-    const landingForeground = "#ffffff";
+    const landingForeground = "#111111";
+    const landingMenuForeground = "#ffffff";
+    const landingIconForeground = "#ffffff";
+    const stuffyLandingImage =
+      heroImages[heroIndex % Math.max(heroImages.length, 1)] ??
+      heroImages[0] ??
+      "/images/stussy.webp";
+    const landingLogoFilter = "brightness(0) invert(1)";
     const landingTextShadow = isDarkTheme
-      ? "0 3px 18px rgba(0,0,0,0.34), 0 0 16px rgba(255,255,255,0.12)"
-      : "0 4px 18px rgba(0,0,0,0.26), 0 0 18px rgba(255,255,255,0.32)";
+      ? "0 0 14px rgba(255,255,255,0.22)"
+      : "0 2px 14px rgba(255,255,255,0.5)";
     const socialHoverShadow = isDarkTheme
-      ? "drop-shadow(0 6px 18px rgba(0,0,0,0.3)) drop-shadow(0 0 12px rgba(255,255,255,0.14))"
-      : "drop-shadow(0 6px 18px rgba(0,0,0,0.22)) drop-shadow(0 0 12px rgba(255,255,255,0.26))";
+      ? "drop-shadow(0 0 10px rgba(255,255,255,0.16))"
+      : "drop-shadow(0 2px 12px rgba(255,255,255,0.42))";
+    const landingMenuLinkClass =
+      "relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-current after:content-[''] after:transition-transform after:duration-300 hover:after:scale-x-100";
 
     return (
       <div className="relative h-screen h-[100svh] w-full overflow-hidden bg-black" style={{ color: landingForeground }}>
@@ -755,7 +791,7 @@ export default function Home() {
           title="Rare Atelier | Stussy Clone"
           description="A minimal landing experience for the StuffyClone template."
           canonicalPath="/"
-          image="/images/stussy.webp"
+          image={heroImages[0] || "/images/stussy.webp"}
           structuredData={{
             "@context": "https://schema.org",
             "@type": "WebSite",
@@ -765,7 +801,7 @@ export default function Home() {
         />
         <div className="relative h-full w-full overflow-hidden">
           <img
-            src="/images/stussy.webp"
+            src={stuffyLandingImage}
             alt="Stussy Clone Landing"
             className="absolute inset-0 h-full w-full object-cover"
             sizes="100vw"
@@ -814,8 +850,8 @@ export default function Home() {
                   <li>
                     <Link
                       href="/products"
-                      className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
-                      style={{ color: landingForeground }}
+                      className={landingMenuLinkClass}
+                      style={{ color: landingMenuForeground }}
                     >
                       Shop
                     </Link>
@@ -823,8 +859,8 @@ export default function Home() {
                   <li>
                     <Link
                       href="/gallery"
-                      className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
-                      style={{ color: landingForeground }}
+                      className={landingMenuLinkClass}
+                      style={{ color: landingMenuForeground }}
                     >
                       Gallery
                     </Link>
@@ -832,8 +868,8 @@ export default function Home() {
                   <li>
                     <Link
                       href="/atelier"
-                      className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
-                      style={{ color: landingForeground }}
+                      className={landingMenuLinkClass}
+                      style={{ color: landingMenuForeground }}
                     >
                       Atelier
                     </Link>
@@ -841,8 +877,8 @@ export default function Home() {
                   <li>
                     <Link
                       href="/cart"
-                      className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
-                      style={{ color: landingForeground }}
+                      className={landingMenuLinkClass}
+                      style={{ color: landingMenuForeground }}
                     >
                       Cart
                     </Link>
@@ -850,8 +886,8 @@ export default function Home() {
                   <li>
                     <Link
                       href="/atelier#contact"
-                      className="relative inline-flex transition-transform duration-300 hover:-translate-y-[1px] after:absolute after:-bottom-1 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300 hover:after:scale-x-100"
-                      style={{ color: landingForeground }}
+                      className={landingMenuLinkClass}
+                      style={{ color: landingMenuForeground }}
                     >
                       Support
                     </Link>
@@ -864,7 +900,7 @@ export default function Home() {
                     rel="noreferrer"
                     aria-label="Instagram"
                     className="inline-flex items-center justify-center transition-all duration-300 hover:-translate-y-0.5 hover:opacity-80"
-                    style={{ color: landingForeground, filter: socialHoverShadow }}
+                    style={{ color: landingIconForeground, filter: socialHoverShadow }}
                   >
                     <Instagram className="h-5 w-5" />
                   </a>
@@ -874,7 +910,7 @@ export default function Home() {
                     rel="noreferrer"
                     aria-label="TikTok"
                     className="inline-flex items-center justify-center transition-all duration-300 hover:-translate-y-0.5 hover:opacity-80"
-                    style={{ color: landingForeground, filter: socialHoverShadow }}
+                    style={{ color: landingIconForeground, filter: socialHoverShadow }}
                   >
                     <svg
                       viewBox="0 0 24 24"
@@ -890,7 +926,7 @@ export default function Home() {
                     rel="noreferrer"
                     aria-label="Facebook"
                     className="inline-flex items-center justify-center transition-all duration-300 hover:-translate-y-0.5 hover:opacity-80"
-                    style={{ color: landingForeground, filter: socialHoverShadow }}
+                    style={{ color: landingIconForeground, filter: socialHoverShadow }}
                   >
                     <Facebook className="h-5 w-5" />
                   </a>

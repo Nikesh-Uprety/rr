@@ -57,7 +57,7 @@ const MAX_IMAGE_SIZE_LABEL = "30MB";
 export default function AdminImagesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [provider, setProvider] = useState<"local" | "cloudinary" | "tigris">("local");
+  const [provider, setProvider] = useState<"local" | "cloudinary" | "tigris">("tigris");
   const [category, setCategory] = useState<ImageCategory>("product");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -448,7 +448,7 @@ export default function AdminImagesPage() {
         <div className="flex flex-col lg:flex-row lg:items-center gap-3 justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-1 rounded-full bg-muted p-1">
-              {(["cloudinary", "tigris", "local"] as const).map((p) => (
+              {(["cloudinary", "tigris"] as const).map((p) => (
                 <button
                   key={p}
                   type="button"
@@ -460,7 +460,7 @@ export default function AdminImagesPage() {
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {p === "cloudinary" ? "Cloudinary" : p === "tigris" ? "Tigris" : "Local"}
+                  {p === "cloudinary" ? "Cloudinary" : "Tigris"}
                 </button>
               ))}
             </div>
@@ -981,4 +981,3 @@ export default function AdminImagesPage() {
     </div>
   );
 }
-

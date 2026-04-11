@@ -33,6 +33,56 @@ function DeferredSection({
   );
 }
 
+function resolveStuffyHeroImage(heroImages: string[], config?: Record<string, any>) {
+  const configuredSlides = Array.isArray(config?.slides)
+    ? config.slides
+        .map((slide: any) => (typeof slide?.image === "string" ? slide.image.trim() : ""))
+        .filter(Boolean)
+    : [];
+
+  return configuredSlides[0] || heroImages[0] || "/images/stussy.webp";
+}
+
+function StuffyCloneHeroPreview({
+  heroImages,
+  config,
+}: {
+  heroImages: string[];
+  config?: Record<string, any>;
+}) {
+  const image = resolveStuffyHeroImage(heroImages, config);
+
+  return (
+    <section className="relative min-h-screen overflow-hidden bg-black text-white">
+      <img
+        src={image}
+        alt="Stuffy landing background"
+        className="absolute inset-0 h-full w-full object-cover"
+        loading="eager"
+        decoding="async"
+      />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.18)_42%,rgba(0,0,0,0.52))]" />
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-6 py-24">
+        <div className="w-full max-w-[32rem] text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-white/70">
+            Stuffy clone
+          </p>
+          <h2 className="mt-4 text-4xl font-semibold tracking-[0.18em] text-white">
+            Landing background
+          </h2>
+          <div className="mt-8 space-y-4 text-[0.95rem] font-semibold uppercase tracking-[0.28em] text-white/88">
+            <div>Shop</div>
+            <div>Gallery</div>
+            <div>Atelier</div>
+            <div>Cart</div>
+            <div>Support</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export interface RenderSectionContext {
   heroImages?: string[];
   heroIndex?: number;
@@ -70,6 +120,16 @@ export function renderSection(section: any, ctx: RenderSectionContext = {}, keyP
 
   switch (section.sectionType) {
     case "hero":
+      if (section.config?.variant === "stuffyclone") {
+        return (
+          <DeferredSection key={key} minHeightClassName="min-h-screen">
+            <StuffyCloneHeroPreview
+              heroImages={ctx.heroImages || []}
+              config={section.config}
+            />
+          </DeferredSection>
+        );
+      }
       return (
         <DeferredSection key={key} minHeightClassName="min-h-screen">
           <HeroSection

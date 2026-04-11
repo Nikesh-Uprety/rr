@@ -35,11 +35,15 @@ export type AdminPanelRole = (typeof ADMIN_PANEL_ROLES)[number];
 export type AdminPageKey = (typeof ADMIN_PAGE_KEYS)[number];
 
 const FULL_ACCESS_ADMIN_PAGES: readonly AdminPageKey[] = ADMIN_PAGE_KEYS;
+const SUPERADMIN_ADMIN_PAGES: readonly AdminPageKey[] = FULL_ACCESS_ADMIN_PAGES;
+const NON_CUSTOMIZATION_ADMIN_PAGES: readonly AdminPageKey[] = ADMIN_PAGE_KEYS.filter(
+  (page) => page !== "landing-page",
+);
 
 const ADMIN_PAGE_ACCESS: Record<AdminPanelRole, readonly AdminPageKey[]> = {
-  superadmin: FULL_ACCESS_ADMIN_PAGES,
-  owner: FULL_ACCESS_ADMIN_PAGES,
-  admin: FULL_ACCESS_ADMIN_PAGES,
+  superadmin: SUPERADMIN_ADMIN_PAGES,
+  owner: NON_CUSTOMIZATION_ADMIN_PAGES,
+  admin: NON_CUSTOMIZATION_ADMIN_PAGES,
   manager: [
     "dashboard",
     "profile",
@@ -107,12 +111,14 @@ const ADMIN_PAGE_ACCESS: Record<AdminPanelRole, readonly AdminPageKey[]> = {
 };
 
 const OVERRIDE_RESTRICTED_PAGES_BY_ROLE: Partial<Record<AdminPanelRole, readonly AdminPageKey[]>> = {
-  manager: ["store-users"],
-  staff: ["store-users"],
-  csr: ["store-users"],
-  sales: ["store-users"],
-  marketing: ["store-users"],
-  cook: ["store-users"],
+  owner: ["landing-page"],
+  admin: ["landing-page"],
+  manager: ["store-users", "landing-page"],
+  staff: ["store-users", "landing-page"],
+  csr: ["store-users", "landing-page"],
+  sales: ["store-users", "landing-page"],
+  marketing: ["store-users", "landing-page"],
+  cook: ["store-users", "landing-page"],
 };
 
 export function normalizeAdminRole(role: string | null | undefined): AdminPanelRole | null {

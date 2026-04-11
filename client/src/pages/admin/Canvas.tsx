@@ -17,6 +17,7 @@ import {
   Monitor,
   Tablet,
   Smartphone,
+  Upload,
   ArrowRightLeft,
   Trash2,
   Lock,
@@ -277,7 +278,7 @@ export default function Canvas() {
     Utility: true,
   });
   const [mediaPickerTarget, setMediaPickerTarget] = useState<MediaPickerTarget | null>(null);
-  const [mediaProvider, setMediaProvider] = useState<"local" | "cloudinary">("local");
+  const [mediaProvider, setMediaProvider] = useState<"tigris">("tigris");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showUploadProgress, setShowUploadProgress] = useState(false);
   const [savingSectionId, setSavingSectionId] = useState<number | null>(null);
@@ -680,12 +681,17 @@ export default function Canvas() {
   const getDefaultDraftForSection = (section: CanvasSection | null): SectionDraft => {
     const sectionType = section?.sectionType ?? "";
     const label = section?.label ?? sectionType;
+    const variantFromConfig =
+      section?.config && typeof section.config === "object" && typeof section.config["variant"] === "string"
+        ? String(section.config["variant"])
+        : "";
+    const isStuffyHero = sectionType === "hero" && variantFromConfig === "stuffyclone";
 
     if (sectionType === "hero") {
       return {
         label,
-        variant: section?.config && typeof section.config === "object" && typeof section.config["variant"] === "string" ? String(section.config["variant"]) : "",
-        image: "",
+        variant: variantFromConfig,
+        image: isStuffyHero ? "/images/stussy.webp" : "",
         title: "",
         text: "",
         hint: "",
@@ -693,16 +699,16 @@ export default function Canvas() {
         eyebrow: "",
         ctaLabel: "",
         ctaHref: "",
-        secondaryCtaLabel: "Discover Atelier",
-        secondaryCtaHref: "/atelier",
+        secondaryCtaLabel: isStuffyHero ? "" : "Discover Atelier",
+        secondaryCtaHref: isStuffyHero ? "" : "/atelier",
         layoutPreset: "",
         items: "",
-        heroSlides: DEFAULT_MAISON_HERO_SLIDES_TEXT,
+        heroSlides: isStuffyHero ? "" : DEFAULT_MAISON_HERO_SLIDES_TEXT,
         campaignImages: "",
         serviceCards: "",
         productIds: "",
         columns: "",
-        rawConfig: JSON.stringify({}, null, 2),
+        rawConfig: JSON.stringify(isStuffyHero ? { variant: "stuffyclone" } : {}, null, 2),
       };
     }
 
@@ -860,6 +866,9 @@ export default function Canvas() {
   const getSectionPresets = (section: CanvasSection | null): SectionPreset[] => {
     switch (section?.sectionType) {
       case "hero":
+        if (section.config?.variant === "stuffyclone") {
+          return [];
+        }
         return [
           {
             id: "luxury-story",
@@ -1051,6 +1060,10 @@ export default function Canvas() {
     }
 
     const config = (selectedSection?.config ?? {}) as Record<string, unknown>;
+    const isStuffyHero =
+      selectedSection.sectionType === "hero" &&
+      typeof config.variant === "string" &&
+      config.variant === "stuffyclone";
     const items = Array.isArray(config.items)
       ? config.items
           .map((item) => {
@@ -1087,6 +1100,15 @@ export default function Canvas() {
           .filter(Boolean)
           .join("\n")
       : "";
+    const firstHeroSlideImage = Array.isArray(config.slides)
+      ? config.slides
+          .map((slide) => {
+            if (!slide || typeof slide !== "object") return "";
+            const entry = slide as Record<string, unknown>;
+            return typeof entry.image === "string" ? entry.image : "";
+          })
+          .find(Boolean) ?? ""
+      : "";
     const campaignImages = Array.isArray(config.images)
       ? config.images
           .map((item) => {
@@ -1117,11 +1139,13 @@ export default function Canvas() {
           .join("\n")
       : "";
 
+    const defaultDraft = getDefaultDraftForSection(selectedSection);
+
     setSectionDraft({
-      ...getDefaultDraftForSection(selectedSection),
+      ...defaultDraft,
       label: selectedSection?.label ?? "",
       variant: typeof config.variant === "string" ? config.variant : "",
-      image: typeof config.image === "string" ? config.image : "",
+      image: typeof config.image === "string" ? config.image : firstHeroSlideImage || defaultDraft.image,
       title: typeof config.title === "string" ? config.title : "",
       text: typeof config.text === "string" ? config.text : "",
       hint: typeof config.hint === "string" ? config.hint : "",
@@ -1133,9 +1157,9 @@ export default function Canvas() {
       secondaryCtaHref: typeof config.secondaryCtaHref === "string" ? config.secondaryCtaHref : "",
       layoutPreset: typeof config.layoutPreset === "string" ? config.layoutPreset : "",
       items,
-      heroSlides: heroSlides || getDefaultDraftForSection(selectedSection).heroSlides,
+      heroSlides: isStuffyHero ? heroSlides : heroSlides || defaultDraft.heroSlides,
       campaignImages,
-      serviceCards: serviceCards || getDefaultDraftForSection(selectedSection).serviceCards,
+      serviceCards: serviceCards || defaultDraft.serviceCards,
       productIds: Array.isArray(config.productIds)
         ? config.productIds.map((id) => String(id)).join(", ")
         : "",
@@ -1302,6 +1326,7 @@ export default function Canvas() {
         };
       })
       .filter((slide) => slide.headline || slide.body || slide.ctaLabel || slide.ctaHref || slide.tag || slide.image || slide.eyebrow);
+    const isStuffyHero = variant === "stuffyclone";
     const campaignImages = sectionDraft.campaignImages
       .split("\n")
       .map((line) => line.trim())
@@ -1341,9 +1366,22 @@ export default function Canvas() {
 
     switch (selectedSection.sectionType) {
       case "hero":
-        assignOrDelete("slides", heroSlides);
-        assignOrDelete("secondaryCtaLabel", secondaryCtaLabel);
-        assignOrDelete("secondaryCtaHref", secondaryCtaHref);
+        if (isStuffyHero) {
+          const stuffyImage = image || heroSlides[0]?.image || "";
+          assignOrDelete("image", stuffyImage);
+          assignOrDelete("slides", stuffyImage ? [{ image: stuffyImage }] : undefined);
+          assignOrDelete("secondaryCtaLabel", undefined);
+          assignOrDelete("secondaryCtaHref", undefined);
+          assignOrDelete("title", undefined);
+          assignOrDelete("text", undefined);
+          assignOrDelete("eyebrow", undefined);
+          assignOrDelete("ctaLabel", undefined);
+          assignOrDelete("ctaHref", undefined);
+        } else {
+          assignOrDelete("slides", heroSlides);
+          assignOrDelete("secondaryCtaLabel", secondaryCtaLabel);
+          assignOrDelete("secondaryCtaHref", secondaryCtaHref);
+        }
         break;
       case "ticker":
         assignOrDelete("items", items);
@@ -1446,7 +1484,16 @@ export default function Canvas() {
 
     if (section.sectionType === "hero") {
       const slides = deserializeHeroSlides(sectionDraft.heroSlides);
-      if (slides.length) config.slides = slides;
+      if (sectionDraft.variant.trim() === "stuffyclone") {
+        const stuffyImage = sectionDraft.image.trim() || slides[0]?.image || "/images/stussy.webp";
+        config.variant = "stuffyclone";
+        if (stuffyImage) {
+          config.image = stuffyImage;
+          config.slides = [{ image: stuffyImage }];
+        }
+      } else if (slides.length) {
+        config.slides = slides;
+      }
     }
 
     if (section.sectionType === "ticker") {
@@ -1567,7 +1614,10 @@ export default function Canvas() {
           .filter((item) => item.title || item.content)
           .slice(0, 2)
       : [];
-    const effectivePreviewImage = heroImage || previewImage;
+    const effectivePreviewImage =
+      section.sectionType === "hero" && config.variant === "stuffyclone"
+        ? heroImage || previewImage || "/images/stussy.webp"
+        : heroImage || previewImage;
 
     return (
       <div
@@ -1591,21 +1641,29 @@ export default function Canvas() {
         {section.sectionType === "hero" ? (
           <div className="absolute inset-x-0 bottom-0 p-3">
             <p className="text-[8px] uppercase tracking-[0.26em] text-[rgba(201,169,110,0.9)]">
-              {heroTag || section.sectionType}
+              {config.variant === "stuffyclone" ? "Stuffy clone" : heroTag || section.sectionType}
             </p>
             <p className="mt-2 line-clamp-2 text-sm font-semibold text-white/95">
-              {heroHeadline || section.label || section.sectionType}
+              {config.variant === "stuffyclone"
+                ? section.label || "Stuffy Landing"
+                : heroHeadline || section.label || section.sectionType}
             </p>
-            <div className="mt-2 flex gap-1">
-              {heroSlides.slice(0, 4).map((_, index) => (
-                <span
-                  key={`hero-progress-${section.id}-${index}`}
-                  className={`h-1 flex-1 rounded-full ${
-                    index === 0 ? "bg-[rgba(201,169,110,0.95)]" : "bg-white/25"
-                  }`}
-                />
-              ))}
-            </div>
+            {config.variant === "stuffyclone" ? (
+              <p className="mt-2 text-[8px] uppercase tracking-[0.18em] text-white/70">
+                Full-screen landing background
+              </p>
+            ) : (
+              <div className="mt-2 flex gap-1">
+                {heroSlides.slice(0, 4).map((_, index) => (
+                  <span
+                    key={`hero-progress-${section.id}-${index}`}
+                    className={`h-1 flex-1 rounded-full ${
+                      index === 0 ? "bg-[rgba(201,169,110,0.95)]" : "bg-white/25"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -1829,6 +1887,8 @@ export default function Canvas() {
                   ? "FAQ Accordion Settings"
                 : "Section Settings";
   const sectionPresets = getSectionPresets(selectedSection);
+  const isSelectedStuffyHero =
+    selectedSection?.sectionType === "hero" && sectionDraft.variant.trim() === "stuffyclone";
 
   const parsedHeroSlides = useMemo(
     () => deserializeHeroSlides(sectionDraft.heroSlides),
@@ -3283,6 +3343,7 @@ export default function Canvas() {
                           onChange={(event) => setSectionDraft((prev) => ({ ...prev, variant: event.target.value }))}
                           className="rounded-xl"
                           placeholder="Optional visual variant"
+                          readOnly={isSelectedStuffyHero}
                         />
                       </div>
                     </div>
@@ -3290,21 +3351,62 @@ export default function Canvas() {
                     <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/10 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <label className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Section Image</label>
+                          <label className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                            {isSelectedStuffyHero ? "Landing Background Image" : "Section Image"}
+                          </label>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Use this as the section’s visual cover in Canvas now, and as a reusable image field for future section layouts.
+                            {isSelectedStuffyHero
+                              ? "This is the actual full-screen image used by the live Stuffy landing page."
+                              : "Use this as the section’s visual cover in Canvas now, and as a reusable image field for future section layouts."}
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="rounded-xl"
-                          onClick={() => setMediaPickerTarget({ type: "section" })}
-                        >
-                          <ImageIcon className="mr-2 h-4 w-4" />
-                          Choose Image
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl"
+                            onClick={() => setMediaPickerTarget({ type: "section" })}
+                          >
+                            <ImageIcon className="mr-2 h-4 w-4" />
+                            Choose Image
+                          </Button>
+                          {isSelectedStuffyHero ? (
+                            <>
+                              <input
+                                id="stuffy-landing-image-upload"
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0];
+                                  setMediaPickerTarget({ type: "section" });
+                                  handleCanvasImageUploadSelection(file);
+                                  event.currentTarget.value = "";
+                                }}
+                              />
+                              <label htmlFor="stuffy-landing-image-upload">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="rounded-xl"
+                                  asChild
+                                  disabled={uploadMediaMutation.isPending}
+                                >
+                                  <span>
+                                    {uploadMediaMutation.isPending ? (
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Upload className="mr-2 h-4 w-4" />
+                                    )}
+                                    {uploadMediaMutation.isPending ? "Uploading..." : "Upload to Tigris"}
+                                  </span>
+                                </Button>
+                              </label>
+                            </>
+                          ) : null}
+                        </div>
                       </div>
                       {sectionDraft.image ? (
                         <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/20">
@@ -3318,12 +3420,17 @@ export default function Canvas() {
                       <Input
                         value={sectionDraft.image}
                         onChange={(event) => setSectionDraft((prev) => ({ ...prev, image: event.target.value }))}
-                        placeholder="Optional image URL"
+                        placeholder={isSelectedStuffyHero ? "Landing background image URL" : "Optional image URL"}
                         className="rounded-xl"
                       />
+                      {isSelectedStuffyHero ? (
+                        <p className="text-xs text-muted-foreground">
+                          Uploads from this control go directly to the Tigris media library and are applied to the Stuffy landing background.
+                        </p>
+                      ) : null}
                     </div>
 
-                    {selectedSection.sectionType === "hero" ? (
+                    {selectedSection.sectionType === "hero" && !isSelectedStuffyHero ? (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <label className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Slides</label>
@@ -4006,10 +4113,12 @@ export default function Canvas() {
                 ? "Choose Hero Slide Image"
                 : mediaPickerTarget?.type === "campaign"
                   ? "Choose Editorial Grid Image"
-                  : "Choose Section Image"}
+                  : isSelectedStuffyHero
+                    ? "Choose Stuffy Landing Background"
+                    : "Choose Section Image"}
             </DialogTitle>
             <DialogDescription>
-              Pick an image from the shared library or upload a new one from your device. New uploads are saved into the same media library for reuse across templates and sections. Maximum upload size: {MAX_CANVAS_IMAGE_UPLOAD_LABEL}.
+              Pick an image from the shared library or upload a new one from your device. New uploads are saved to Tigris for reuse across templates and sections. Maximum upload size: {MAX_CANVAS_IMAGE_UPLOAD_LABEL}.
             </DialogDescription>
           </DialogHeader>
 
@@ -4019,24 +4128,10 @@ export default function Canvas() {
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
                   Media Source
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant={mediaProvider === "local" ? "default" : "outline"}
-                    className="rounded-xl"
-                    onClick={() => setMediaProvider("local")}
-                  >
-                    Local Library
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={mediaProvider === "cloudinary" ? "default" : "outline"}
-                    className="rounded-xl"
-                    onClick={() => setMediaProvider("cloudinary")}
-                  >
-                    Cloudinary
-                  </Button>
-                </div>
+                <p className="text-sm font-semibold text-foreground">Tigris Media Library</p>
+                <p className="text-xs text-muted-foreground">
+                  New uploads from here go straight to Tigris and can be reused across sections.
+                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">

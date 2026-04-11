@@ -741,7 +741,7 @@ export default function AdminBucketsPage() {
                 Provider
               </p>
               <div className="inline-flex w-full items-center gap-1 rounded-full bg-muted p-1">
-                {(["cloudinary", "tigris", "local"] as ProviderKey[]).map((key) => (
+                {(["cloudinary", "tigris"] as const).map((key) => (
                   <button
                     key={key}
                     type="button"
